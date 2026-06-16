@@ -1,0 +1,5 @@
+node_modules/
+*.log
+.DS_Store
+strip_historian_backup_*.json
+strip_historian_events_*.csv

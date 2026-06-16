@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stripping Historian — event-based strip tracker</title>
+<style>
+  :root{
+    --ink:#16242b; --muted:#6b7c84; --line:#d8e0e3; --bg:#f3f6f7; --card:#ffffff;
+    --accent:#1f4e5f; --accent2:#2e6e84;
+    --green-bg:#dcf3e3; --green:#1b7a3d; --amber-bg:#fdedcf; --amber:#8a5a00;
+    --red-bg:#f8d4d4; --red:#9c2a2a; --yellow:#fff6cc;
+    --radius:10px; --radius-s:7px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.45}
+  header{background:var(--accent);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;position:sticky;top:0;z-index:30}
+  header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.2px}
+  header .sub{color:#cfe0e6;font-size:12px}
+  header .sp{flex:1}
+  .btn{background:#fff;border:1px solid var(--line);color:var(--ink);padding:7px 12px;border-radius:var(--radius-s);cursor:pointer;font-size:13px;font-weight:500}
+  .btn:hover{background:#f0f3f4}
+  .btn.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.ghost{background:transparent;border-color:rgba(255,255,255,.5);color:#fff}
+  .btn.ghost:hover{background:rgba(255,255,255,.12)}
+  .btn.sm{padding:4px 9px;font-size:12px}
+  .btn.danger{color:var(--red);border-color:#e3a9a9}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  nav{display:flex;gap:2px;background:var(--card);border-bottom:1px solid var(--line);padding:0 10px;overflow-x:auto;position:sticky;top:51px;z-index:25}
+  nav button{background:none;border:none;border-bottom:3px solid transparent;padding:11px 14px;cursor:pointer;color:var(--muted);font-size:13.5px;font-weight:500;white-space:nowrap}
+  nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  nav button .badge{display:inline-block;min-width:17px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;text-align:center}
+  main{padding:18px;max-width:1180px;margin:0 auto}
+  h2.sec{font-size:15px;margin:0 0 12px}
+  h3.sub{font-size:13px;margin:18px 0 8px;color:var(--accent);font-weight:600}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:14px;flex-wrap:wrap}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 4px}
+  input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius-s);font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:var(--accent2)}
+  .field{margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+  th{background:#eef3f4;font-weight:600;color:#3b4a50;position:sticky;top:0}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);max-height:62vh;background:#fff}
+  tbody tr:hover{background:#f7fafb}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
+  .p-green{background:var(--green-bg);color:var(--green)} .p-amber{background:var(--amber-bg);color:var(--amber)}
+  .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:#e9eef0;color:#566}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+  .kpi .v{font-size:26px;font-weight:700} .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .kpi.warn{border-color:#e3a9a9} .kpi.warn .v{color:var(--red)}
+  .kpi.good .v{color:var(--green)}
+  .bathcard{flex:1;min-width:290px;max-width:380px;cursor:pointer;transition:border-color .12s}
+  .bathcard:hover{border-color:var(--accent2)}
+  .bathcard h3{margin:0 0 2px;font-size:15px;display:flex;align-items:center;gap:8px}
+  .kv{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px dashed #eef1f2;font-size:13px}
+  .kv span:first-child{color:var(--muted)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px}
+  .typegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px}
+  .typebtn{padding:12px 10px;border:1px solid var(--line);background:#fff;border-radius:var(--radius-s);cursor:pointer;text-align:left;font-weight:600;font-size:13.5px}
+  .typebtn:hover{border-color:var(--accent2)} .typebtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .typebtn small{display:block;font-weight:400;font-size:11px;opacity:.75;margin-top:2px}
+  .formcard{max-width:600px}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .note{background:var(--yellow);border-radius:var(--radius-s);padding:8px 12px;font-size:12.5px;margin-bottom:14px}
+  .warn-line{display:flex;gap:7px;align-items:flex-start;padding:6px 10px;border-radius:var(--radius-s);font-size:12.5px;margin-bottom:6px}
+  .warn-red{background:var(--red-bg);color:var(--red)} .warn-amber{background:var(--amber-bg);color:var(--amber)}
+  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+  .linkish{color:var(--accent2);cursor:pointer;text-decoration:underline}
+  .attn{background:#fff4f4;border-bottom:1px solid #f0caca;color:var(--red);padding:7px 16px;font-size:13px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .attn b{font-weight:700}
+  .attn .sp{flex:1}
+  svg.chart{display:block;max-width:100%}
+  .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
+  .charts3 .ch{border:1px solid var(--line);border-radius:var(--radius-s);padding:6px}
+  .chttl{font-size:11px;color:var(--muted);margin-bottom:2px;display:flex;justify-content:space-between}
+  .bar{height:14px;background:#eef3f4;border-radius:7px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--accent2)}
+  /* modal */
+  .overlay{position:fixed;inset:0;background:rgba(8,20,26,.45);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:60;overflow:auto}
+  .modal{background:#fff;border-radius:var(--radius);max-width:720px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  .modal-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:var(--radius) var(--radius) 0 0}
+  .modal-h h3{margin:0;font-size:15px;flex:1}
+  .modal-b{padding:16px}
+  .modal-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+  .x{cursor:pointer;border:none;background:none;font-size:18px;color:var(--muted);line-height:1}
+  /* timeline */
+  .tl{list-style:none;margin:0;padding:0}
+  .tl li{position:relative;padding:0 0 14px 22px;border-left:2px solid var(--line)}
+  .tl li:last-child{border-left-color:transparent}
+  .tl li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--accent2);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .tl .tl-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .tl .tl-when{font-size:12px;color:var(--muted)}
+  .tl .tl-d{font-size:12.5px;color:#3b4a50;margin-top:2px}
+  /* print */
+  #printArea{display:none}
+  .pr-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #16242b;padding-bottom:8px;margin-bottom:14px}
+  .pr-head h2{margin:0;font-size:18px}
+  .pr-meta td{border:none;padding:2px 14px 2px 0;font-size:12px}
+  @media print{
+    body > *{display:none !important}
+    #printArea{display:block !important;padding:0}
+    #printArea table th{position:static}
+  }
+  @media(max-width:620px){ .twocol{grid-template-columns:1fr} main{padding:12px} .charts3{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<header>
+  <h1>Stripping Historian</h1>
+  <span class="sub">offline · event-based · data stays on this PC</span>
+  <span class="sp"></span>
+  <button class="btn ghost sm" id="exportJson">Backup</button>
+  <button class="btn ghost sm" id="importBtn">Import</button>
+  <button class="btn ghost sm" id="exportCsv">Export CSV</button>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
+</header>
+<div id="attention"></div>
+<nav id="nav"></nav>
+<main id="main"></main>
+<div id="modalRoot"></div>
+<div id="printArea"></div>
+
+<script>
+"use strict";
+
+/* =========================================================================
+   Stripping Historian — a single-file, offline, event-sourced shop log for
+   chemical stripping of turbine components.
+
+   Architecture:  the event log is the ONE source of truth. Every other view
+   (pieces, baths, quality, dashboard) is a PURE function of (events, config).
+   Those pure functions live in the DOMAIN block below and are unit-tested in
+   /tests, decoupled from storage and the DOM.
+   ========================================================================= */
+
+const DB_NAME = "strip_historian_db", DB_VER = 1;
+let db = null, EVENTS = [], CONFIG = {};
+
+const DEFAULT_CONFIG = {
+  tempSet: 90, tempTol: 3,          // bath temperature setpoint °C and tolerance
+  hclMin: 16, hclMax: 22,           // free-HCl control band (%)
+  feMax: 100,                       // dissolved iron limit (ppm) -> bath spent
+  maxCycles: 3, maxHours: 24,       // per-piece limits before engineering review
+  maxBathAge: 30,                   // bath life (days) before scheduled change
+  baths: ["102-103", "106-107", "202-203", "206-207"],
+  operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
+};
+
+/* ============================ DOMAIN START ===============================
+   Pure functions only. No DOM, no IndexedDB, no module-level mutable state.
+   Everything takes its inputs as arguments so it can be tested in isolation. */
+
+function round(n, p = 1){ const f = Math.pow(10, p); return Math.round((+n) * f) / f; }
+function num(v){ return (v === "" || v == null) ? null : (Number.isFinite(+v) ? +v : null); }
+function fmtNum(v){ const n = num(v); return n == null ? "" : String(round(n, 2)); }
+
+function byDate(a, b){
+  return String(a.datetime || "").localeCompare(String(b.datetime || ""))
+      || String(a.eventId || "").localeCompare(String(b.eventId || ""));
+}
+
+// Clock-time difference in hours, tolerant of an overnight roll-over.
+function hrsBetween(a, b){
+  if(!a || !b) return 0;
+  const [h1, m1] = a.split(":").map(Number), [h2, m2] = b.split(":").map(Number);
+  let d = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if(d < 0) d += 1440;
+  return round(d / 60, 2);
+}
+function daysBetween(a, b){ if(!a || !b) return ""; return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtDate(dt){ if(!dt) return ""; const d = dt.slice(0,10).split("-"); return d[2] + " " + MONTHS[(+d[1]) - 1] + " " + d[0].slice(2); }
+function fmtDT(dt){ if(!dt) return ""; return fmtDate(dt) + (dt.length > 10 ? " " + dt.slice(11,16) : ""); }
+
+// Human, sortable event id: YYYYMMDD-NNNN, unique per day.
+function nextEventId(dateStr, events){
+  const ymd = (dateStr || "").slice(0,10).replace(/-/g, "");
+  let n = 0; events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0) n++; });
+  return ymd + "-" + String(n + 1).padStart(4, "0");
+}
+
+/* ---- event-type schema: each type declares only the fields it needs ---- */
+const F = { // key -> [storedName, label, kind]
+  bath:["bath","Bath","baths"], jc:["jc","J/C No.","text"], component:["component","Component","text"],
+  serial:["serial","Serial","text"], cycle:["cycle","Cycle #","num"],
+  hclPct:["hclPct","Free HCl %","num"], fePpm:["fePpm","Iron Fe (ppm)","num"], temp:["temp","Temp °C","num"],
+  hcl:["hclAddedL","HCl added (L)","num"], water:["waterAddedL","Water added (L)","num"], h3po4:["h3po4AddedL","H₃PO₄ added (L)","num"],
+  tin:["timeIn","Time in","time"], tout:["timeOut","Time out","time"],
+  result:["result","Result","sel:Cleared,Re-strip,Hold"],
+  wax:["waxFailure","Wax failure","sel:None,Partial mask loss,Complete mask loss"],
+  disp:["status","Disposition","sel:Accepted,Engineering review,Scrap,Return to vendor,Hold"],
+  reason:["disposalReason","Disposal reason","sel:Iron limit reached,HCl exhausted,Contamination,Scheduled change,Other"],
+  op:["operator","Operator","operator"], notes:["notes","Notes","text"]
+};
+const TYPES = {
+  "Bath Fill":        { desc:"new charge",            fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "Chemistry Check":  { desc:"titration result",      fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
+  "HCl Top-Up":       { desc:"add acid",              fields:[F.bath,F.hcl,F.op,F.notes] },
+  "Water Top-Up":     { desc:"add water",             fields:[F.bath,F.water,F.op,F.notes] },
+  "Immersion":        { desc:"one dip of a piece",    fields:[F.bath,F.jc,F.component,F.serial,F.cycle,F.tin,F.tout,F.result,F.wax,F.op,F.notes] },
+  "Wax Failure":      { desc:"masking defect",        fields:[F.bath,F.jc,F.serial,F.cycle,F.wax,F.op,F.notes] },
+  "Re-Masking":       { desc:"part re-waxed",         fields:[F.jc,F.serial,F.op,F.notes] },
+  "Engineering Review":{ desc:"disposition a part",   fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
+  "Bath Disposal":    { desc:"bath taken out",        fields:[F.bath,F.reason,F.op,F.notes] }
+};
+const TYPE_PILL = {
+  "Immersion":"p-grey","Chemistry Check":"p-grey","Bath Fill":"p-green","Bath Disposal":"p-red",
+  "Wax Failure":"p-red","Re-Masking":"p-amber","Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey"
+};
+
+const isWaxFail = e => e.type === "Wax Failure" || (e.type === "Immersion" && e.waxFailure && e.waxFailure !== "None");
+
+/* ---- derived: piece status from one piece's event history ---- */
+function pieceStatusFor(ev, config){
+  const ims = ev.filter(e => e.type === "Immersion").slice().sort(byDate);
+  const eng = ev.filter(e => e.type === "Engineering Review").slice().sort(byDate);
+  const cycles = ims.length;
+  const hours  = round(ims.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0));
+  const engDisp = eng.length ? eng[eng.length - 1].status : "";
+  const base = { cycles, hours };
+  if(ims.some(e => e.result === "Cleared"))      return { s:"Cleared",       cls:"p-green", ...base };
+  if(engDisp === "Accepted")                     return { s:"Accepted",      cls:"p-green", ...base };
+  if(engDisp === "Scrap")                        return { s:"Scrap",         cls:"p-red",   ...base };
+  if(engDisp === "Return to vendor")             return { s:"Returned",      cls:"p-grey",  ...base };
+  if(eng.length)                                 return { s:"→ Engineering", cls:"p-red",   ...base };
+  if(cycles >= config.maxCycles || hours >= config.maxHours)
+                                                 return { s:"→ Engineering", cls:"p-red",   ...base };
+  if(cycles > 0)                                 return { s:"In progress",   cls:"p-amber", ...base };
+  return { s:"—", cls:"p-grey", ...base };
+}
+
+// One row per serial, with its full (sorted) event history attached.
+function derivePieces(events, config){
+  const map = new Map();
+  events.forEach(e => {
+    if(!e.serial) return;
+    const o = map.get(e.serial) || { serial:e.serial, jc:"", component:"", events:[] };
+    o.events.push(e); if(e.jc) o.jc = e.jc; if(e.component) o.component = e.component;
+    map.set(e.serial, o);
+  });
+  const rows = [];
+  map.forEach(o => {
+    const ev  = o.events.slice().sort(byDate);
+    const ims = ev.filter(e => e.type === "Immersion");
+    const st  = pieceStatusFor(ev, config);
+    rows.push({
+      serial:o.serial, jc:o.jc, component:o.component,
+      cycles:ims.length, hours:st.hours,
+      wax:ev.filter(isWaxFail).length,
+      reStrips:ims.filter(e => e.result === "Re-strip").length,
+      firstPass:ims.length > 0 && ims.slice().sort(byDate)[0].result === "Cleared",
+      lastBath:ims.length ? ims[ims.length - 1].bath : "",
+      status:st, events:ev
+    });
+  });
+  rows.sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)));
+  return rows;
+}
+
+// State of one bath for its CURRENT charge (everything since the latest fill).
+function deriveBath(events, config, bath, nowDT){
+  const evs = events.filter(e => e.bath === bath).slice().sort(byDate);
+  const fills = evs.filter(e => e.type === "Bath Fill");
+  const lastFill = fills.length ? fills[fills.length - 1] : null;
+  const start = lastFill ? lastFill.datetime : null;
+  const inCharge = e => !start || e.datetime >= start;
+  const disposal = evs.filter(e => e.type === "Bath Disposal" && inCharge(e)).slice(-1)[0] || null;
+  const end = disposal ? disposal.datetime : nowDT;
+  const within = e => inCharge(e) && e.datetime <= end;
+
+  const chem = evs.filter(e => e.type === "Chemistry Check" && within(e));
+  const lastChem = chem.length ? chem[chem.length - 1] : null;
+  const ims  = evs.filter(e => e.type === "Immersion" && within(e));
+  const loadH = round(ims.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0));
+  const parts = new Set(ims.map(e => e.serial).filter(Boolean)).size;
+  const wax = evs.filter(e => within(e) && isWaxFail(e)).length;
+  const hclAdded   = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL   || 0), 0);
+  const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
+  const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
+  const active = !!lastFill && !disposal;
+
+  const flags = [];
+  if(lastChem){
+    if(num(lastChem.fePpm) != null && +lastChem.fePpm > config.feMax) flags.push("Iron " + lastChem.fePpm + " ppm > " + config.feMax);
+    if(num(lastChem.hclPct) != null && (+lastChem.hclPct < config.hclMin || +lastChem.hclPct > config.hclMax)) flags.push("HCl " + lastChem.hclPct + "% out of band");
+    if(num(lastChem.temp) != null && Math.abs(+lastChem.temp - config.tempSet) > config.tempTol) flags.push("Temp " + lastChem.temp + "°C out of band");
+  }
+  if(active && age !== "" && age >= config.maxBathAge) flags.push("Age " + age + " d ≥ " + config.maxBathAge);
+
+  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags };
+}
+function deriveBaths(events, config, nowDT){ return config.baths.map(b => deriveBath(events, config, b, nowDT)); }
+
+// Roll pieces up to their job cards.
+function deriveJobCards(events, config){
+  const map = new Map();
+  derivePieces(events, config).forEach(r => {
+    const k = r.jc || "(none)";
+    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, cleared:0, fp:0, eng:0, reStrips:0, wax:0 };
+    o.pieces++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
+    if(r.status.s === "→ Engineering") o.eng++; o.reStrips += r.reStrips; o.wax += r.wax;
+    if(!o.component && r.component) o.component = r.component;
+    map.set(k, o);
+  });
+  return [...map.values()]
+    .map(o => ({ ...o, fpy: o.pieces ? Math.round(o.fp / o.pieces * 100) : 0 }))
+    .sort((a, b) => String(a.jc).localeCompare(String(b.jc)));
+}
+
+function deriveKpis(events, config, nowDT){
+  const pr = derivePieces(events, config);
+  const ims = events.filter(e => e.type === "Immersion");
+  const reStrip = ims.filter(e => e.result === "Re-strip").length;
+  const baths = deriveBaths(events, config, nowDT);
+  const clearedPieces = pr.filter(r => r.status.s === "Cleared");
+  return {
+    total: pr.length,
+    cleared: clearedPieces.length,
+    fp: pr.filter(r => r.firstPass).length,
+    eng: pr.filter(r => r.status.s === "→ Engineering").length,
+    inProg: pr.filter(r => r.status.s === "In progress").length,
+    fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
+    reStrip, reStripRate: ims.length ? Math.round(reStrip / ims.length * 100) : 0,
+    immersions: ims.length,
+    wax: events.filter(isWaxFail).length,
+    bathsOver: baths.filter(b => b.active && b.flags.length).length,
+    activeBaths: baths.filter(b => b.active).length,
+    avgCycles: clearedPieces.length ? round(clearedPieces.reduce((a, r) => a + r.cycles, 0) / clearedPieces.length, 2) : 0
+  };
+}
+
+// Quality view rows: every defect-ish event, newest first, tagged with a kind.
+function deriveDefects(events){
+  return events.filter(e =>
+      ["Wax Failure","Re-Masking","Engineering Review"].includes(e.type)
+      || isWaxFail(e) || (e.type === "Immersion" && e.result === "Re-strip"))
+    .slice().sort(byDate).reverse()
+    .map(e => {
+      let kind, detail;
+      if(e.type === "Engineering Review"){ kind = "Eng review"; detail = e.status || ""; }
+      else if(e.type === "Re-Masking"){ kind = "Re-mask"; detail = e.notes || ""; }
+      else if(e.type === "Wax Failure"){ kind = "Wax failure"; detail = e.waxFailure || ""; }
+      else if(isWaxFail(e)){ kind = "Wax failure"; detail = e.waxFailure; }
+      else { kind = "Re-strip"; detail = (e.timeIn || "") + "-" + (e.timeOut || ""); }
+      return { e, kind, detail };
+    });
+}
+
+// Soft, non-blocking warnings shown while logging (and used by the test suite).
+function eventWarnings(d, events, config, nowDT){
+  const w = [];
+  const others = events.filter(e => e.id == null || e.id !== d.id);
+  if(d.type === "Chemistry Check"){
+    const fe = num(d.fePpm); if(fe != null && fe > config.feMax) w.push({ level:"red", msg:`Iron ${fe} ppm exceeds limit ${config.feMax} — bath may be spent` });
+    const hp = num(d.hclPct); if(hp != null && (hp < config.hclMin || hp > config.hclMax)) w.push({ level:"amber", msg:`Free HCl ${hp}% outside band ${config.hclMin}–${config.hclMax}%` });
+    const t = num(d.temp); if(t != null && Math.abs(t - config.tempSet) > config.tempTol) w.push({ level:"amber", msg:`Temp ${t}°C outside ${config.tempSet}±${config.tempTol}°C` });
+  }
+  if(d.type === "Immersion"){
+    if(d.serial){
+      const prior = others.filter(e => e.type === "Immersion" && e.serial === d.serial);
+      const cyc = prior.length + 1;
+      const hrs = prior.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0) + hrsBetween(d.timeIn, d.timeOut);
+      if(cyc > config.maxCycles) w.push({ level:"red", msg:`This is cycle ${cyc} — exceeds max ${config.maxCycles}; route to engineering` });
+      if(hrs >= config.maxHours) w.push({ level:"red", msg:`Cumulative immersion ${round(hrs)} h ≥ max ${config.maxHours} h` });
+      if(prior.some(e => e.result === "Cleared")) w.push({ level:"amber", msg:`Serial ${d.serial} already has a Cleared immersion` });
+    }
+    if(d.bath){
+      const bs = deriveBath(others, config, d.bath, nowDT);
+      if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} was disposed ${fmtDate(bs.disposal.datetime)}` });
+      else if(!bs.lastFill) w.push({ level:"amber", msg:`Bath ${d.bath} has no fill logged` });
+      else if(bs.flags.length) w.push({ level:"amber", msg:`Bath ${d.bath}: ${bs.flags.join("; ")}` });
+    }
+    if(d.timeIn && d.timeOut && hrsBetween(d.timeIn, d.timeOut) <= 0) w.push({ level:"amber", msg:"Time out is not after time in" });
+  }
+  if(d.type === "Bath Fill" && d.bath){
+    const bs = deriveBath(others, config, d.bath, nowDT);
+    if(bs.active) w.push({ level:"amber", msg:`Bath ${d.bath} is already active (filled ${fmtDate(bs.lastFill.datetime)}); dispose before re-filling` });
+  }
+  if((d.type === "HCl Top-Up" || d.type === "Water Top-Up") && d.bath){
+    const bs = deriveBath(others, config, d.bath, nowDT);
+    if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} is disposed` });
+    else if(!bs.lastFill) w.push({ level:"amber", msg:`Bath ${d.bath} has no fill logged` });
+  }
+  return w;
+}
+/* ============================= DOMAIN END =============================== */
+
+/* ----------------------------- storage -------------------------------- */
+function openDB(){ return new Promise((res, rej) => {
+  const r = indexedDB.open(DB_NAME, DB_VER);
+  r.onupgradeneeded = e => { const d = e.target.result;
+    if(!d.objectStoreNames.contains("events")) d.createObjectStore("events", { keyPath:"id", autoIncrement:true });
+    if(!d.objectStoreNames.contains("config")) d.createObjectStore("config", { keyPath:"k" }); };
+  r.onsuccess = e => { db = e.target.result; res(); };
+  r.onerror = e => rej(e.target.error);
+}); }
+function tx(store, mode){ return db.transaction(store, mode).objectStore(store); }
+function getAll(store){ return new Promise((res, rej) => { const r = tx(store, "readonly").getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); }); }
+function putRec(store, obj){ return new Promise((res, rej) => { const r = tx(store, "readwrite").put(obj); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+function delRec(store, key){ return new Promise((res, rej) => { const r = tx(store, "readwrite").delete(key); r.onsuccess = () => res(); r.onerror = () => rej(r.error); }); }
+function clearStore(store){ return new Promise((res, rej) => { const r = tx(store, "readwrite").clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); }); }
+
+async function loadAll(){
+  EVENTS = (await getAll("events")).sort(byDate);
+  CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  (await getAll("config")).forEach(o => CONFIG[o.k] = o.v);
+}
+async function saveConfig(){ for(const k of Object.keys(CONFIG)) await putRec("config", { k, v:CONFIG[k] }); }
+
+function nowLocalDT(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
+function todayISODate(){ return new Date().toISOString().slice(0,10); }
+
+async function addEvent(obj){
+  obj.datetime = obj.datetime || nowLocalDT();
+  obj.eventId = nextEventId(obj.datetime, EVENTS);
+  const id = await putRec("events", obj); obj.id = id; await loadAll();
+}
+async function updateEvent(obj){ await putRec("events", obj); await loadAll(); }
+async function removeEvent(id){ await delRec("events", id); await loadAll(); }
+
+/* ---------------------------- DOM helpers ----------------------------- */
+const $ = (s, el = document) => el.querySelector(s);
+function esc(s){ return (s == null ? "" : String(s)).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function cel(tag, attrs = {}, kids = []){
+  const e = document.createElement(tag);
+  for(const k in attrs){ const v = attrs[k];
+    if(k === "class") e.className = v;
+    else if(k === "html") e.innerHTML = v;
+    else if(k.startsWith("on") && typeof v === "function") e.addEventListener(k.slice(2), v);
+    else if(v != null && v !== false) e.setAttribute(k, v);
+  }
+  (Array.isArray(kids) ? kids : [kids]).forEach(c => { if(c == null || c === false) return; e.append(c.nodeType ? c : document.createTextNode(String(c))); });
+  return e;
+}
+const pill = (text, cls) => cel("span", { class:"pill " + (cls || "p-grey") }, text);
+const tcell = (v, cls) => cel("td", cls ? { class:cls } : {}, v == null ? "" : String(v));
+
+let flashMsg = "";
+function flash(msg){ flashMsg = msg; const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#16242b;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px" }, msg); document.body.append(b); setTimeout(() => b.remove(), 1600); }
+
+/* modal */
+function modal(title, bodyNode, footerNodes){
+  const root = $("#modalRoot"); root.innerHTML = "";
+  const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
+  const box = cel("div", { class:"modal" });
+  box.append(
+    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", onclick:closeModal }, "✕") ]),
+    cel("div", { class:"modal-b" }, bodyNode),
+    footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
+  );
+  overlay.append(box); root.append(overlay);
+}
+function closeModal(){ $("#modalRoot").innerHTML = ""; }
+document.addEventListener("keydown", e => { if(e.key === "Escape") closeModal(); });
+
+/* SVG charts (dependency-free) */
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#6b7c84", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
+
+// points: [{label, y}]. opt: {w,h,color,limit,band:{lo,hi},mini,fmtY}
+function trendChart(points, opt = {}){
+  const w = opt.w || 260, h = opt.h || 92, mini = !!opt.mini;
+  const padL = mini ? 4 : 30, padR = mini ? 4 : 8, padT = mini ? 4 : 10, padB = mini ? 4 : 16;
+  const fmtY = opt.fmtY || (v => String(round(v, 1)));
+  const ys = points.map(p => p.y).filter(Number.isFinite);
+  let hi = Math.max(...ys, opt.limit != null ? opt.limit : -Infinity, opt.band ? opt.band.hi : -Infinity);
+  let lo = Math.min(...ys, opt.band ? opt.band.lo : Infinity);
+  if(!Number.isFinite(hi)) hi = 1; if(!Number.isFinite(lo)) lo = 0;
+  lo = Math.min(lo, hi); if(hi === lo) hi = lo + 1;
+  const span = hi - lo; hi += span * 0.12; lo -= span * 0.08;
+  const X = i => padL + (points.length <= 1 ? (w - padL - padR) / 2 : i * (w - padL - padR) / (points.length - 1));
+  const Y = v => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo));
+  const svg = svgEl("svg", { class:"chart", width:"100%", height:h, viewBox:`0 0 ${w} ${h}`, preserveAspectRatio:"none" });
+  if(opt.band) svg.appendChild(svgEl("rect", { x:padL, y:Y(opt.band.hi), width:w - padL - padR, height:Math.max(0, Y(opt.band.lo) - Y(opt.band.hi)), fill:"rgba(31,122,61,.10)" }));
+  if(opt.limit != null){ const ly = Y(opt.limit); svg.appendChild(svgEl("line", { x1:padL, y1:ly, x2:w - padR, y2:ly, stroke:"#9c2a2a", "stroke-dasharray":"4 3", "stroke-width":1 })); }
+  if(!mini){ svg.appendChild(svgText(padL - 4, Y(hi - span * 0.05) + 3, fmtY(hi - span * 0.05), "end")); svg.appendChild(svgText(padL - 4, Y(lo + span * 0.05), fmtY(lo + span * 0.05), "end")); }
+  const d = points.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.y).toFixed(1)).join(" ");
+  svg.appendChild(svgEl("path", { d, fill:"none", stroke:opt.color || "#2e6e84", "stroke-width":2, "stroke-linejoin":"round" }));
+  if(!mini) points.forEach((p, i) => { const over = opt.limit != null && p.y > opt.limit; svg.appendChild(svgEl("circle", { cx:X(i), cy:Y(p.y), r:2.6, fill:over ? "#9c2a2a" : (opt.color || "#2e6e84") })); });
+  return svg;
+}
+
+/* ------------------------------ state --------------------------------- */
+const TABS = ["Log event", "Event log", "Pieces", "Baths", "Quality", "Dashboard", "Settings"];
+let activeTab = "Log event";
+let logFilter = { type:"", bath:"", text:"" };
+let qualFilter = "All";
+let formType = null, formData = {}, editId = null;
+
+/* ------------------------------ render -------------------------------- */
+function attentionItems(){
+  const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active && b.flags.length);
+  const pieces = derivePieces(EVENTS, CONFIG).filter(r => r.status.s === "→ Engineering");
+  return { baths, pieces };
+}
+function renderAttention(){
+  const a = $("#attention"); a.innerHTML = "";
+  const { baths, pieces } = attentionItems();
+  if(!baths.length && !pieces.length) return;
+  const bar = cel("div", { class:"attn" });
+  bar.append(cel("span", {}, "⚠"));
+  if(baths.length) bar.append(cel("span", {}, [cel("b", {}, String(baths.length)), " bath" + (baths.length > 1 ? "s" : "") + " out of band"]));
+  if(pieces.length) bar.append(cel("span", {}, [cel("b", {}, String(pieces.length)), " piece" + (pieces.length > 1 ? "s" : "") + " awaiting disposition"]));
+  bar.append(cel("span", { class:"sp" }));
+  if(baths.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Baths"; render(); } }, "View baths"));
+  if(pieces.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Pieces"; render(); } }, "View pieces"));
+  a.append(bar);
+}
+function renderNav(){
+  const nav = $("#nav"); nav.innerHTML = "";
+  const { baths, pieces } = attentionItems();
+  const counts = { "Baths":baths.length, "Pieces":pieces.length };
+  TABS.forEach(t => {
+    const kids = [t];
+    if(counts[t]) kids.push(cel("span", { class:"badge" }, String(counts[t])));
+    nav.append(cel("button", { class:t === activeTab ? "on" : "", onclick:() => { activeTab = t; render(); } }, kids));
+  });
+}
+function render(){
+  renderNav(); renderAttention();
+  const m = $("#main"); m.innerHTML = "";
+  ({ "Log event":vLog, "Event log":vEventLog, "Pieces":vPieces, "Baths":vBaths, "Quality":vQuality, "Dashboard":vDash, "Settings":vSettings }[activeTab])(m);
+}
+
+/* --- Log event --- */
+function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t }; render(); }
+function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); activeTab = "Log event"; render(); }
+
+function vLog(m){
+  m.append(cel("h2", { class:"sec" }, editId != null ? "Edit event" : "Log an event"));
+  const grid = cel("div", { class:"typegrid" });
+  Object.keys(TYPES).forEach(t => grid.append(cel("button", { class:"typebtn" + (formType === t ? " on" : ""), onclick:() => startNew(t) },
+    [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+  m.append(grid);
+  if(!formType){ m.append(cel("div", { class:"note" }, "Pick an event type above. Each one shows only the fields it needs, and the system stamps a unique Event ID and timestamp automatically.")); return; }
+
+  const card = cel("div", { class:"card formcard" });
+  const head = cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:10px" }, [
+    cel("h2", { class:"sec", style:"margin:0;flex:1" }, formType),
+    editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null
+  ]);
+  card.append(head);
+  card.append(cel("div", { class:"field" }, [
+    cel("label", { class:"f" }, "Date / time"),
+    cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })
+  ]));
+
+  const two = cel("div", { class:"twocol" });
+  let needList = false;
+  TYPES[formType].fields.forEach(fd => {
+    const [name, label, kind] = fd;
+    const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
+    let inp;
+    const onin = e => { formData[name] = e.target.value; refreshWarn(); };
+    if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
+    else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
+    else if(kind === "num"){ inp = cel("input", { type:"number", step:"any", oninput:onin }); }
+    else if(kind === "time"){ inp = cel("input", { type:"time", oninput:onin }); }
+    else if(kind === "operator"){ needList = true; inp = cel("input", { type:"text", list:"opList", oninput:onin }); }
+    else { inp = cel("input", { type:"text", oninput:onin }); }
+    if(formData[name] != null) inp.value = formData[name];
+    wrap.append(inp); two.append(wrap);
+  });
+  card.append(two);
+  if(needList){ const dl = cel("datalist", { id:"opList" }); CONFIG.operators.forEach(o => dl.append(cel("option", { value:o }))); card.append(dl); }
+
+  const warnBox = cel("div", { style:"margin-top:4px" });
+  card.append(warnBox);
+  function refreshWarn(){
+    warnBox.innerHTML = "";
+    eventWarnings(formData, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
+      warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
+  }
+  refreshWarn();
+
+  card.append(cel("div", { style:"margin-top:8px;display:flex;gap:8px" }, [
+    cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update event" : "Save event"),
+    cel("button", { class:"btn", onclick:() => { formType = null; editId = null; render(); } }, "Cancel")
+  ]));
+  m.append(card);
+  card.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
+}
+async function saveForm(){
+  const rec = Object.assign({}, formData);
+  if(editId != null){ rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS); await updateEvent(rec); flash("Updated " + rec.eventId); }
+  else { await addEvent(rec); flash("Saved " + rec.eventId); }
+  formType = editId != null ? null : formType;
+  editId = null;
+  formData = formType ? { datetime:nowLocalDT(), type:formType } : {};
+  render();
+}
+
+/* --- Event log --- */
+function eventDetail(e){
+  const d = [];
+  if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
+  if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} (${hrsBetween(e.timeIn, e.timeOut)} h) ${e.result || ""}` + (isWaxFail(e) ? ` · ${e.waxFailure}` : ""));
+  if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
+  if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
+  if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
+  if(e.type === "Wax Failure") d.push(e.waxFailure || "");
+  if(e.type === "Engineering Review") d.push(e.status || "");
+  if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
+  if(e.notes) d.push("“" + e.notes + "”");
+  return d.join("  ");
+}
+function vEventLog(m){
+  m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
+  const chips = cel("div", { class:"chips" });
+  const tSel = cel("select", { style:"width:auto", oninput:e => { logFilter.type = e.target.value; render(); } }, cel("option", { value:"" }, "All types"));
+  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, t))); tSel.value = logFilter.type;
+  const bSel = cel("select", { style:"width:auto", oninput:e => { logFilter.bath = e.target.value; render(); } }, cel("option", { value:"" }, "All baths"));
+  CONFIG.baths.forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
+  const txt = cel("input", { style:"width:210px", placeholder:"search J/C, serial, notes…", value:logFilter.text, oninput:e => { logFilter.text = e.target.value; render(); } });
+  chips.append(tSel, bSel, txt, cel("button", { class:"btn sm", onclick:() => { logFilter = { type:"", bath:"", text:"" }; render(); } }, "Clear"));
+  m.append(chips);
+
+  const q = (logFilter.text || "").toLowerCase();
+  const rows = EVENTS.slice().reverse().filter(e =>
+    (!logFilter.type || e.type === logFilter.type) && (!logFilter.bath || e.bath === logFilter.bath) &&
+    (!q || [e.eventId, e.jc, e.serial, e.component, e.notes, e.operator, e.type].some(v => v && String(v).toLowerCase().includes(q))));
+  m.append(cel("div", { class:"muted", style:"margin-bottom:8px;font-size:12px" }, rows.length + " of " + EVENTS.length + " events"));
+  if(!rows.length){ m.append(emptyState()); return; }
+
+  const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
+  ["Event ID","When","Type","Bath","J/C","Serial","Cyc","Detail","Op",""].forEach(c => hr.append(cel("th", {}, c)));
+  t.append(cel("thead", {}, hr));
+  const tb = cel("tbody");
+  rows.forEach(e => {
+    const tr = cel("tr");
+    tr.append(cel("td", { class:"mono" }, e.eventId || ""));
+    tr.append(tcell(fmtDT(e.datetime)));
+    tr.append(cel("td", {}, pill(e.type, TYPE_PILL[e.type])));
+    tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(e.serial)); tr.append(tcell(e.cycle));
+    tr.append(tcell(eventDetail(e)));
+    tr.append(tcell(e.operator));
+    tr.append(cel("td", { style:"white-space:nowrap" }, [
+      cel("button", { class:"btn sm", title:"Edit", onclick:() => startEdit(e) }, "✎"),
+      cel("button", { class:"btn sm danger", title:"Delete", style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ await removeEvent(e.id); render(); } } }, "✕")
+    ]));
+    tb.append(tr);
+  });
+  t.append(tb); wrap.append(t); m.append(wrap);
+}
+
+/* --- Pieces --- */
+function vPieces(m){
+  m.append(cel("h2", { class:"sec" }, "Pieces — derived from the event stream"));
+  const rows = derivePieces(EVENTS, CONFIG);
+  if(!rows.length){ m.append(emptyState()); return; }
+  const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
+  ["J/C","Serial","Component","Cycles","Cum h","Wax","Status",""].forEach((c, i) => hr.append(cel("th", i >= 3 && i <= 5 ? { class:"num" } : {}, c)));
+  t.append(cel("thead", {}, hr));
+  const tb = cel("tbody");
+  rows.forEach(r => {
+    const tr = cel("tr");
+    tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component));
+    tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
+    tr.append(cel("td", { class:"num" }, String(r.hours)));
+    tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
+    tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
+    tr.append(cel("td", {}, cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history")));
+    tb.append(tr);
+  });
+  t.append(tb); wrap.append(t); m.append(wrap);
+}
+function pieceTimeline(ev){
+  const ul = cel("ul", { class:"tl" });
+  ev.forEach(e => {
+    ul.append(cel("li", {}, [
+      cel("div", { class:"tl-h" }, [pill(e.type, TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime) + (e.bath ? "  ·  bath " + e.bath : "")), e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
+      cel("div", { class:"tl-d" }, eventDetail(e) || "")
+    ]));
+  });
+  return ul;
+}
+function showSerial(serial){
+  const p = derivePieces(EVENTS, CONFIG).find(r => r.serial === serial);
+  if(!p) return;
+  const ev = p.events.slice().reverse();
+  const body = cel("div", {});
+  body.append(cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" }, [
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, p.jc || "—"), cel("div", { class:"l" }, "Job card")]),
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.cycles)), cel("div", { class:"l" }, "Cycles")]),
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.hours)), cel("div", { class:"l" }, "Cum hours")]),
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
+  ]));
+  body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
+  body.append(pieceTimeline(ev));
+  modal("Serial " + serial + (p.component ? " · " + p.component : ""), body, [
+    cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Print traveler"),
+    cel("button", { class:"btn primary", onclick:closeModal }, "Close")
+  ]);
+}
+function printTraveler(p){
+  const pa = $("#printArea"); pa.innerHTML = "";
+  pa.append(cel("div", { class:"pr-head" }, [
+    cel("div", {}, [cel("h2", {}, "Strip Traveler — " + p.serial), cel("div", { class:"muted" }, p.component || "")]),
+    cel("div", { style:"text-align:right" }, [cel("div", {}, "Stripping Historian"), cel("div", { class:"muted" }, "Printed " + fmtDT(nowLocalDT()))])
+  ]));
+  const meta = cel("table", { style:"width:auto;margin-bottom:14px" });
+  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Job card"), cel("td", { class:"pr-meta" }, p.jc || "—"), cel("td", { class:"pr-meta" }, "Cycles"), cel("td", { class:"pr-meta" }, String(p.cycles))]));
+  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cum hours"), cel("td", { class:"pr-meta" }, String(p.hours))]));
+  pa.append(meta);
+  const t = cel("table"), hr = cel("tr");
+  ["Event ID","When","Type","Bath","Detail","Operator"].forEach(c => hr.append(cel("th", {}, c)));
+  t.append(cel("thead", {}, hr));
+  const tb = cel("tbody");
+  p.events.forEach(e => tb.append(cel("tr", {}, [cel("td", { class:"mono" }, e.eventId || ""), tcell(fmtDT(e.datetime)), tcell(e.type), tcell(e.bath), tcell(eventDetail(e)), tcell(e.operator)])));
+  t.append(tb); pa.append(t);
+  window.print();
+}
+
+/* --- Baths --- */
+function vBaths(m){
+  m.append(cel("h2", { class:"sec" }, "Baths — current charge computed from fills, checks, top-ups, disposals"));
+  const row = cel("div", { class:"row" });
+  deriveBaths(EVENTS, CONFIG, nowLocalDT()).forEach(s => {
+    const c = cel("div", { class:"card bathcard", onclick:() => showBath(s.bath) });
+    c.append(cel("h3", {}, [s.bath, s.active ? pill("active", "p-green") : (s.disposal ? pill("disposed", "p-grey") : pill("empty", "p-grey"))]));
+    c.append(cel("div", { class:"muted", style:"font-size:12px;margin-bottom:8px" },
+      s.disposal ? ("Disposed " + fmtDate(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
+    const kv = (k, v) => c.append(cel("div", { class:"kv" }, [cel("span", {}, k), cel("span", {}, v)]));
+    kv("Age (days)", s.age === "" ? "—" : String(s.age));
+    if(s.lastChem) kv("Latest chem", "HCl " + fmtNum(s.lastChem.hclPct) + "% · Fe " + fmtNum(s.lastChem.fePpm) + " · " + fmtNum(s.lastChem.temp) + "°C");
+    kv("Load (piece-h)", String(s.loadH));
+    kv("Parts processed", String(s.parts));
+    kv("Wax failures", String(s.wax));
+    if(s.flags.length) c.append(cel("div", { class:"note", style:"margin-top:10px;background:var(--red-bg);color:var(--red)" }, "⚠ " + s.flags.join(" · ")));
+    else if(s.lastChem) c.append(cel("div", { class:"flagok", style:"margin-top:10px;font-size:12px;color:var(--green)" }, "✓ in band"));
+    if(s.chem.length > 1){
+      const sp = cel("div", { style:"margin-top:10px" });
+      sp.append(cel("div", { class:"muted", style:"font-size:11px;margin-bottom:2px" }, "Iron ppm trend (tap card for full chemistry)"));
+      sp.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:40, limit:CONFIG.feMax, color:"#2e6e84" }));
+      c.append(sp);
+    }
+    row.append(c);
+  });
+  m.append(row);
+}
+function showBath(bath){
+  const s = deriveBath(EVENTS, CONFIG, bath, nowLocalDT());
+  const body = cel("div", {});
+  body.append(cel("div", { class:"muted", style:"margin-bottom:6px" },
+    s.disposal ? ("Disposed " + fmtDT(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDT(s.lastFill.datetime) : "No fill logged")));
+  if(s.lastFill) body.append(cel("div", { style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
+  if(s.flags.length) body.append(cel("div", { class:"note", style:"background:var(--red-bg);color:var(--red)" }, "⚠ " + s.flags.join(" · ")));
+
+  if(s.chem.length){
+    const charts = cel("div", { class:"charts3" });
+    const mk = (title, key, opt, unit) => {
+      const ch = cel("div", { class:"ch" });
+      const last = s.chem[s.chem.length - 1];
+      ch.append(cel("div", { class:"chttl" }, [cel("span", {}, title), cel("span", {}, fmtNum(last[key]) + (unit || ""))]));
+      ch.append(trendChart(s.chem.map(e => ({ y:+e[key] || 0 })), opt));
+      return ch;
+    };
+    charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#9c2a2a" }, ""));
+    charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#2e6e84" }, "%"));
+    charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#8a5a00" }, "°"));
+    body.append(charts);
+    body.append(cel("div", { class:"muted", style:"font-size:11px;margin-top:4px" }, "Red dashed = limit · green band = control band"));
+  }
+
+  const stats = cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" });
+  [["Age (d)", s.age === "" ? "—" : s.age], ["Load (piece-h)", s.loadH], ["Parts", s.parts], ["Wax fails", s.wax], ["Chem checks", s.chem.length]]
+    .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
+  body.append(stats);
+
+  modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, [cel("button", { class:"btn primary", onclick:closeModal }, "Close")]);
+}
+
+/* --- Quality --- */
+function vQuality(m){
+  m.append(cel("h2", { class:"sec" }, "Quality — instant defect database"));
+  const all = deriveDefects(EVENTS);
+  const kinds = ["All", "Wax failure", "Re-mask", "Eng review", "Re-strip"];
+  const chips = cel("div", { class:"chips" });
+  kinds.forEach(k => chips.append(cel("button", { class:"btn sm" + (qualFilter === k ? " primary" : ""), onclick:() => { qualFilter = k; render(); } }, k)));
+  m.append(chips);
+  const defs = qualFilter === "All" ? all : all.filter(d => d.kind === qualFilter);
+  if(!defs.length){ m.append(cel("div", { class:"empty" }, "No matching defects, re-masking, or engineering reviews logged.")); return; }
+  const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
+  ["When","Kind","J/C","Serial","Bath","Detail","Op"].forEach(c => hr.append(cel("th", {}, c)));
+  t.append(cel("thead", {}, hr));
+  const tb = cel("tbody");
+  defs.forEach(({ e, kind, detail }) => {
+    const tr = cel("tr");
+    tr.append(tcell(fmtDT(e.datetime)));
+    tr.append(cel("td", {}, pill(kind, TYPE_PILL[e.type] || "p-amber")));
+    tr.append(cel("td", {}, e.serial ? cel("span", { class:"linkish", onclick:() => showSerial(e.serial) }, e.jc || "—") : (e.jc || "")));
+    tr.append(cel("td", {}, e.serial ? cel("span", { class:"linkish", onclick:() => showSerial(e.serial) }, e.serial) : ""));
+    tr.append(tcell(e.bath)); tr.append(tcell(detail)); tr.append(tcell(e.operator));
+    tb.append(tr);
+  });
+  t.append(tb); wrap.append(t); m.append(wrap);
+}
+
+/* --- Dashboard --- */
+function vDash(m){
+  m.append(cel("h2", { class:"sec" }, "Dashboard"));
+  const k = deriveKpis(EVENTS, CONFIG, nowLocalDT());
+  const tiles = [
+    ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")],
+    ["Re-strip rate", k.reStripRate + "%", k.reStripRate > 40 ? "warn" : ""],
+    ["Pieces total", k.total, ""], ["Cleared", k.cleared, ""],
+    ["In progress", k.inProg, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""],
+    ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""],
+    ["Avg cycles to clear", k.avgCycles || "—", ""],
+    ["Active baths", k.activeBaths, ""], ["Baths out of band", k.bathsOver, k.bathsOver > 0 ? "warn" : ""]
+  ];
+  const kp = cel("div", { class:"kpis" });
+  tiles.forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
+  m.append(kp);
+
+  const jr = deriveJobCards(EVENTS, CONFIG);
+  if(jr.length){
+    m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
+    const bars = cel("div", { class:"card", style:"max-width:560px" });
+    jr.forEach(r => {
+      bars.append(cel("div", { style:"margin-bottom:8px" }, [
+        cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.fp + "/" + r.pieces + " · " + r.fpy + "%")]),
+        cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
+      ]));
+    });
+    m.append(bars);
+
+    m.append(cel("h3", { class:"sub" }, "By job card"));
+    const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
+    ["J/C","Component","Pieces","Cleared","First-pass","→ Eng","Re-strips","Wax","FPY"].forEach((c, i) => hr.append(cel("th", i >= 2 ? { class:"num" } : {}, c)));
+    t.append(cel("thead", {}, hr));
+    const tb = cel("tbody");
+    jr.forEach(r => {
+      const tr = cel("tr");
+      tr.append(tcell(r.jc)); tr.append(tcell(r.component));
+      [r.pieces, r.cleared, r.fp, r.eng, r.reStrips, r.wax, r.fpy + "%"].forEach(v => tr.append(cel("td", { class:"num" }, String(v))));
+      tb.append(tr);
+    });
+    t.append(tb); wrap.append(t); m.append(wrap);
+  }
+
+  const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active || b.disposal);
+  if(baths.length){
+    m.append(cel("h3", { class:"sub" }, "Bath status"));
+    const row = cel("div", { class:"row" });
+    baths.forEach(s => {
+      const c = cel("div", { class:"card", style:"flex:1;min-width:200px;max-width:260px;cursor:pointer", onclick:() => showBath(s.bath) });
+      c.append(cel("div", { style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px" }, [cel("b", {}, s.bath), s.active ? (s.flags.length ? pill("out of band", "p-red") : pill("in band", "p-green")) : pill("disposed", "p-grey")]));
+      if(s.lastChem) c.append(cel("div", { class:"muted", style:"font-size:12px" }, "Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d")));
+      if(s.chem.length > 1) c.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:34, limit:CONFIG.feMax }));
+      row.append(c);
+    });
+    m.append(row);
+  }
+}
+
+/* --- Settings --- */
+function vSettings(m){
+  m.append(cel("h2", { class:"sec" }, "Settings"));
+  const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
+  c1.append(cel("h2", { class:"sec" }, "Process limits"));
+  const lim = [["tempSet","Temperature setpoint °C"],["tempTol","Temp tolerance ± °C"],["hclMin","Free HCl % minimum"],["hclMax","Free HCl % maximum"],["feMax","Iron Fe max ppm"],["maxCycles","Max cycles / piece"],["maxHours","Max immersion h / piece"],["maxBathAge","Max bath life (days)"]];
+  const lg = cel("div", { class:"twocol" });
+  lim.forEach(([k, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[k], oninput:async e => { CONFIG[k] = +e.target.value; await saveConfig(); renderAttention(); renderNav(); } })])));
+  c1.append(lg); m.append(c1);
+
+  const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
+  c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
+  m.append(c2);
+
+  const c3 = cel("div", { class:"card", style:"max-width:560px" });
+  c3.append(cel("h2", { class:"sec" }, "Data"));
+  c3.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap" }, [
+    cel("button", { class:"btn", onclick:loadExample }, "Load example data"),
+    cel("button", { class:"btn danger", onclick:async () => { if(confirm("Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); flash("All events cleared"); render(); } } }, "Clear all events")
+  ]));
+  c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, "Data is stored in this browser, on this PC only. Use “Backup” (top bar) regularly, and “Import” to restore or move to another machine."));
+  m.append(c3);
+}
+function emptyState(){ return cel("div", { class:"empty" }, [cel("div", { style:"font-size:15px;margin-bottom:6px" }, "No events yet"), cel("div", {}, "Use “Log event” to start, or load the example from Settings → Data.")]); }
+
+/* ---------------------------- export / import ------------------------- */
+function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = cel("a", { href:u, download:name }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
+$("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:1, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
+$("#exportCsv").onclick = () => {
+  const cols = ["eventId","datetime","type","bath","jc","component","serial","cycle","hclPct","fePpm","temp","hclAddedL","waterAddedL","h3po4AddedL","timeIn","timeOut","result","waxFailure","disposalReason","status","operator","notes"];
+  const lines = [cols.join(",")];
+  EVENTS.forEach(e => lines.push(cols.map(c => { let v = e[c] == null ? "" : String(e[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(",")));
+  download("strip_historian_events_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
+};
+$("#importBtn").onclick = () => $("#importFile").click();
+$("#importFile").onchange = e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = async () => {
+    try {
+      const d = JSON.parse(r.result);
+      if(!Array.isArray(d.events)) throw new Error("no events array in file");
+      if(!confirm("Import will REPLACE current data with the backup (" + d.events.length + " events). Continue?")) return;
+      await clearStore("events");
+      for(const ev of d.events){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
+      if(d.config){ CONFIG = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config); await saveConfig(); }
+      await loadAll(); flash("Imported " + d.events.length + " events"); render();
+    } catch(err){ alert("Could not read file: " + err.message); }
+  };
+  r.readAsText(f); e.target.value = "";
+};
+
+/* ---------------------------- example data ---------------------------- */
+async function loadExample(){
+  if(EVENTS.length && !confirm("Add example data on top of existing events?")) return;
+  const ex = [];
+  const push = o => ex.push(o);
+
+  // ---- Bath 102-103: a charge that ages out (iron climbs past the limit) ----
+  push({ datetime:"2026-03-13T08:00", type:"Bath Fill", bath:"102-103", hclAddedL:300, waterAddedL:700, h3po4AddedL:100, operator:"Maint", notes:"new charge" });
+  push({ datetime:"2026-03-13T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:21, fePpm:30, operator:"Maint" });
+  push({ datetime:"2026-03-18T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:19, fePpm:70, operator:"Maint" });
+  push({ datetime:"2026-03-19T07:30", type:"HCl Top-Up", bath:"102-103", hclAddedL:120, operator:"Maint", notes:"restore free acid" });
+  push({ datetime:"2026-03-22T09:00", type:"Chemistry Check", bath:"102-103", temp:89, hclPct:17, fePpm:110, operator:"Maint" });
+  push({ datetime:"2026-03-23T09:00", type:"Chemistry Check", bath:"102-103", temp:88, hclPct:14, fePpm:160, operator:"Maint", notes:"acid low, iron high" });
+
+  // J/C 7261 — GT26 R2011 V3, six serials going through cycles in 102-103
+  const ser = ["7261-01","7261-02","7261-03","7261-04","7261-05","7261-06"];
+  ser.forEach((s, i) => push({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:1, timeIn:"08:00", timeOut:"15:30", result:(i === 0 || i === 3) ? "Cleared" : "Re-strip", operator:"Diang" }));
+  ["7261-02","7261-03","7261-05","7261-06"].forEach(s => push({ datetime:"2026-03-22T20:30", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:2, timeIn:"20:30", timeOut:"02:00", result:s === "7261-02" ? "Cleared" : "Re-strip", operator:"JM" }));
+  [["7261-03","Cleared","None"],["7261-05","Re-strip","Complete mask loss"],["7261-06","Re-strip","Complete mask loss"]]
+    .forEach(([s, r, w]) => push({ datetime:"2026-03-23T08:30", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:3, timeIn:"08:30", timeOut:"17:30", result:r, waxFailure:w, operator:"Bernabe" }));
+  push({ datetime:"2026-03-24T07:00", type:"Bath Disposal", bath:"102-103", disposalReason:"Iron limit reached", operator:"Maint" });
+
+  // ---- Bath 106-107: rescue charge for the stragglers ----
+  push({ datetime:"2026-03-23T18:00", type:"Bath Fill", bath:"106-107", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" });
+  push({ datetime:"2026-03-23T18:30", type:"Chemistry Check", bath:"106-107", temp:90, hclPct:22, fePpm:10, operator:"Maint" });
+  push({ datetime:"2026-03-23T19:00", type:"Re-Masking", jc:"7261", serial:"7261-05", operator:"Bernabe", notes:"re-waxed cooling holes before rescue dip" });
+  push({ datetime:"2026-03-23T20:00", type:"Immersion", bath:"106-107", jc:"7261", component:"GT26 R2011 V3", serial:"7261-05", cycle:4, timeIn:"20:00", timeOut:"02:00", result:"Re-strip", operator:"Diang" });
+  push({ datetime:"2026-03-24T09:00", type:"Engineering Review", jc:"7261", serial:"7261-05", status:"Engineering review", operator:"QA", notes:"4 cycles + wax loss" });
+  push({ datetime:"2026-03-24T09:05", type:"Engineering Review", jc:"7261", serial:"7261-06", status:"Scrap", operator:"QA", notes:"3 cycles, complete mask loss" });
+
+  // ---- Bath 202-203: a clean line for contrast (good first-pass yield) ----
+  push({ datetime:"2026-03-20T08:00", type:"Bath Fill", bath:"202-203", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" });
+  push({ datetime:"2026-03-20T08:30", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:21, fePpm:15, operator:"Maint" });
+  ["7440-01","7440-02","7440-03"].forEach((s, i) => push({ datetime:"2026-03-21T08:00", type:"Immersion", bath:"202-203", jc:"7440", component:"GT26 R2012 V2", serial:s, cycle:1, timeIn:"08:00", timeOut:"14:00", result:"Cleared", operator:"Diang" }));
+  push({ datetime:"2026-03-25T09:00", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:20, fePpm:45, operator:"Maint" });
+
+  for(const e of ex) await addEvent(e);
+  flash("Example loaded (" + ex.length + " events)");
+  activeTab = "Dashboard"; render();
+}
+
+/* -------------------------------- boot -------------------------------- */
+(async function(){
+  try { await openDB(); await loadAll(); }
+  catch(err){ document.body.innerHTML = "<p style='padding:20px'>This app needs a browser with IndexedDB. Error: " + esc(err.message || err) + "</p>"; return; }
+  render();
+})();
+</script>
+</body>
+</html>
