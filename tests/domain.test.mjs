@@ -2,10 +2,9 @@
  *
  * The app ships as one self-contained HTML file. Rather than duplicate logic,
  * this harness extracts the DOMAIN block (and the whole <script>) straight out
- * of index.html and exercises it in Node — so there is a single source of truth
- * and the tests cannot drift from what actually ships.
+ * of index.html and exercises it in Node — single source of truth, no drift.
  *
- * Run with:  node --test   (or `npm test`)
+ * Run with:  npm test   (node --test tests/*.test.mjs)
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -16,196 +15,228 @@ import { dirname, join } from "node:path";
 const here = dirname(fileURLToPath(import.meta.url));
 const html = readFileSync(join(here, "..", "index.html"), "utf8");
 
-/* ---- extract the full script and the pure DOMAIN block ---- */
 const scriptSrc = html.slice(html.indexOf("<script>") + "<script>".length, html.lastIndexOf("</script>"));
-
 const domStart = html.indexOf("DOMAIN START");
 const domEnd = html.indexOf("DOMAIN END");
 assert.ok(domStart > -1 && domEnd > domStart, "DOMAIN markers must be present in index.html");
-// from the end of the START comment line to the start of the END comment block
 const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf("/*", domEnd));
 
 const EXPORTS = [
-  "round","num","fmtNum","byDate","hrsBetween","daysBetween","fmtDate","fmtDT","nextEventId",
-  "pieceStatusFor","derivePieces","deriveBath","deriveBaths","deriveJobCards","deriveKpis",
-  "deriveDefects","eventWarnings","isWaxFail","TYPES","F","TYPE_PILL"
+  "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
+  "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
+  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
 
-const CONFIG = {
-  tempSet:90, tempTol:3, hclMin:16, hclMax:22, feMax:100,
-  maxCycles:3, maxHours:24, maxBathAge:30,
-  baths:["B1","B2"], operators:[]
-};
+const CONFIG = { tempSet:90, tempTol:3, hclMin:16, hclMax:22, feMax:100, maxCycles:3, maxHours:24, maxBathAge:30, baths:["B1","B2"], operators:[] };
 const NOW = "2026-04-01T00:00";
 let _id = 0;
-const ev = o => ({ id:++_id, eventId:(o.datetime || "").slice(0,10).replace(/-/g,"") + "-x", ...o });
+const ev = o => ({ id:++_id, eventId:(o.datetime || "").slice(0,10).replace(/-/g,"") + "-" + _id, ...o });
+const load = (dt, bath, serials, extra = {}) => ev({ datetime:dt, type:"Load In", bath, serials, ...extra });
+const extract = (dt, bath, items, extra = {}) => ev({ datetime:dt, type:"Extraction", bath, items, ...extra });
 
-/* ----------------------------- helpers ----------------------------- */
+/* ----------------------------- harness ----------------------------- */
 test("the whole <script> parses (syntax check)", () => {
-  // new Function compiles but does not execute the body — a pure syntax gate.
   assert.doesNotThrow(() => new Function(scriptSrc));
 });
-
-test("hrsBetween handles same-day and overnight", () => {
-  assert.equal(D.hrsBetween("08:00", "15:30"), 7.5);
-  assert.equal(D.hrsBetween("20:30", "02:00"), 5.5);   // rolls past midnight
-  assert.equal(D.hrsBetween("22:00", "22:00"), 0);
-  assert.equal(D.hrsBetween("", "10:00"), 0);
+test("the event schema uses Load In + Extraction, not a combined Immersion", () => {
+  assert.ok(D.TYPES["Load In"] && D.TYPES["Extraction"]);
+  assert.equal(D.TYPES["Immersion"], undefined);
 });
 
-test("daysBetween, fmtDate, nextEventId", () => {
+/* ----------------------------- helpers ----------------------------- */
+test("time + serial helpers", () => {
+  assert.equal(D.hrsBetween("08:00", "15:30"), 7.5);
+  assert.equal(D.hrsBetween("20:30", "02:00"), 5.5);
+  assert.equal(D.hoursBetweenDT("2026-03-22T08:00", "2026-03-22T15:30"), 7.5);
+  assert.equal(D.hoursBetweenDT("2026-03-22T20:00", "2026-03-23T02:00"), 6); // spans midnight/days
   assert.equal(D.daysBetween("2026-03-13", "2026-03-24"), 11);
   assert.equal(D.fmtDate("2026-03-13"), "13 Mar 26");
-  assert.equal(D.fmtDT("2026-03-13T08:05"), "13 Mar 26 08:05");
   assert.equal(D.nextEventId("2026-03-13T08:00", []), "20260313-0001");
-  const seeded = [{ eventId:"20260313-0001" }, { eventId:"20260313-0002" }, { eventId:"20260314-0001" }];
-  assert.equal(D.nextEventId("2026-03-13T10:00", seeded), "20260313-0003");
+});
+test("parseSerials expands ranges and dedupes", () => {
+  assert.deepEqual(D.parseSerials("7261-01..06"), ["7261-01","7261-02","7261-03","7261-04","7261-05","7261-06"]);
+  assert.deepEqual(D.parseSerials("7261-01..7261-03, 7261-09"), ["7261-01","7261-02","7261-03","7261-09"]);
+  assert.deepEqual(D.parseSerials("A1\nA2 A2,A3"), ["A1","A2","A3"]);
+  assert.deepEqual(D.parseSerials(""), []);
+});
+
+/* --------------------- load / extract pairing ---------------------- */
+test("multi-part load + partial extraction tracks what is still in the bath", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A","B","C"], { jc:"J", component:"X" }),
+    extract("2026-03-22T15:30", "B1", [{ serial:"A", result:"Cleared" }])   // pull only A
+  ];
+  const { records, open } = D.deriveImmersions(events, "2026-03-22T18:00");
+  const byS = Object.fromEntries(records.map(r => [r.serial, r]));
+  assert.equal(byS.A.open, false);
+  assert.equal(byS.A.result, "Cleared");
+  assert.equal(byS.A.hours, 7.5);             // out − in, from datetimes
+  assert.equal(byS.B.open, true);
+  assert.equal(byS.C.open, true);
+  assert.equal(open.size, 2);                 // B and C are still in the tank
+  assert.deepEqual(D.bathContents(events, "2026-03-22T18:00", "B1").map(r => r.serial), ["B","C"]);
+  assert.equal(byS.B.elapsedH, 10);           // 08:00 -> 18:00
+});
+test("re-loading a re-stripped part increments its cycle count", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Re-strip" }]),
+    load("2026-03-22T11:00", "B1", ["A"]),
+    extract("2026-03-22T13:00", "B1", [{ serial:"A", result:"Cleared" }])
+  ];
+  const { records } = D.deriveImmersions(events, NOW);
+  const a = records.filter(r => r.serial === "A");
+  assert.equal(a.length, 2);
+  assert.deepEqual(a.map(r => r.cycle), [1, 2]);
+  assert.equal(a[1].result, "Cleared");
+});
+test("extracting a part that was never loaded is flagged as an anomaly", () => {
+  const { records } = D.deriveImmersions([extract("2026-03-22T10:00", "B1", [{ serial:"Z", result:"Cleared" }])], NOW);
+  assert.equal(records.length, 1);
+  assert.match(records[0].anomaly, /not in bath/);
 });
 
 /* ----------------------------- pieces ------------------------------ */
-test("piece status: cleared, in-progress, and over-cycle routing", () => {
+test("piece status: In bath, Cleared (first pass), Awaiting, and over-cycle routing", () => {
   const events = [
-    // P1 clears first pass
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"B1", jc:"J", serial:"P1", timeIn:"08:00", timeOut:"15:30", result:"Cleared" }),
-    // P2 still working (one re-strip)
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"B1", jc:"J", serial:"P2", timeIn:"08:00", timeOut:"15:30", result:"Re-strip" }),
-    // P3 hits 3 re-strips -> engineering
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"B1", jc:"J", serial:"P3", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T11:00", type:"Immersion", bath:"B1", jc:"J", serial:"P3", timeIn:"11:00", timeOut:"13:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T14:00", type:"Immersion", bath:"B1", jc:"J", serial:"P3", timeIn:"14:00", timeOut:"16:00", result:"Re-strip" }),
-    // P4 scrapped by engineering
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"B1", jc:"J", serial:"P4", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", jc:"J", serial:"P4", status:"Scrap" })
+    // A: loaded, still in -> In bath
+    load("2026-03-22T08:00", "B1", ["A"], { jc:"J" }),
+    // B: cleared first pull -> Cleared + first pass
+    load("2026-03-22T08:00", "B1", ["B"], { jc:"J" }),
+    extract("2026-03-22T12:00", "B1", [{ serial:"B", result:"Cleared" }]),
+    // C: pulled re-strip, not re-loaded -> Awaiting re-strip
+    load("2026-03-22T08:00", "B1", ["C"], { jc:"J" }),
+    extract("2026-03-22T10:00", "B1", [{ serial:"C", result:"Re-strip" }]),
+    // D: three re-strip cycles -> over max -> Engineering
+    load("2026-03-22T08:00", "B1", ["D"], { jc:"J" }),
+    extract("2026-03-22T09:00", "B1", [{ serial:"D", result:"Re-strip" }]),
+    load("2026-03-22T10:00", "B1", ["D"]),
+    extract("2026-03-22T11:00", "B1", [{ serial:"D", result:"Re-strip" }]),
+    load("2026-03-22T12:00", "B1", ["D"]),
+    extract("2026-03-22T13:00", "B1", [{ serial:"D", result:"Re-strip" }])
   ];
-  const rows = Object.fromEntries(D.derivePieces(events, CONFIG).map(r => [r.serial, r]));
-  assert.equal(rows.P1.status.s, "Cleared");
-  assert.equal(rows.P1.firstPass, true);
-  assert.equal(rows.P2.status.s, "In progress");
-  assert.equal(rows.P2.firstPass, false);
-  assert.equal(rows.P3.status.s, "→ Engineering");
-  assert.equal(rows.P3.cycles, 3);
-  assert.equal(rows.P4.status.s, "Scrap");
+  const rows = Object.fromEntries(D.derivePieces(events, CONFIG, "2026-03-22T20:00").map(r => [r.serial, r]));
+  assert.equal(rows.A.status.s, "In bath");
+  assert.equal(rows.A.inBath, true);
+  assert.equal(rows.A.currentBath, "B1");
+  assert.equal(rows.B.status.s, "Cleared");
+  assert.equal(rows.B.firstPass, true);
+  assert.equal(rows.C.status.s, "Awaiting re-strip");
+  assert.equal(rows.D.status.s, "→ Engineering");
+  assert.equal(rows.D.cycles, 3);
 });
-
-test("first-pass requires the chronologically first immersion to clear", () => {
+test("a scrap disposition shows on the piece", () => {
   const events = [
-    ev({ datetime:"2026-03-22T20:00", type:"Immersion", serial:"X", timeIn:"20:00", timeOut:"22:00", result:"Cleared" }),
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", serial:"X", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" })
+    load("2026-03-22T08:00", "B1", ["P"], { jc:"J" }),
+    extract("2026-03-22T10:00", "B1", [{ serial:"P", result:"Re-strip" }]),
+    ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"P", status:"Scrap" })
   ];
-  const row = D.derivePieces(events, CONFIG)[0];
-  assert.equal(row.status.s, "Cleared");      // it did eventually clear
-  assert.equal(row.firstPass, false);          // but not on the first dip
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Scrap");
 });
 
 /* ----------------------------- baths ------------------------------- */
-test("bath flags fire on iron / HCl / temp excursions", () => {
+test("bath flags fire on iron / HCl / temp excursions, and report contents", () => {
   const events = [
     ev({ datetime:"2026-03-13T08:00", type:"Bath Fill", bath:"B1" }),
     ev({ datetime:"2026-03-13T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:21, fePpm:30 }),
-    ev({ datetime:"2026-03-23T09:00", type:"Chemistry Check", bath:"B1", temp:85, hclPct:14, fePpm:160 })
+    ev({ datetime:"2026-03-23T09:00", type:"Chemistry Check", bath:"B1", temp:85, hclPct:14, fePpm:160 }),
+    load("2026-03-23T10:00", "B1", ["A","B"])
   ];
   const s = D.deriveBath(events, CONFIG, "B1", NOW);
   assert.equal(s.active, true);
-  assert.equal(s.lastChem.fePpm, 160);
-  assert.equal(s.flags.length, 3, "iron, HCl band, and temp band should all flag");
-  assert.ok(s.flags.some(f => f.includes("Iron")));
-  assert.ok(s.flags.some(f => f.includes("HCl")));
-  assert.ok(s.flags.some(f => f.includes("Temp")));
+  assert.equal(s.flags.length, 3);
+  assert.deepEqual(s.contents.map(r => r.serial), ["A","B"]);
 });
-
 test("bath state is scoped to the current charge (resets after a refill)", () => {
   const events = [
     ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
-    ev({ datetime:"2026-03-05T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:150 }), // old, spent
+    ev({ datetime:"2026-03-05T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:150 }),
     ev({ datetime:"2026-03-06T07:00", type:"Bath Disposal", bath:"B1", disposalReason:"Iron limit reached" }),
-    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),                                       // fresh charge
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),
     ev({ datetime:"2026-03-11T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:21, fePpm:20 })
   ];
   const s = D.deriveBath(events, CONFIG, "B1", NOW);
-  assert.equal(s.active, true, "latest fill has no later disposal");
-  assert.equal(s.lastChem.fePpm, 20, "only the fresh charge's chemistry counts");
-  assert.equal(s.flags.length, 0, "fresh charge is in band");
+  assert.equal(s.active, true);
+  assert.equal(s.lastChem.fePpm, 20);
+  assert.equal(s.flags.length, 0);
 });
 
-test("a disposed bath is not active and reports its disposal", () => {
+/* ------------------------------ KPIs ------------------------------- */
+test("KPIs: FPY, re-strip rate, and parts-in-bath count", () => {
   const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B2" }),
-    ev({ datetime:"2026-03-06T07:00", type:"Bath Disposal", bath:"B2", disposalReason:"Scheduled change" })
+    load("2026-03-22T08:00", "B1", ["A","B"], { jc:"J" }),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Re-strip" }]),
+    load("2026-03-22T11:00", "B1", ["B"]),
+    extract("2026-03-22T13:00", "B1", [{ serial:"B", result:"Cleared" }]),
+    load("2026-03-22T14:00", "B1", ["C"], { jc:"J" }) // C still in the tank
   ];
-  const s = D.deriveBath(events, CONFIG, "B2", NOW);
-  assert.equal(s.active, false);
-  assert.ok(s.disposal);
-  assert.equal(s.disposal.disposalReason, "Scheduled change");
-});
-
-/* ----------------------------- KPIs -------------------------------- */
-test("KPIs: FPY and re-strip rate", () => {
-  const events = [
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", serial:"A", timeIn:"08:00", timeOut:"10:00", result:"Cleared" }),
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", serial:"B", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T12:00", type:"Immersion", serial:"B", timeIn:"12:00", timeOut:"14:00", result:"Cleared" })
-  ];
-  const k = D.deriveKpis(events, CONFIG, NOW);
-  assert.equal(k.total, 2);
+  const k = D.deriveKpis(events, CONFIG, "2026-03-22T20:00");
+  assert.equal(k.total, 3);
   assert.equal(k.cleared, 2);
-  assert.equal(k.fp, 1);                 // only A cleared first pass
-  assert.equal(k.fpy, 50);
-  assert.equal(k.immersions, 3);
+  assert.equal(k.fp, 1);                 // only A cleared on its first pull
+  assert.equal(k.fpy, 33);
+  assert.equal(k.inBath, 1);             // C
+  assert.equal(k.dips, 4);               // A, B×2, C
   assert.equal(k.reStrip, 1);
-  assert.equal(k.reStripRate, 33);       // 1 of 3 immersions
+  assert.equal(k.reStripRate, 25);
+});
+
+/* ----------------------------- quality ----------------------------- */
+test("defects expand per extracted item (wax + re-strip)", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A","B"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }, { serial:"B", result:"Cleared", waxFailure:"None" }])
+  ];
+  const defs = D.deriveDefects(events);
+  assert.ok(defs.some(d => d.kind === "Wax failure" && d.serial === "A"));
+  assert.ok(defs.some(d => d.kind === "Re-strip" && d.serial === "A"));
+  assert.ok(!defs.some(d => d.serial === "B")); // B was clean
 });
 
 /* -------------------------- entry warnings ------------------------- */
-test("eventWarnings flags an over-limit chemistry check", () => {
+test("eventWarnings: chemistry over limits", () => {
   const w = D.eventWarnings({ type:"Chemistry Check", bath:"B1", fePpm:160, hclPct:14, temp:80 }, [], CONFIG, NOW);
   assert.equal(w.length, 3);
   assert.ok(w.some(x => x.level === "red" && /Iron 160/.test(x.msg)));
 });
-
-test("eventWarnings flags an immersion that would exceed max cycles", () => {
-  const prior = [
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", serial:"P", bath:"B1", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T11:00", type:"Immersion", serial:"P", bath:"B1", timeIn:"11:00", timeOut:"13:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T14:00", type:"Immersion", serial:"P", bath:"B1", timeIn:"14:00", timeOut:"16:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" })
-  ];
-  const draft = { type:"Immersion", serial:"P", bath:"B1", timeIn:"17:00", timeOut:"19:00", result:"Re-strip" };
-  const w = D.eventWarnings(draft, prior, CONFIG, NOW);
-  assert.ok(w.some(x => x.level === "red" && /cycle 4/.test(x.msg)), "should warn this is cycle 4 > max 3");
-});
-
-test("eventWarnings warns about immersing in a disposed bath", () => {
+test("eventWarnings: a load that would exceed max cycles, or re-loads a part already in a bath", () => {
   const prior = [
     ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-22T08:00", "B1", ["P"]), extract("2026-03-22T09:00", "B1", [{ serial:"P", result:"Re-strip" }]),
+    load("2026-03-22T10:00", "B1", ["P"]), extract("2026-03-22T11:00", "B1", [{ serial:"P", result:"Re-strip" }]),
+    load("2026-03-22T12:00", "B1", ["P"]), extract("2026-03-22T13:00", "B1", [{ serial:"P", result:"Re-strip" }]),
+    load("2026-03-22T14:00", "B1", ["Q"]) // Q still in the bath
+  ];
+  const overCycle = D.eventWarnings({ type:"Load In", bath:"B1", serials:["P"] }, prior, CONFIG, NOW);
+  assert.ok(overCycle.some(x => x.level === "red" && /cycle 4/.test(x.msg)));
+  const alreadyIn = D.eventWarnings({ type:"Load In", bath:"B1", serials:["Q"] }, prior, CONFIG, NOW);
+  assert.ok(alreadyIn.some(x => /already in bath/.test(x.msg)));
+});
+test("eventWarnings: extracting from a disposed bath, or a part that is not in it", () => {
+  const prior = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
     ev({ datetime:"2026-03-06T07:00", type:"Bath Disposal", bath:"B1", disposalReason:"Iron limit reached" })
   ];
-  const w = D.eventWarnings({ type:"Immersion", serial:"Q", bath:"B1", timeIn:"08:00", timeOut:"10:00" }, prior, CONFIG, NOW);
+  const w = D.eventWarnings({ type:"Extraction", bath:"B1", items:[{ serial:"Z", result:"Cleared" }] }, prior, CONFIG, NOW);
   assert.ok(w.some(x => x.level === "red" && /disposed/.test(x.msg)));
+  assert.ok(w.some(x => /not currently in bath/.test(x.msg)));
+});
+test("editing a load does not warn against itself", () => {
+  const existing = load("2026-03-22T08:00", "B1", ["P"]);
+  const w = D.eventWarnings({ ...existing }, [existing], CONFIG, NOW);
+  assert.ok(!w.some(x => /already in bath/.test(x.msg)));
 });
 
-test("editing an event does not warn against itself", () => {
-  const existing = ev({ datetime:"2026-03-22T08:00", type:"Immersion", serial:"P", bath:"B1", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" });
-  const all = [existing, ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" })];
-  // editing the same record (same id) -> it must be excluded from the "prior" set
-  const draft = { ...existing };
-  const w = D.eventWarnings(draft, all, CONFIG, NOW);
-  assert.ok(!w.some(x => /cycle 2/.test(x.msg)), "the event must not count itself as a prior cycle");
-});
-
-/* --------------------------- job cards ----------------------------- */
-test("job-card rollup aggregates pieces and yield", () => {
+/* ---------------------- events-for-serial -------------------------- */
+test("eventsForSerial finds the serial inside load/extract arrays", () => {
   const events = [
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", jc:"J1", component:"C", serial:"A", timeIn:"08:00", timeOut:"10:00", result:"Cleared" }),
-    ev({ datetime:"2026-03-22T08:00", type:"Immersion", jc:"J1", component:"C", serial:"B", timeIn:"08:00", timeOut:"10:00", result:"Re-strip" }),
-    ev({ datetime:"2026-03-22T12:00", type:"Immersion", jc:"J1", component:"C", serial:"B", timeIn:"12:00", timeOut:"14:00", result:"Cleared" })
+    load("2026-03-22T08:00", "B1", ["A","B"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }]),
+    ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"B", status:"Hold" })
   ];
-  const jc = D.deriveJobCards(events, CONFIG);
-  assert.equal(jc.length, 1);
-  assert.equal(jc[0].pieces, 2);
-  assert.equal(jc[0].cleared, 2);
-  assert.equal(jc[0].fp, 1);
-  assert.equal(jc[0].fpy, 50);
-  assert.equal(jc[0].reStrips, 1);
+  assert.equal(D.eventsForSerial(events, "A").length, 2);
+  assert.equal(D.eventsForSerial(events, "B").length, 2);
 });

@@ -6,11 +6,25 @@ modern browser — no server, no install, no network. All data stays in that
 browser, on that PC, in IndexedDB.
 
 It is built around one idea: **the event log is the single source of truth.**
-Operators only ever record *what happened* (a bath was filled, a titration was
-taken, a piece was dipped, a mask failed, a part was dispositioned). Every other
-screen — piece tracker, bath status, quality log, dashboard — is **derived** from
-that immutable stream. Nothing is double‑entered, and history can never disagree
-with itself.
+Operators only ever record *what happened*. Every other screen — piece tracker,
+bath status, quality log, dashboard — is **derived** from that immutable stream.
+Nothing is double‑entered, and history can never disagree with itself.
+
+### Dips are split into Load In + Extraction
+
+On the floor you rarely know the out‑time when a part goes in, parts go in as a
+**batch**, and they don't all come out together. So a dip is two events:
+
+- **Load In** — *N* parts go INTO a bath. The event timestamp *is* the time‑in.
+  Serials are entered as a list, with range shorthand like `7261-01..06`.
+- **Extraction** — pull **some** of what's currently in that bath. The form shows
+  you the **live bath contents** as a checklist; you tick the parts coming out and
+  set each result (Cleared / Re‑strip / Hold). Parts you don't tick **stay in**.
+
+The system pairs loads → extractions per serial, counts cycles automatically,
+computes each dip's hours from the two timestamps, and always knows **what's still
+in every bath** ("On the floor now"). A part that comes out Re‑strip can simply be
+loaded again — that's its next cycle.
 
 ---
 
@@ -33,10 +47,11 @@ with itself.
 
 | Event | Purpose |
 |---|---|
+| **Load In** | *N* parts INTO a bath (time in); serials as a list / range |
+| **Extraction** | Pull some parts OUT (time out, per‑part result + wax) |
 | Bath Fill | New charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
 | HCl / Water Top‑Up | Maintain the charge between checks |
-| Immersion | One dip of a piece (time in/out, result, wax state) |
 | Wax Failure | Masking defect on a part |
 | Re‑Masking | Part re‑waxed before another dip |
 | Engineering Review | Disposition a part (Accepted / Scrap / Return / Hold…) |
@@ -44,12 +59,13 @@ with itself.
 
 **Derived views**
 
-- **Pieces** — one row per serial: cycles, cumulative immersion hours, wax fails,
-  and a status (`Cleared`, `In progress`, `→ Engineering`, `Scrap`, …). Click
-  *history* for a full timeline and a printable **strip traveler** for the quality
-  record.
-- **Baths** — per‑bath state for the **current charge** (state resets after a
-  refill): age, latest chemistry, piece‑hour load, parts processed, and
+- **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
+  and a status (`In bath`, `Awaiting re‑strip`, `Cleared`, `→ Engineering`,
+  `Scrap`, …), filterable. Click *history* for a full timeline and a printable
+  **strip traveler** for the quality record.
+- **Baths** — an **On the floor now** panel listing exactly what is in each tank
+  (with elapsed time), plus per‑bath state for the **current charge** (resets after
+  a refill): age, latest chemistry, piece‑hour load, parts processed, and
   **out‑of‑band flags**. Trend charts for Fe / HCl / temp with limit lines and
   control bands.
 - **Quality** — an instant defect database (wax failures, re‑masks, engineering
@@ -93,12 +109,18 @@ test harness below.
 
 ## Tests
 
-The test suite reads `index.html`, extracts the DOMAIN block **and** the whole
-`<script>`, and exercises them in Node — so there's a single source of truth and
-the tests can't drift from what ships. It also syntax‑checks the entire script.
+Two layers, both reading straight from `index.html` so they can't drift from what
+ships:
+
+- **`tests/domain.test.mjs`** — extracts the DOMAIN block and unit‑tests the pure
+  logic (load/extraction pairing, what's‑left tracking, cycle counting, bath flags,
+  KPIs, entry warnings). Also syntax‑checks the entire `<script>`.
+- **`tests/smoke.mjs`** — boots the real app against a tiny in‑memory DOM +
+  IndexedDB shim, loads the example data, and renders every tab, both custom forms,
+  and the modals — catching view‑layer runtime errors headlessly.
 
 ```bash
-npm test        # node --test tests/*.test.mjs
+npm test
 ```
 
 ---

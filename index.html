@@ -31,6 +31,7 @@
   nav button{background:none;border:none;border-bottom:3px solid transparent;padding:11px 14px;cursor:pointer;color:var(--muted);font-size:13.5px;font-weight:500;white-space:nowrap}
   nav button.on{color:var(--accent);border-bottom-color:var(--accent)}
   nav button .badge{display:inline-block;min-width:17px;padding:0 5px;margin-left:6px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700;text-align:center}
+  nav button .badge.info{background:var(--accent2)}
   main{padding:18px;max-width:1180px;margin:0 auto}
   h2.sec{font-size:15px;margin:0 0 12px}
   h3.sub{font-size:13px;margin:18px 0 8px;color:var(--accent);font-weight:600}
@@ -39,17 +40,19 @@
   .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
   label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 4px}
   input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:var(--radius-s);font-size:14px;font-family:inherit;background:#fff;color:var(--ink)}
+  textarea{resize:vertical}
   input:focus,select:focus,textarea:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:var(--accent2)}
   .field{margin-bottom:12px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
-  th{background:#eef3f4;font-weight:600;color:#3b4a50;position:sticky;top:0}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  th{background:#eef3f4;font-weight:600;color:#3b4a50;position:sticky;top:0}
   .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);max-height:62vh;background:#fff}
   tbody tr:hover{background:#f7fafb}
   .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
   .p-green{background:var(--green-bg);color:var(--green)} .p-amber{background:var(--amber-bg);color:var(--amber)}
   .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:#e9eef0;color:#566}
+  .p-blue{background:#d9ebf2;color:#1f4e5f}
   .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:16px}
   .kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
   .kpi .v{font-size:26px;font-weight:700} .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
@@ -66,7 +69,7 @@
   .typebtn{padding:12px 10px;border:1px solid var(--line);background:#fff;border-radius:var(--radius-s);cursor:pointer;text-align:left;font-weight:600;font-size:13.5px}
   .typebtn:hover{border-color:var(--accent2)} .typebtn.on{background:var(--accent);color:#fff;border-color:var(--accent)}
   .typebtn small{display:block;font-weight:400;font-size:11px;opacity:.75;margin-top:2px}
-  .formcard{max-width:600px}
+  .formcard{max-width:620px}
   .twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .note{background:var(--yellow);border-radius:var(--radius-s);padding:8px 12px;font-size:12.5px;margin-bottom:14px}
   .warn-line{display:flex;gap:7px;align-items:flex-start;padding:6px 10px;border-radius:var(--radius-s);font-size:12.5px;margin-bottom:6px}
@@ -82,15 +85,23 @@
   .chttl{font-size:11px;color:var(--muted);margin-bottom:2px;display:flex;justify-content:space-between}
   .bar{height:14px;background:#eef3f4;border-radius:7px;overflow:hidden}
   .bar > i{display:block;height:100%;background:var(--accent2)}
+  .flagok{color:var(--green)}
+  .tag{display:inline-block;background:#eef3f4;border-radius:6px;padding:1px 7px;font-size:12px;margin:2px 3px 0 0}
+  .tag.flagbad{background:var(--red-bg);color:var(--red)}
+  .serial-prev{margin-top:6px;min-height:18px}
+  .contents{border:1px solid var(--line);border-radius:var(--radius-s);overflow:hidden;margin-top:4px}
+  .crow{display:grid;grid-template-columns:26px 1fr 130px 160px;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line)}
+  .crow:last-child{border-bottom:none}
+  .crow input[type=checkbox]{width:18px;height:18px}
+  .crow select{padding:5px 6px;font-size:12.5px}
   /* modal */
   .overlay{position:fixed;inset:0;background:rgba(8,20,26,.45);display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;z-index:60;overflow:auto}
-  .modal{background:#fff;border-radius:var(--radius);max-width:720px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  .modal{background:#fff;border-radius:var(--radius);max-width:740px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
   .modal-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:var(--radius) var(--radius) 0 0}
   .modal-h h3{margin:0;font-size:15px;flex:1}
   .modal-b{padding:16px}
   .modal-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
   .x{cursor:pointer;border:none;background:none;font-size:18px;color:var(--muted);line-height:1}
-  /* timeline */
   .tl{list-style:none;margin:0;padding:0}
   .tl li{position:relative;padding:0 0 14px 22px;border-left:2px solid var(--line)}
   .tl li:last-child{border-left-color:transparent}
@@ -98,7 +109,6 @@
   .tl .tl-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .tl .tl-when{font-size:12px;color:var(--muted)}
   .tl .tl-d{font-size:12.5px;color:#3b4a50;margin-top:2px}
-  /* print */
   #printArea{display:none}
   .pr-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #16242b;padding-bottom:8px;margin-bottom:14px}
   .pr-head h2{margin:0;font-size:18px}
@@ -108,7 +118,7 @@
     #printArea{display:block !important;padding:0}
     #printArea table th{position:static}
   }
-  @media(max-width:620px){ .twocol{grid-template-columns:1fr} main{padding:12px} .charts3{grid-template-columns:1fr} }
+  @media(max-width:620px){ .twocol{grid-template-columns:1fr} main{padding:12px} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:26px 1fr;row-gap:6px} }
 </style>
 </head>
 <body>
@@ -118,7 +128,7 @@
   <span class="sp"></span>
   <button class="btn ghost sm" id="exportJson">Backup</button>
   <button class="btn ghost sm" id="importBtn">Import</button>
-  <button class="btn ghost sm" id="exportCsv">Export CSV</button>
+  <button class="btn ghost sm" id="exportCsv">Export dips (CSV)</button>
   <input type="file" id="importFile" accept="application/json" style="display:none">
 </header>
 <div id="attention"></div>
@@ -134,28 +144,29 @@
    Stripping Historian — a single-file, offline, event-sourced shop log for
    chemical stripping of turbine components.
 
-   Architecture:  the event log is the ONE source of truth. Every other view
-   (pieces, baths, quality, dashboard) is a PURE function of (events, config).
-   Those pure functions live in the DOMAIN block below and are unit-tested in
-   /tests, decoupled from storage and the DOM.
+   Dips are recorded as two separate events so the operator never has to know
+   the out-time up front:
+     • Load In   — N parts go INTO a bath  (event time = time in)
+     • Extraction — SOME parts come OUT     (event time = time out, per-part result)
+   The system pairs them per serial, counts cycles, and always knows what is
+   still in each bath. Every view is a PURE function of the event stream.
    ========================================================================= */
 
 const DB_NAME = "strip_historian_db", DB_VER = 1;
 let db = null, EVENTS = [], CONFIG = {};
 
 const DEFAULT_CONFIG = {
-  tempSet: 90, tempTol: 3,          // bath temperature setpoint °C and tolerance
-  hclMin: 16, hclMax: 22,           // free-HCl control band (%)
-  feMax: 100,                       // dissolved iron limit (ppm) -> bath spent
-  maxCycles: 3, maxHours: 24,       // per-piece limits before engineering review
-  maxBathAge: 30,                   // bath life (days) before scheduled change
+  tempSet: 90, tempTol: 3,
+  hclMin: 16, hclMax: 22,
+  feMax: 100,
+  maxCycles: 3, maxHours: 24,
+  maxBathAge: 30,
   baths: ["102-103", "106-107", "202-203", "206-207"],
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
 };
 
 /* ============================ DOMAIN START ===============================
-   Pure functions only. No DOM, no IndexedDB, no module-level mutable state.
-   Everything takes its inputs as arguments so it can be tested in isolation. */
+   Pure functions only. No DOM, no IndexedDB, no module-level mutable state. */
 
 function round(n, p = 1){ const f = Math.pow(10, p); return Math.round((+n) * f) / f; }
 function num(v){ return (v === "" || v == null) ? null : (Number.isFinite(+v) ? +v : null); }
@@ -166,123 +177,193 @@ function byDate(a, b){
       || String(a.eventId || "").localeCompare(String(b.eventId || ""));
 }
 
-// Clock-time difference in hours, tolerant of an overnight roll-over.
-function hrsBetween(a, b){
+function hrsBetween(a, b){ // clock-time difference, tolerant of overnight roll-over
   if(!a || !b) return 0;
   const [h1, m1] = a.split(":").map(Number), [h2, m2] = b.split(":").map(Number);
   let d = (h2 * 60 + m2) - (h1 * 60 + m1);
   if(d < 0) d += 1440;
   return round(d / 60, 2);
 }
+function hoursBetweenDT(a, b){ if(!a || !b) return 0; const d = (new Date(b) - new Date(a)) / 3600000; return d > 0 ? d : 0; }
 function daysBetween(a, b){ if(!a || !b) return ""; return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function fmtDate(dt){ if(!dt) return ""; const d = dt.slice(0,10).split("-"); return d[2] + " " + MONTHS[(+d[1]) - 1] + " " + d[0].slice(2); }
 function fmtDT(dt){ if(!dt) return ""; return fmtDate(dt) + (dt.length > 10 ? " " + dt.slice(11,16) : ""); }
 
-// Human, sortable event id: YYYYMMDD-NNNN, unique per day.
 function nextEventId(dateStr, events){
   const ymd = (dateStr || "").slice(0,10).replace(/-/g, "");
   let n = 0; events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0) n++; });
   return ymd + "-" + String(n + 1).padStart(4, "0");
 }
 
-/* ---- event-type schema: each type declares only the fields it needs ---- */
+// "7261-01..06" / "7261-01..7261-06" expands to a list; commas/spaces/newlines split.
+function parseSerials(text){
+  if(!text) return [];
+  const out = [], add = s => { if(s && !out.includes(s)) out.push(s); };
+  String(text).split(/[\s,;]+/).map(t => t.trim()).filter(Boolean).forEach(tok => {
+    const parts = tok.split("..");
+    if(parts.length === 2){
+      const lm = parts[0].match(/^(.*?)(\d+)$/);
+      if(lm){
+        const prefix = lm[1], width = lm[2].length;
+        const hi = /^\d+$/.test(parts[1]) ? parts[1] : (parts[1].match(/(\d+)$/) || [])[1];
+        if(hi != null){
+          const a = parseInt(lm[2], 10), b = parseInt(hi, 10);
+          if(b >= a && b - a < 10000){ for(let n = a; n <= b; n++) add(prefix + String(n).padStart(width, "0")); return; }
+        }
+      }
+    }
+    add(tok);
+  });
+  return out;
+}
+
+/* ---- event-type schema ---- */
 const F = { // key -> [storedName, label, kind]
   bath:["bath","Bath","baths"], jc:["jc","J/C No.","text"], component:["component","Component","text"],
-  serial:["serial","Serial","text"], cycle:["cycle","Cycle #","num"],
+  serial:["serial","Serial","text"],
   hclPct:["hclPct","Free HCl %","num"], fePpm:["fePpm","Iron Fe (ppm)","num"], temp:["temp","Temp °C","num"],
   hcl:["hclAddedL","HCl added (L)","num"], water:["waterAddedL","Water added (L)","num"], h3po4:["h3po4AddedL","H₃PO₄ added (L)","num"],
-  tin:["timeIn","Time in","time"], tout:["timeOut","Time out","time"],
-  result:["result","Result","sel:Cleared,Re-strip,Hold"],
   wax:["waxFailure","Wax failure","sel:None,Partial mask loss,Complete mask loss"],
   disp:["status","Disposition","sel:Accepted,Engineering review,Scrap,Return to vendor,Hold"],
   reason:["disposalReason","Disposal reason","sel:Iron limit reached,HCl exhausted,Contamination,Scheduled change,Other"],
   op:["operator","Operator","operator"], notes:["notes","Notes","text"]
 };
 const TYPES = {
-  "Bath Fill":        { desc:"new charge",            fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
-  "Chemistry Check":  { desc:"titration result",      fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
-  "HCl Top-Up":       { desc:"add acid",              fields:[F.bath,F.hcl,F.op,F.notes] },
-  "Water Top-Up":     { desc:"add water",             fields:[F.bath,F.water,F.op,F.notes] },
-  "Immersion":        { desc:"one dip of a piece",    fields:[F.bath,F.jc,F.component,F.serial,F.cycle,F.tin,F.tout,F.result,F.wax,F.op,F.notes] },
-  "Wax Failure":      { desc:"masking defect",        fields:[F.bath,F.jc,F.serial,F.cycle,F.wax,F.op,F.notes] },
-  "Re-Masking":       { desc:"part re-waxed",         fields:[F.jc,F.serial,F.op,F.notes] },
-  "Engineering Review":{ desc:"disposition a part",   fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
-  "Bath Disposal":    { desc:"bath taken out",        fields:[F.bath,F.reason,F.op,F.notes] }
+  "Load In":          { desc:"parts INTO a bath (time in)",  custom:"load",    fields:[F.bath,F.jc,F.component,F.op,F.notes] },
+  "Extraction":       { desc:"parts OUT of a bath (time out)",custom:"extract", fields:[F.bath,F.op,F.notes] },
+  "Chemistry Check":  { desc:"titration result",   fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
+  "HCl Top-Up":       { desc:"add acid",            fields:[F.bath,F.hcl,F.op,F.notes] },
+  "Water Top-Up":     { desc:"add water",           fields:[F.bath,F.water,F.op,F.notes] },
+  "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "Wax Failure":      { desc:"masking defect",      fields:[F.bath,F.jc,F.serial,F.wax,F.op,F.notes] },
+  "Re-Masking":       { desc:"part re-waxed",       fields:[F.jc,F.serial,F.op,F.notes] },
+  "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
+  "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
 const TYPE_PILL = {
-  "Immersion":"p-grey","Chemistry Check":"p-grey","Bath Fill":"p-green","Bath Disposal":"p-red",
-  "Wax Failure":"p-red","Re-Masking":"p-amber","Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey"
+  "Load In":"p-blue","Extraction":"p-grey","Immersion":"p-grey","Chemistry Check":"p-grey",
+  "Bath Fill":"p-green","Bath Disposal":"p-red","Wax Failure":"p-red","Re-Masking":"p-amber",
+  "Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey"
 };
 
-const isWaxFail = e => e.type === "Wax Failure" || (e.type === "Immersion" && e.waxFailure && e.waxFailure !== "None");
+// Events that mention a serial (it now lives inside arrays on load/extract events).
+function eventsForSerial(events, serial){
+  return events.filter(e =>
+    e.serial === serial ||
+    (e.type === "Load In" && (e.serials || []).includes(serial)) ||
+    (e.type === "Extraction" && (e.items || []).some(i => i.serial === serial))
+  ).slice().sort(byDate);
+}
 
-/* ---- derived: piece status from one piece's event history ---- */
-function pieceStatusFor(ev, config){
-  const ims = ev.filter(e => e.type === "Immersion").slice().sort(byDate);
-  const eng = ev.filter(e => e.type === "Engineering Review").slice().sort(byDate);
-  const cycles = ims.length;
-  const hours  = round(ims.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0));
-  const engDisp = eng.length ? eng[eng.length - 1].status : "";
-  const base = { cycles, hours };
-  if(ims.some(e => e.result === "Cleared"))      return { s:"Cleared",       cls:"p-green", ...base };
-  if(engDisp === "Accepted")                     return { s:"Accepted",      cls:"p-green", ...base };
-  if(engDisp === "Scrap")                        return { s:"Scrap",         cls:"p-red",   ...base };
-  if(engDisp === "Return to vendor")             return { s:"Returned",      cls:"p-grey",  ...base };
-  if(eng.length)                                 return { s:"→ Engineering", cls:"p-red",   ...base };
-  if(cycles >= config.maxCycles || hours >= config.maxHours)
-                                                 return { s:"→ Engineering", cls:"p-red",   ...base };
-  if(cycles > 0)                                 return { s:"In progress",   cls:"p-amber", ...base };
+/* ---- the backbone: pair Load In + Extraction (and legacy Immersion) into
+        per-part "dip" records, and report what is still in each bath ---- */
+function deriveImmersions(events, nowDT){
+  const seq = events.slice().sort(byDate);
+  const records = [];
+  const open = new Map();   // serial -> currently-open record
+  const cyc = new Map();    // serial -> loads so far
+  const bump = s => { const n = (cyc.get(s) || 0) + 1; cyc.set(s, n); return n; };
+  for(const e of seq){
+    if(e.type === "Load In"){
+      (e.serials || []).forEach(s => {
+        const rec = { serial:s, bath:e.bath || "", jc:e.jc || "", component:e.component || "",
+          cycle:bump(s), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
+          hours:null, elapsedH:null, open:true, anomaly:null, loadEvent:e, extractEvent:null };
+        if(open.has(s)){ const old = open.get(s); old.open = false; old.anomaly = (old.anomaly ? old.anomaly + "; " : "") + "no extraction logged"; rec.anomaly = "was already in " + old.bath; }
+        open.set(s, rec); records.push(rec);
+      });
+    } else if(e.type === "Extraction"){
+      (e.items || []).forEach(it => {
+        const s = it.serial, r = open.get(s);
+        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        else records.push({ serial:s, bath:e.bath || "", jc:"", component:"", cycle:(cyc.get(s) || 0),
+          inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None",
+          hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
+      });
+    } else if(e.type === "Immersion"){ // legacy self-contained dip
+      if(!e.serial) continue;
+      records.push({ serial:e.serial, bath:e.bath || "", jc:e.jc || "", component:e.component || "",
+        cycle:bump(e.serial), inDT:e.datetime, outDT:e.datetime, result:e.result || "", waxFailure:e.waxFailure || "None",
+        hours:hrsBetween(e.timeIn, e.timeOut), elapsedH:null, open:false, anomaly:null, loadEvent:e, extractEvent:e });
+    }
+  }
+  open.forEach(r => { r.elapsedH = round(hoursBetweenDT(r.inDT, nowDT), 2); });
+  return { records, open };
+}
+function bathContents(events, nowDT, bath){
+  const { open } = deriveImmersions(events, nowDT);
+  return [...open.values()].filter(r => !bath || r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
+}
+
+function pieceStatusFor(recs, engEvents, config){
+  const open = recs.some(r => r.open);
+  const cleared = recs.some(r => r.result === "Cleared");
+  const cycles = recs.length;
+  const closedH = round(recs.filter(r => !r.open).reduce((a, r) => a + (r.hours || 0), 0));
+  const totalH = round(closedH + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedH || 0), 0));
+  const engDisp = engEvents.length ? engEvents[engEvents.length - 1].status : "";
+  const base = { cycles, hours:closedH, totalH, open };
+  if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
+  if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
+  if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
+  if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
+  if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
+  if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
+  if(cycles >= config.maxCycles || totalH >= config.maxHours)
+                                     return { s:"→ Engineering",    cls:"p-red",   ...base };
+  if(cycles > 0)                     return { s:"Awaiting re-strip", cls:"p-amber", ...base };
   return { s:"—", cls:"p-grey", ...base };
 }
 
-// One row per serial, with its full (sorted) event history attached.
-function derivePieces(events, config){
+function derivePieces(events, config, nowDT){
+  const { records } = deriveImmersions(events, nowDT);
   const map = new Map();
-  events.forEach(e => {
-    if(!e.serial) return;
-    const o = map.get(e.serial) || { serial:e.serial, jc:"", component:"", events:[] };
-    o.events.push(e); if(e.jc) o.jc = e.jc; if(e.component) o.component = e.component;
-    map.set(e.serial, o);
-  });
+  records.forEach(r => { const o = map.get(r.serial) || { serial:r.serial, jc:"", component:"", recs:[] }; o.recs.push(r); if(r.jc) o.jc = r.jc; if(r.component) o.component = r.component; map.set(r.serial, o); });
+  events.forEach(e => { if(e.serial && !map.has(e.serial)) map.set(e.serial, { serial:e.serial, jc:e.jc || "", component:e.component || "", recs:[] }); });
   const rows = [];
   map.forEach(o => {
-    const ev  = o.events.slice().sort(byDate);
-    const ims = ev.filter(e => e.type === "Immersion");
-    const st  = pieceStatusFor(ev, config);
+    const recs = o.recs.slice().sort((a, b) => String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
+    const evs = eventsForSerial(events, o.serial);
+    const eng = evs.filter(e => e.type === "Engineering Review");
+    const st = pieceStatusFor(recs, eng, config);
+    const openRec = recs.find(r => r.open);
     rows.push({
-      serial:o.serial, jc:o.jc, component:o.component,
-      cycles:ims.length, hours:st.hours,
-      wax:ev.filter(isWaxFail).length,
-      reStrips:ims.filter(e => e.result === "Re-strip").length,
-      firstPass:ims.length > 0 && ims.slice().sort(byDate)[0].result === "Cleared",
-      lastBath:ims.length ? ims[ims.length - 1].bath : "",
-      status:st, events:ev
+      serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
+      cycles:recs.length, hours:st.hours,
+      wax: recs.filter(r => r.waxFailure && r.waxFailure !== "None").length + evs.filter(e => e.type === "Wax Failure").length,
+      reStrips: recs.filter(r => r.result === "Re-strip").length,
+      inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
+      lastBath: recs.length ? recs[recs.length - 1].bath : "",
+      firstPass: recs.length > 0 && recs[0].result === "Cleared",
+      status:st, recs, events:evs
     });
   });
   rows.sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)));
   return rows;
 }
 
-// State of one bath for its CURRENT charge (everything since the latest fill).
 function deriveBath(events, config, bath, nowDT){
   const evs = events.filter(e => e.bath === bath).slice().sort(byDate);
   const fills = evs.filter(e => e.type === "Bath Fill");
   const lastFill = fills.length ? fills[fills.length - 1] : null;
   const start = lastFill ? lastFill.datetime : null;
-  const inCharge = e => !start || e.datetime >= start;
-  const disposal = evs.filter(e => e.type === "Bath Disposal" && inCharge(e)).slice(-1)[0] || null;
+  const inCharge = dt => !start || dt >= start;
+  const disposal = evs.filter(e => e.type === "Bath Disposal" && inCharge(e.datetime)).slice(-1)[0] || null;
   const end = disposal ? disposal.datetime : nowDT;
-  const within = e => inCharge(e) && e.datetime <= end;
-
+  const within = e => inCharge(e.datetime) && e.datetime <= end;
   const chem = evs.filter(e => e.type === "Chemistry Check" && within(e));
   const lastChem = chem.length ? chem[chem.length - 1] : null;
-  const ims  = evs.filter(e => e.type === "Immersion" && within(e));
-  const loadH = round(ims.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0));
-  const parts = new Set(ims.map(e => e.serial).filter(Boolean)).size;
-  const wax = evs.filter(e => within(e) && isWaxFail(e)).length;
-  const hclAdded   = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL   || 0), 0);
+
+  const { records, open } = deriveImmersions(events, nowDT);
+  const recTime = r => r.inDT || r.outDT;
+  const recs = records.filter(r => r.bath === bath && recTime(r) && inCharge(recTime(r)) && recTime(r) <= end);
+  const contents = [...open.values()].filter(r => r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
+  const loadH = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)), 0));
+  const parts = new Set(recs.map(r => r.serial)).size;
+  const wax = recs.filter(r => r.waxFailure && r.waxFailure !== "None").length + evs.filter(e => within(e) && e.type === "Wax Failure").length;
+  const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
   const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
   const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
   const active = !!lastFill && !disposal;
@@ -294,67 +375,66 @@ function deriveBath(events, config, bath, nowDT){
     if(num(lastChem.temp) != null && Math.abs(+lastChem.temp - config.tempSet) > config.tempTol) flags.push("Temp " + lastChem.temp + "°C out of band");
   }
   if(active && age !== "" && age >= config.maxBathAge) flags.push("Age " + age + " d ≥ " + config.maxBathAge);
+  if(disposal && contents.length) flags.push(contents.length + " part(s) still recorded as inside a disposed bath");
 
-  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags };
+  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags, contents };
 }
 function deriveBaths(events, config, nowDT){ return config.baths.map(b => deriveBath(events, config, b, nowDT)); }
 
-// Roll pieces up to their job cards.
-function deriveJobCards(events, config){
+function deriveJobCards(events, config, nowDT){
   const map = new Map();
-  derivePieces(events, config).forEach(r => {
+  derivePieces(events, config, nowDT).forEach(r => {
     const k = r.jc || "(none)";
-    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, cleared:0, fp:0, eng:0, reStrips:0, wax:0 };
+    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, cleared:0, fp:0, eng:0, inBath:0, reStrips:0, wax:0 };
     o.pieces++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
-    if(r.status.s === "→ Engineering") o.eng++; o.reStrips += r.reStrips; o.wax += r.wax;
+    if(r.status.s === "→ Engineering") o.eng++; if(r.inBath) o.inBath++;
+    o.reStrips += r.reStrips; o.wax += r.wax;
     if(!o.component && r.component) o.component = r.component;
     map.set(k, o);
   });
-  return [...map.values()]
-    .map(o => ({ ...o, fpy: o.pieces ? Math.round(o.fp / o.pieces * 100) : 0 }))
+  return [...map.values()].map(o => ({ ...o, fpy: o.pieces ? Math.round(o.fp / o.pieces * 100) : 0 }))
     .sort((a, b) => String(a.jc).localeCompare(String(b.jc)));
 }
 
 function deriveKpis(events, config, nowDT){
-  const pr = derivePieces(events, config);
-  const ims = events.filter(e => e.type === "Immersion");
-  const reStrip = ims.filter(e => e.result === "Re-strip").length;
+  const pr = derivePieces(events, config, nowDT);
+  const { records, open } = deriveImmersions(events, nowDT);
+  const reStrip = records.filter(r => r.result === "Re-strip").length;
   const baths = deriveBaths(events, config, nowDT);
   const clearedPieces = pr.filter(r => r.status.s === "Cleared");
   return {
-    total: pr.length,
-    cleared: clearedPieces.length,
+    total: pr.length, cleared: clearedPieces.length,
     fp: pr.filter(r => r.firstPass).length,
     eng: pr.filter(r => r.status.s === "→ Engineering").length,
-    inProg: pr.filter(r => r.status.s === "In progress").length,
+    awaiting: pr.filter(r => r.status.s === "Awaiting re-strip").length,
+    inBath: open.size,
     fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
-    reStrip, reStripRate: ims.length ? Math.round(reStrip / ims.length * 100) : 0,
-    immersions: ims.length,
-    wax: events.filter(isWaxFail).length,
+    dips: records.length, reStrip, reStripRate: records.length ? Math.round(reStrip / records.length * 100) : 0,
+    wax: records.filter(r => r.waxFailure && r.waxFailure !== "None").length + events.filter(e => e.type === "Wax Failure").length,
     bathsOver: baths.filter(b => b.active && b.flags.length).length,
     activeBaths: baths.filter(b => b.active).length,
     avgCycles: clearedPieces.length ? round(clearedPieces.reduce((a, r) => a + r.cycles, 0) / clearedPieces.length, 2) : 0
   };
 }
 
-// Quality view rows: every defect-ish event, newest first, tagged with a kind.
 function deriveDefects(events){
-  return events.filter(e =>
-      ["Wax Failure","Re-Masking","Engineering Review"].includes(e.type)
-      || isWaxFail(e) || (e.type === "Immersion" && e.result === "Re-strip"))
-    .slice().sort(byDate).reverse()
-    .map(e => {
-      let kind, detail;
-      if(e.type === "Engineering Review"){ kind = "Eng review"; detail = e.status || ""; }
-      else if(e.type === "Re-Masking"){ kind = "Re-mask"; detail = e.notes || ""; }
-      else if(e.type === "Wax Failure"){ kind = "Wax failure"; detail = e.waxFailure || ""; }
-      else if(isWaxFail(e)){ kind = "Wax failure"; detail = e.waxFailure; }
-      else { kind = "Re-strip"; detail = (e.timeIn || "") + "-" + (e.timeOut || ""); }
-      return { e, kind, detail };
+  const out = [];
+  events.forEach(e => {
+    if(e.type === "Engineering Review") out.push({ e, kind:"Eng review", detail:e.status || "", serial:e.serial || "", bath:e.bath || "" });
+    else if(e.type === "Re-Masking") out.push({ e, kind:"Re-mask", detail:e.notes || "", serial:e.serial || "", bath:e.bath || "" });
+    else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:e.waxFailure || "", serial:e.serial || "", bath:e.bath || "" });
+    else if(e.type === "Extraction") (e.items || []).forEach(it => {
+      if(it.waxFailure && it.waxFailure !== "None") out.push({ e, kind:"Wax failure", detail:it.waxFailure, serial:it.serial, bath:e.bath || "" });
+      if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
     });
+    else if(e.type === "Immersion"){
+      if(e.waxFailure && e.waxFailure !== "None") out.push({ e, kind:"Wax failure", detail:e.waxFailure, serial:e.serial || "", bath:e.bath || "" });
+      if(e.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:e.serial || "", bath:e.bath || "" });
+    }
+  });
+  return out.sort((a, b) => byDate(a.e, b.e)).reverse();
 }
 
-// Soft, non-blocking warnings shown while logging (and used by the test suite).
 function eventWarnings(d, events, config, nowDT){
   const w = [];
   const others = events.filter(e => e.id == null || e.id !== d.id);
@@ -363,31 +443,41 @@ function eventWarnings(d, events, config, nowDT){
     const hp = num(d.hclPct); if(hp != null && (hp < config.hclMin || hp > config.hclMax)) w.push({ level:"amber", msg:`Free HCl ${hp}% outside band ${config.hclMin}–${config.hclMax}%` });
     const t = num(d.temp); if(t != null && Math.abs(t - config.tempSet) > config.tempTol) w.push({ level:"amber", msg:`Temp ${t}°C outside ${config.tempSet}±${config.tempTol}°C` });
   }
-  if(d.type === "Immersion"){
-    if(d.serial){
-      const prior = others.filter(e => e.type === "Immersion" && e.serial === d.serial);
-      const cyc = prior.length + 1;
-      const hrs = prior.reduce((a, e) => a + hrsBetween(e.timeIn, e.timeOut), 0) + hrsBetween(d.timeIn, d.timeOut);
-      if(cyc > config.maxCycles) w.push({ level:"red", msg:`This is cycle ${cyc} — exceeds max ${config.maxCycles}; route to engineering` });
-      if(hrs >= config.maxHours) w.push({ level:"red", msg:`Cumulative immersion ${round(hrs)} h ≥ max ${config.maxHours} h` });
-      if(prior.some(e => e.result === "Cleared")) w.push({ level:"amber", msg:`Serial ${d.serial} already has a Cleared immersion` });
-    }
+  if(d.type === "Load In"){
+    const serials = d.serials || [];
+    if(!serials.length) w.push({ level:"amber", msg:"No serials entered" });
     if(d.bath){
       const bs = deriveBath(others, config, d.bath, nowDT);
       if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} was disposed ${fmtDate(bs.disposal.datetime)}` });
       else if(!bs.lastFill) w.push({ level:"amber", msg:`Bath ${d.bath} has no fill logged` });
       else if(bs.flags.length) w.push({ level:"amber", msg:`Bath ${d.bath}: ${bs.flags.join("; ")}` });
     }
-    if(d.timeIn && d.timeOut && hrsBetween(d.timeIn, d.timeOut) <= 0) w.push({ level:"amber", msg:"Time out is not after time in" });
+    const { records, open } = deriveImmersions(others, nowDT);
+    serials.forEach(s => {
+      if(open.has(s)) w.push({ level:"amber", msg:`Serial ${s} is already in bath ${open.get(s).bath}` });
+      const prior = records.filter(r => r.serial === s).length;
+      if(prior + 1 > config.maxCycles) w.push({ level:"red", msg:`Serial ${s} would be cycle ${prior + 1} (> max ${config.maxCycles}) — route to engineering` });
+      if(records.some(r => r.serial === s && r.result === "Cleared")) w.push({ level:"amber", msg:`Serial ${s} already has a Cleared dip` });
+    });
   }
-  if(d.type === "Bath Fill" && d.bath){
-    const bs = deriveBath(others, config, d.bath, nowDT);
-    if(bs.active) w.push({ level:"amber", msg:`Bath ${d.bath} is already active (filled ${fmtDate(bs.lastFill.datetime)}); dispose before re-filling` });
+  if(d.type === "Extraction"){
+    const items = d.items || [];
+    if(!items.length) w.push({ level:"amber", msg:"No parts selected to extract" });
+    if(d.bath){
+      const bs = deriveBath(others, config, d.bath, nowDT);
+      if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} is disposed` });
+      const inBath = bathContents(others, nowDT, d.bath).map(r => r.serial);
+      items.forEach(it => { if(!inBath.includes(it.serial)) w.push({ level:"amber", msg:`Serial ${it.serial} is not currently in bath ${d.bath}` }); });
+    }
   }
   if((d.type === "HCl Top-Up" || d.type === "Water Top-Up") && d.bath){
     const bs = deriveBath(others, config, d.bath, nowDT);
     if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} is disposed` });
     else if(!bs.lastFill) w.push({ level:"amber", msg:`Bath ${d.bath} has no fill logged` });
+  }
+  if(d.type === "Bath Fill" && d.bath){
+    const bs = deriveBath(others, config, d.bath, nowDT);
+    if(bs.active) w.push({ level:"amber", msg:`Bath ${d.bath} is already active (filled ${fmtDate(bs.lastFill.datetime)}); dispose before re-filling` });
   }
   return w;
 }
@@ -418,11 +508,7 @@ async function saveConfig(){ for(const k of Object.keys(CONFIG)) await putRec("c
 function nowLocalDT(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
 function todayISODate(){ return new Date().toISOString().slice(0,10); }
 
-async function addEvent(obj){
-  obj.datetime = obj.datetime || nowLocalDT();
-  obj.eventId = nextEventId(obj.datetime, EVENTS);
-  const id = await putRec("events", obj); obj.id = id; await loadAll();
-}
+async function addEvent(obj){ obj.datetime = obj.datetime || nowLocalDT(); obj.eventId = nextEventId(obj.datetime, EVENTS); const id = await putRec("events", obj); obj.id = id; await loadAll(); }
 async function updateEvent(obj){ await putRec("events", obj); await loadAll(); }
 async function removeEvent(id){ await delRec("events", id); await loadAll(); }
 
@@ -442,11 +528,8 @@ function cel(tag, attrs = {}, kids = []){
 }
 const pill = (text, cls) => cel("span", { class:"pill " + (cls || "p-grey") }, text);
 const tcell = (v, cls) => cel("td", cls ? { class:cls } : {}, v == null ? "" : String(v));
+function flash(msg){ const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#16242b;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px" }, msg); document.body.append(b); setTimeout(() => b.remove(), 1600); }
 
-let flashMsg = "";
-function flash(msg){ flashMsg = msg; const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#16242b;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px" }, msg); document.body.append(b); setTimeout(() => b.remove(), 1600); }
-
-/* modal */
 function modal(title, bodyNode, footerNodes){
   const root = $("#modalRoot"); root.innerHTML = "";
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
@@ -461,12 +544,9 @@ function modal(title, bodyNode, footerNodes){
 function closeModal(){ $("#modalRoot").innerHTML = ""; }
 document.addEventListener("keydown", e => { if(e.key === "Escape") closeModal(); });
 
-/* SVG charts (dependency-free) */
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
 function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#6b7c84", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
-
-// points: [{label, y}]. opt: {w,h,color,limit,band:{lo,hi},mini,fmtY}
 function trendChart(points, opt = {}){
   const w = opt.w || 260, h = opt.h || 92, mini = !!opt.mini;
   const padL = mini ? 4 : 30, padR = mini ? 4 : 8, padT = mini ? 4 : 10, padB = mini ? 4 : 16;
@@ -489,39 +569,61 @@ function trendChart(points, opt = {}){
   return svg;
 }
 
+/* presentation helpers (DOM-free, app layer) */
+function eventDetail(e){
+  const d = [];
+  if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
+  if(e.type === "Load In"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} in${e.bath ? " → " + e.bath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
+  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => i.waxFailure && i.waxFailure !== "None").length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
+  if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} ${e.result || ""}`);
+  if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
+  if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
+  if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
+  if(e.type === "Wax Failure") d.push(e.waxFailure || "");
+  if(e.type === "Engineering Review") d.push(e.status || "");
+  if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
+  if(e.notes) d.push("“" + e.notes + "”");
+  return d.join("  ");
+}
+function eventDetailForSerial(e, serial){
+  if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
+  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (it.waxFailure && it.waxFailure !== "None" ? " · wax: " + it.waxFailure : "")) : ("extraction from " + (e.bath || "bath")); }
+  return eventDetail(e);
+}
+
 /* ------------------------------ state --------------------------------- */
 const TABS = ["Log event", "Event log", "Pieces", "Baths", "Quality", "Dashboard", "Settings"];
 let activeTab = "Log event";
 let logFilter = { type:"", bath:"", text:"" };
-let qualFilter = "All";
+let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null;
 
-/* ------------------------------ render -------------------------------- */
 function attentionItems(){
   const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active && b.flags.length);
-  const pieces = derivePieces(EVENTS, CONFIG).filter(r => r.status.s === "→ Engineering");
+  const pieces = derivePieces(EVENTS, CONFIG, nowLocalDT()).filter(r => r.status.s === "→ Engineering");
   return { baths, pieces };
 }
 function renderAttention(){
   const a = $("#attention"); a.innerHTML = "";
   const { baths, pieces } = attentionItems();
   if(!baths.length && !pieces.length) return;
-  const bar = cel("div", { class:"attn" });
-  bar.append(cel("span", {}, "⚠"));
+  const bar = cel("div", { class:"attn" }, cel("span", {}, "⚠"));
   if(baths.length) bar.append(cel("span", {}, [cel("b", {}, String(baths.length)), " bath" + (baths.length > 1 ? "s" : "") + " out of band"]));
   if(pieces.length) bar.append(cel("span", {}, [cel("b", {}, String(pieces.length)), " piece" + (pieces.length > 1 ? "s" : "") + " awaiting disposition"]));
   bar.append(cel("span", { class:"sp" }));
   if(baths.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Baths"; render(); } }, "View baths"));
-  if(pieces.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Pieces"; render(); } }, "View pieces"));
+  if(pieces.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Pieces"; pieceFilter = "→ Engineering"; render(); } }, "View pieces"));
   a.append(bar);
 }
 function renderNav(){
   const nav = $("#nav"); nav.innerHTML = "";
   const { baths, pieces } = attentionItems();
-  const counts = { "Baths":baths.length, "Pieces":pieces.length };
+  const inBath = bathContents(EVENTS, nowLocalDT(), "").length;
   TABS.forEach(t => {
     const kids = [t];
-    if(counts[t]) kids.push(cel("span", { class:"badge" }, String(counts[t])));
+    if(t === "Pieces" && pieces.length) kids.push(cel("span", { class:"badge" }, String(pieces.length)));
+    if(t === "Baths" && baths.length) kids.push(cel("span", { class:"badge" }, String(baths.length)));
+    if(t === "Baths" && !baths.length && inBath) kids.push(cel("span", { class:"badge info" }, String(inBath)));
     nav.append(cel("button", { class:t === activeTab ? "on" : "", onclick:() => { activeTab = t; render(); } }, kids));
   });
 }
@@ -532,56 +634,51 @@ function render(){
 }
 
 /* --- Log event --- */
-function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t }; render(); }
-function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); activeTab = "Log event"; render(); }
+function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t }; if(t === "Extraction") formData._rows = {}; render(); }
+function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); if(e.type === "Load In") formData._serialText = (e.serials || []).join(", "); if(e.type === "Extraction") formData._rows = {}; activeTab = "Log event"; render(); }
+function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "" }; activeTab = "Log event"; render(); }
+function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", _rows:{} }; activeTab = "Log event"; render(); }
+
+function appendOpList(card){ const dl = cel("datalist", { id:"opList" }); (CONFIG.operators || []).forEach(o => dl.append(cel("option", { value:o }))); card.append(dl); }
+function fieldNode(name, label, kind, onin){
+  const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
+  let inp;
+  if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
+  else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
+  else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
+  else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
+  else inp = cel("input", { type:"text", oninput:onin });
+  if(formData[name] != null) inp.value = formData[name];
+  wrap.append(inp); return wrap;
+}
 
 function vLog(m){
   m.append(cel("h2", { class:"sec" }, editId != null ? "Edit event" : "Log an event"));
   const grid = cel("div", { class:"typegrid" });
-  Object.keys(TYPES).forEach(t => grid.append(cel("button", { class:"typebtn" + (formType === t ? " on" : ""), onclick:() => startNew(t) },
-    [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+  Object.keys(TYPES).forEach(t => grid.append(cel("button", { class:"typebtn" + (formType === t ? " on" : ""), onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
   m.append(grid);
-  if(!formType){ m.append(cel("div", { class:"note" }, "Pick an event type above. Each one shows only the fields it needs, and the system stamps a unique Event ID and timestamp automatically.")); return; }
+  if(!formType){ m.append(cel("div", { class:"note" }, "Pick an event type. Dips are split into “Load In” (parts into a bath) and “Extraction” (parts out) so you never have to know the out-time in advance — and the bath always knows what is still in it.")); return; }
 
   const card = cel("div", { class:"card formcard" });
-  const head = cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:10px" }, [
+  card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:10px" }, [
     cel("h2", { class:"sec", style:"margin:0;flex:1" }, formType),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null
-  ]);
-  card.append(head);
-  card.append(cel("div", { class:"field" }, [
-    cel("label", { class:"f" }, "Date / time"),
-    cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })
   ]));
-
-  const two = cel("div", { class:"twocol" });
-  let needList = false;
-  TYPES[formType].fields.forEach(fd => {
-    const [name, label, kind] = fd;
-    const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
-    let inp;
-    const onin = e => { formData[name] = e.target.value; refreshWarn(); };
-    if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
-    else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
-    else if(kind === "num"){ inp = cel("input", { type:"number", step:"any", oninput:onin }); }
-    else if(kind === "time"){ inp = cel("input", { type:"time", oninput:onin }); }
-    else if(kind === "operator"){ needList = true; inp = cel("input", { type:"text", list:"opList", oninput:onin }); }
-    else { inp = cel("input", { type:"text", oninput:onin }); }
-    if(formData[name] != null) inp.value = formData[name];
-    wrap.append(inp); two.append(wrap);
-  });
-  card.append(two);
-  if(needList){ const dl = cel("datalist", { id:"opList" }); CONFIG.operators.forEach(o => dl.append(cel("option", { value:o }))); card.append(dl); }
+  const dtLabel = "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "");
+  card.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, dtLabel), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
 
   const warnBox = cel("div", { style:"margin-top:4px" });
-  card.append(warnBox);
   function refreshWarn(){
     warnBox.innerHTML = "";
     eventWarnings(formData, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
       warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
   }
-  refreshWarn();
-
+  const body = cel("div", {}); card.append(body);
+  const custom = TYPES[formType].custom;
+  if(custom === "load") buildLoadFields(body, refreshWarn);
+  else if(custom === "extract") buildExtractFields(body, refreshWarn);
+  else buildGenericFields(body, refreshWarn);
+  card.append(warnBox); refreshWarn();
   card.append(cel("div", { style:"margin-top:8px;display:flex;gap:8px" }, [
     cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update event" : "Save event"),
     cel("button", { class:"btn", onclick:() => { formType = null; editId = null; render(); } }, "Cancel")
@@ -589,30 +686,106 @@ function vLog(m){
   m.append(card);
   card.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
 }
+
+function buildGenericFields(card, refreshWarn){
+  let needList = false;
+  const two = cel("div", { class:"twocol" });
+  TYPES[formType].fields.forEach(fd => { const [name, label, kind] = fd; if(kind === "operator") needList = true;
+    two.append(fieldNode(name, label, kind, e => { formData[name] = e.target.value; refreshWarn(); })); });
+  card.append(two);
+  if(needList) appendOpList(card);
+}
+
+function buildLoadFields(card, refreshWarn){
+  appendOpList(card);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("bath", "Bath", "baths", e => { formData.bath = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(two);
+  const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Serials — comma, space or new line; ranges like 7261-01..06"));
+  const ta = cel("textarea", { rows:"2", placeholder:"7261-01..06, 7261-09" });
+  ta.value = formData._serialText != null ? formData._serialText : (formData.serials || []).join(", ");
+  const prev = cel("div", { class:"serial-prev" });
+  function upd(){
+    formData._serialText = ta.value; formData.serials = parseSerials(ta.value); prev.innerHTML = "";
+    if(formData.serials.length){
+      prev.append(cel("span", { class:"muted" }, formData.serials.length + " part" + (formData.serials.length > 1 ? "s" : "") + ": "));
+      formData.serials.slice(0, 14).forEach(s => prev.append(cel("span", { class:"tag" }, s)));
+      if(formData.serials.length > 14) prev.append(cel("span", { class:"muted" }, " +" + (formData.serials.length - 14) + " more"));
+    }
+    refreshWarn();
+  }
+  ta.addEventListener("input", upd); wrap.append(ta, prev); card.append(wrap);
+  card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+  upd();
+}
+
+function buildExtractFields(card, refreshWarn){
+  appendOpList(card);
+  const bathWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath"));
+  const bsel = cel("select", {}, cel("option", { value:"" }, "—"));
+  CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
+  bsel.addEventListener("input", () => { formData.bath = bsel.value; formData._rows = {}; rebuild(); refreshWarn(); });
+  bathWrap.append(bsel); card.append(bathWrap);
+  const cont = cel("div", {}); card.append(cont);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+  card.append(two);
+  formData._rows = formData._rows || {};
+  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => ({ serial:s, result:formData._rows[s].result, waxFailure:formData._rows[s].wax })); }
+  function rebuild(){
+    cont.innerHTML = "";
+    if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12px" }, "Select a bath to see what is currently in it.")); sync(); return; }
+    let rows;
+    if(editId != null && Array.isArray(formData.items) && !Object.keys(formData._rows).length){
+      formData.items.forEach(it => formData._rows[it.serial] = { result:it.result || "Cleared", wax:it.waxFailure || "None", checked:true });
+      rows = formData.items.map(it => ({ serial:it.serial, inDT:null, elapsedH:null }));
+    } else {
+      const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
+      rows = contents.slice();
+      contents.forEach(r => { if(!formData._rows[r.serial]) formData._rows[r.serial] = { result:"Cleared", wax:"None", checked:false }; });
+      Object.keys(formData._rows).forEach(s => { if(!rows.find(r => r.serial === s)) rows.push({ serial:s, inDT:null, elapsedH:null }); });
+    }
+    if(!rows.length){ cont.append(cel("div", { class:"note", style:"background:var(--amber-bg);color:var(--amber)" }, "Nothing is currently recorded in bath " + formData.bath + ".")); sync(); return; }
+    cont.append(cel("label", { class:"f" }, "In the bath now — tick the parts you are pulling"));
+    cont.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin:6px 0" }, [
+      cel("button", { class:"btn sm", type:"button", onclick:() => { rows.forEach(r => formData._rows[r.serial].checked = true); rebuild(); refreshWarn(); } }, "Select all"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { rows.forEach(r => formData._rows[r.serial].checked = false); rebuild(); refreshWarn(); } }, "Clear"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { rows.forEach(r => formData._rows[r.serial].result = "Cleared"); rebuild(); } }, "All Cleared"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { rows.forEach(r => formData._rows[r.serial].result = "Re-strip"); rebuild(); } }, "All Re-strip")
+    ]));
+    const boxEl = cel("div", { class:"contents" });
+    rows.forEach(r => {
+      const st = formData._rows[r.serial];
+      const cb = cel("input", { type:"checkbox" }); cb.checked = !!st.checked;
+      cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); });
+      const resSel = cel("select", {}); ["Cleared", "Re-strip", "Hold"].forEach(o => resSel.append(cel("option", { value:o }, o))); resSel.value = st.result;
+      resSel.addEventListener("input", () => { st.result = resSel.value; st.checked = true; cb.checked = true; sync(); refreshWarn(); });
+      const waxSel = cel("select", {}); ["None", "Partial mask loss", "Complete mask loss"].forEach(o => waxSel.append(cel("option", { value:o }, o))); waxSel.value = st.wax;
+      waxSel.addEventListener("input", () => { st.wax = waxSel.value; sync(); });
+      const meta = r.elapsedH != null ? ("in " + (r.inDT ? fmtDT(r.inDT) : "") + " · " + r.elapsedH + " h") : (r.inDT ? fmtDT(r.inDT) : "");
+      boxEl.append(cel("div", { class:"crow" }, [cb, cel("div", {}, [cel("b", {}, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]), resSel, waxSel]));
+    });
+    cont.append(boxEl); sync();
+  }
+  rebuild();
+}
+
 async function saveForm(){
-  const rec = Object.assign({}, formData);
-  if(editId != null){ rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS); await updateEvent(rec); flash("Updated " + rec.eventId); }
-  else { await addEvent(rec); flash("Saved " + rec.eventId); }
-  formType = editId != null ? null : formType;
-  editId = null;
-  formData = formType ? { datetime:nowLocalDT(), type:formType } : {};
+  const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
+  if(rec.type === "Load In"){ rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
+  if(editId != null){ rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS); await updateEvent(rec); flash("Updated " + rec.eventId); editId = null; formType = null; formData = {}; }
+  else { await addEvent(rec); flash("Saved " + rec.eventId); formData = { datetime:nowLocalDT(), type:formType }; if(formType === "Extraction") formData._rows = {}; }
   render();
 }
 
+function emptyState(){ return cel("div", { class:"empty" }, [cel("div", { style:"font-size:15px;margin-bottom:6px" }, "No events yet"), cel("div", {}, "Use “Log event” to start, or load the example from Settings → Data.")]); }
+
 /* --- Event log --- */
-function eventDetail(e){
-  const d = [];
-  if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
-  if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} (${hrsBetween(e.timeIn, e.timeOut)} h) ${e.result || ""}` + (isWaxFail(e) ? ` · ${e.waxFailure}` : ""));
-  if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
-  if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
-  if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
-  if(e.type === "Wax Failure") d.push(e.waxFailure || "");
-  if(e.type === "Engineering Review") d.push(e.status || "");
-  if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
-  if(e.notes) d.push("“" + e.notes + "”");
-  return d.join("  ");
-}
 function vEventLog(m){
   m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
   const chips = cel("div", { class:"chips" });
@@ -625,22 +798,22 @@ function vEventLog(m){
   m.append(chips);
 
   const q = (logFilter.text || "").toLowerCase();
-  const rows = EVENTS.slice().reverse().filter(e =>
-    (!logFilter.type || e.type === logFilter.type) && (!logFilter.bath || e.bath === logFilter.bath) &&
-    (!q || [e.eventId, e.jc, e.serial, e.component, e.notes, e.operator, e.type].some(v => v && String(v).toLowerCase().includes(q))));
+  const matchText = e => [e.eventId, e.jc, e.serial, e.component, e.notes, e.operator, e.type, (e.serials || []).join(" "), (e.items || []).map(i => i.serial).join(" ")].some(v => v && String(v).toLowerCase().includes(q));
+  const rows = EVENTS.slice().reverse().filter(e => (!logFilter.type || e.type === logFilter.type) && (!logFilter.bath || e.bath === logFilter.bath) && (!q || matchText(e)));
   m.append(cel("div", { class:"muted", style:"margin-bottom:8px;font-size:12px" }, rows.length + " of " + EVENTS.length + " events"));
   if(!rows.length){ m.append(emptyState()); return; }
 
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["Event ID","When","Type","Bath","J/C","Serial","Cyc","Detail","Op",""].forEach(c => hr.append(cel("th", {}, c)));
+  ["Event ID", "When", "Type", "Bath", "J/C", "Parts", "Detail", "Op", ""].forEach(c => hr.append(cel("th", {}, c)));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
   rows.forEach(e => {
+    const partsCell = e.type === "Load In" ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
     const tr = cel("tr");
     tr.append(cel("td", { class:"mono" }, e.eventId || ""));
     tr.append(tcell(fmtDT(e.datetime)));
     tr.append(cel("td", {}, pill(e.type, TYPE_PILL[e.type])));
-    tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(e.serial)); tr.append(tcell(e.cycle));
+    tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(partsCell));
     tr.append(tcell(eventDetail(e)));
     tr.append(tcell(e.operator));
     tr.append(cel("td", { style:"white-space:nowrap" }, [
@@ -654,11 +827,20 @@ function vEventLog(m){
 
 /* --- Pieces --- */
 function vPieces(m){
-  m.append(cel("h2", { class:"sec" }, "Pieces — derived from the event stream"));
-  const rows = derivePieces(EVENTS, CONFIG);
-  if(!rows.length){ m.append(emptyState()); return; }
+  m.append(cel("h2", { class:"sec" }, "Pieces — derived from load / extraction events"));
+  const all = derivePieces(EVENTS, CONFIG, nowLocalDT());
+  const filt = {
+    "All": () => true, "In bath": r => r.status.s === "In bath",
+    "Awaiting": r => r.status.s === "Awaiting re-strip", "Cleared": r => r.status.s === "Cleared" || r.status.s === "Accepted",
+    "→ Engineering": r => r.status.s === "→ Engineering"
+  };
+  const chips = cel("div", { class:"chips" });
+  Object.keys(filt).forEach(k => { const n = all.filter(filt[k]).length; chips.append(cel("button", { class:"btn sm" + (pieceFilter === k ? " primary" : ""), onclick:() => { pieceFilter = k; render(); } }, k + (k === "All" ? "" : " (" + n + ")"))); });
+  m.append(chips);
+  const rows = all.filter(filt[pieceFilter] || (() => true));
+  if(!rows.length){ m.append(all.length ? cel("div", { class:"empty" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["J/C","Serial","Component","Cycles","Cum h","Wax","Status",""].forEach((c, i) => hr.append(cel("th", i >= 3 && i <= 5 ? { class:"num" } : {}, c)));
+  ["J/C", "Serial", "Component", "Cyc", "Cum h", "Wax", "Status", "Where", ""].forEach((c, i) => hr.append(cel("th", (i === 3 || i === 4 || i === 5) ? { class:"num" } : {}, c)));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
   rows.forEach(r => {
@@ -668,25 +850,23 @@ function vPieces(m){
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
+    tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
     tr.append(cel("td", {}, cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history")));
     tb.append(tr);
   });
   t.append(tb); wrap.append(t); m.append(wrap);
 }
-function pieceTimeline(ev){
+function pieceTimeline(evs, serial){
   const ul = cel("ul", { class:"tl" });
-  ev.forEach(e => {
-    ul.append(cel("li", {}, [
-      cel("div", { class:"tl-h" }, [pill(e.type, TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime) + (e.bath ? "  ·  bath " + e.bath : "")), e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
-      cel("div", { class:"tl-d" }, eventDetail(e) || "")
-    ]));
-  });
+  evs.forEach(e => ul.append(cel("li", {}, [
+    cel("div", { class:"tl-h" }, [pill(e.type, TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
+    cel("div", { class:"tl-d" }, eventDetailForSerial(e, serial) || "")
+  ])));
   return ul;
 }
 function showSerial(serial){
-  const p = derivePieces(EVENTS, CONFIG).find(r => r.serial === serial);
+  const p = derivePieces(EVENTS, CONFIG, nowLocalDT()).find(r => r.serial === serial);
   if(!p) return;
-  const ev = p.events.slice().reverse();
   const body = cel("div", {});
   body.append(cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" }, [
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, p.jc || "—"), cel("div", { class:"l" }, "Job card")]),
@@ -695,7 +875,7 @@ function showSerial(serial){
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
   ]));
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
-  body.append(pieceTimeline(ev));
+  body.append(pieceTimeline(p.events.slice().reverse(), serial));
   modal("Serial " + serial + (p.component ? " · " + p.component : ""), body, [
     cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Print traveler"),
     cel("button", { class:"btn primary", onclick:closeModal }, "Close")
@@ -712,21 +892,38 @@ function printTraveler(p){
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cum hours"), cel("td", { class:"pr-meta" }, String(p.hours))]));
   pa.append(meta);
   const t = cel("table"), hr = cel("tr");
-  ["Event ID","When","Type","Bath","Detail","Operator"].forEach(c => hr.append(cel("th", {}, c)));
+  ["Event ID", "When", "Type", "Bath", "Detail", "Operator"].forEach(c => hr.append(cel("th", {}, c)));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  p.events.forEach(e => tb.append(cel("tr", {}, [cel("td", { class:"mono" }, e.eventId || ""), tcell(fmtDT(e.datetime)), tcell(e.type), tcell(e.bath), tcell(eventDetail(e)), tcell(e.operator)])));
+  p.events.forEach(e => tb.append(cel("tr", {}, [cel("td", { class:"mono" }, e.eventId || ""), tcell(fmtDT(e.datetime)), tcell(e.type), tcell(e.bath), tcell(eventDetailForSerial(e, p.serial)), tcell(e.operator)])));
   t.append(tb); pa.append(t);
   window.print();
 }
 
 /* --- Baths --- */
 function vBaths(m){
-  m.append(cel("h2", { class:"sec" }, "Baths — current charge computed from fills, checks, top-ups, disposals"));
+  m.append(cel("h2", { class:"sec" }, "Baths — current charge computed from the event stream"));
+  const now = nowLocalDT();
+  const allOpen = bathContents(EVENTS, now, "");
+  const floor = cel("div", { class:"card", style:"margin-bottom:14px" });
+  floor.append(cel("h3", { class:"sub", style:"margin-top:0" }, "On the floor now — parts currently in baths"));
+  if(!allOpen.length) floor.append(cel("div", { class:"muted" }, "No parts are currently in any bath."));
+  else {
+    const byBath = new Map(); allOpen.forEach(r => { const a = byBath.get(r.bath) || []; a.push(r); byBath.set(r.bath, a); });
+    byBath.forEach((arr, b) => {
+      const line = cel("div", { style:"margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap" });
+      line.append(cel("span", { style:"font-weight:600" }, b), cel("span", { class:"muted" }, arr.length + " part" + (arr.length > 1 ? "s" : "") + " · longest " + round(Math.max(...arr.map(r => r.elapsedH || 0))) + " h"));
+      arr.forEach(r => line.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " (" + round(r.elapsedH) + "h)")));
+      line.append(cel("button", { class:"btn sm", onclick:() => startExtraction(b) }, "Extract…"));
+      floor.append(line);
+    });
+  }
+  m.append(floor);
+
   const row = cel("div", { class:"row" });
-  deriveBaths(EVENTS, CONFIG, nowLocalDT()).forEach(s => {
-    const c = cel("div", { class:"card bathcard", onclick:() => showBath(s.bath) });
-    c.append(cel("h3", {}, [s.bath, s.active ? pill("active", "p-green") : (s.disposal ? pill("disposed", "p-grey") : pill("empty", "p-grey"))]));
+  deriveBaths(EVENTS, CONFIG, now).forEach(s => {
+    const c = cel("div", { class:"bathcard card", onclick:() => showBath(s.bath) });
+    c.append(cel("h3", {}, [s.bath, s.active ? pill("active", "p-green") : (s.disposal ? pill("disposed", "p-grey") : pill("empty", "p-grey")), s.contents.length ? pill(s.contents.length + " in bath", "p-blue") : null]));
     c.append(cel("div", { class:"muted", style:"font-size:12px;margin-bottom:8px" },
       s.disposal ? ("Disposed " + fmtDate(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
     const kv = (k, v) => c.append(cel("div", { class:"kv" }, [cel("span", {}, k), cel("span", {}, v)]));
@@ -734,13 +931,16 @@ function vBaths(m){
     if(s.lastChem) kv("Latest chem", "HCl " + fmtNum(s.lastChem.hclPct) + "% · Fe " + fmtNum(s.lastChem.fePpm) + " · " + fmtNum(s.lastChem.temp) + "°C");
     kv("Load (piece-h)", String(s.loadH));
     kv("Parts processed", String(s.parts));
-    kv("Wax failures", String(s.wax));
     if(s.flags.length) c.append(cel("div", { class:"note", style:"margin-top:10px;background:var(--red-bg);color:var(--red)" }, "⚠ " + s.flags.join(" · ")));
-    else if(s.lastChem) c.append(cel("div", { class:"flagok", style:"margin-top:10px;font-size:12px;color:var(--green)" }, "✓ in band"));
+    else if(s.lastChem) c.append(cel("div", { class:"flagok", style:"margin-top:10px;font-size:12px" }, "✓ in band"));
+    const acts = cel("div", { style:"margin-top:10px;display:flex;gap:6px", onclick:e => e.stopPropagation() });
+    acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
+    if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startExtraction(s.bath) }, "Extract"));
+    c.append(acts);
     if(s.chem.length > 1){
       const sp = cel("div", { style:"margin-top:10px" });
       sp.append(cel("div", { class:"muted", style:"font-size:11px;margin-bottom:2px" }, "Iron ppm trend (tap card for full chemistry)"));
-      sp.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:40, limit:CONFIG.feMax, color:"#2e6e84" }));
+      sp.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:40, limit:CONFIG.feMax }));
       c.append(sp);
     }
     row.append(c);
@@ -755,34 +955,39 @@ function showBath(bath){
   if(s.lastFill) body.append(cel("div", { style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
   if(s.flags.length) body.append(cel("div", { class:"note", style:"background:var(--red-bg);color:var(--red)" }, "⚠ " + s.flags.join(" · ")));
 
+  if(s.contents.length){
+    body.append(cel("h3", { class:"sub" }, "In the bath now (" + s.contents.length + ")"));
+    const cw = cel("div", {});
+    s.contents.forEach(r => cw.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " · " + round(r.elapsedH) + " h")));
+    body.append(cw);
+    body.append(cel("div", { style:"margin-top:8px" }, cel("button", { class:"btn sm primary", onclick:() => { closeModal(); startExtraction(bath); } }, "Extract from this bath")));
+  }
   if(s.chem.length){
     const charts = cel("div", { class:"charts3" });
-    const mk = (title, key, opt, unit) => {
-      const ch = cel("div", { class:"ch" });
-      const last = s.chem[s.chem.length - 1];
+    const mk = (title, key, opt, unit) => { const ch = cel("div", { class:"ch" }); const last = s.chem[s.chem.length - 1];
       ch.append(cel("div", { class:"chttl" }, [cel("span", {}, title), cel("span", {}, fmtNum(last[key]) + (unit || ""))]));
-      ch.append(trendChart(s.chem.map(e => ({ y:+e[key] || 0 })), opt));
-      return ch;
-    };
+      ch.append(trendChart(s.chem.map(e => ({ y:+e[key] || 0 })), opt)); return ch; };
     charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#9c2a2a" }, ""));
     charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#2e6e84" }, "%"));
     charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#8a5a00" }, "°"));
     body.append(charts);
     body.append(cel("div", { class:"muted", style:"font-size:11px;margin-top:4px" }, "Red dashed = limit · green band = control band"));
   }
-
   const stats = cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" });
   [["Age (d)", s.age === "" ? "—" : s.age], ["Load (piece-h)", s.loadH], ["Parts", s.parts], ["Wax fails", s.wax], ["Chem checks", s.chem.length]]
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
-
-  modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, [cel("button", { class:"btn primary", onclick:closeModal }, "Close")]);
+  modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, [
+    cel("button", { class:"btn", onclick:() => { closeModal(); startLoad(bath); } }, "Load in"),
+    cel("button", { class:"btn primary", onclick:closeModal }, "Close")
+  ]);
 }
 
 /* --- Quality --- */
 function vQuality(m){
   m.append(cel("h2", { class:"sec" }, "Quality — instant defect database"));
   const all = deriveDefects(EVENTS);
+  const jcBySerial = {}; derivePieces(EVENTS, CONFIG, nowLocalDT()).forEach(p => { jcBySerial[p.serial] = p.jc; });
   const kinds = ["All", "Wax failure", "Re-mask", "Eng review", "Re-strip"];
   const chips = cel("div", { class:"chips" });
   kinds.forEach(k => chips.append(cel("button", { class:"btn sm" + (qualFilter === k ? " primary" : ""), onclick:() => { qualFilter = k; render(); } }, k)));
@@ -790,16 +995,17 @@ function vQuality(m){
   const defs = qualFilter === "All" ? all : all.filter(d => d.kind === qualFilter);
   if(!defs.length){ m.append(cel("div", { class:"empty" }, "No matching defects, re-masking, or engineering reviews logged.")); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["When","Kind","J/C","Serial","Bath","Detail","Op"].forEach(c => hr.append(cel("th", {}, c)));
+  ["When", "Kind", "J/C", "Serial", "Bath", "Detail", "Op"].forEach(c => hr.append(cel("th", {}, c)));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  defs.forEach(({ e, kind, detail }) => {
+  defs.forEach(d => {
+    const e = d.e, jc = jcBySerial[d.serial] || "";
     const tr = cel("tr");
     tr.append(tcell(fmtDT(e.datetime)));
-    tr.append(cel("td", {}, pill(kind, TYPE_PILL[e.type] || "p-amber")));
-    tr.append(cel("td", {}, e.serial ? cel("span", { class:"linkish", onclick:() => showSerial(e.serial) }, e.jc || "—") : (e.jc || "")));
-    tr.append(cel("td", {}, e.serial ? cel("span", { class:"linkish", onclick:() => showSerial(e.serial) }, e.serial) : ""));
-    tr.append(tcell(e.bath)); tr.append(tcell(detail)); tr.append(tcell(e.operator));
+    tr.append(cel("td", {}, pill(d.kind, TYPE_PILL[e.type] || "p-amber")));
+    tr.append(tcell(jc));
+    tr.append(cel("td", {}, d.serial ? cel("span", { class:"linkish", onclick:() => showSerial(d.serial) }, d.serial) : ""));
+    tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(e.operator));
     tb.append(tr);
   });
   t.append(tb); wrap.append(t); m.append(wrap);
@@ -813,8 +1019,8 @@ function vDash(m){
     ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")],
     ["Re-strip rate", k.reStripRate + "%", k.reStripRate > 40 ? "warn" : ""],
     ["Pieces total", k.total, ""], ["Cleared", k.cleared, ""],
-    ["In progress", k.inProg, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""],
-    ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""],
+    ["In bath now", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""],
+    ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""],
     ["Avg cycles to clear", k.avgCycles || "—", ""],
     ["Active baths", k.activeBaths, ""], ["Baths out of band", k.bathsOver, k.bathsOver > 0 ? "warn" : ""]
   ];
@@ -822,29 +1028,23 @@ function vDash(m){
   tiles.forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
 
-  const jr = deriveJobCards(EVENTS, CONFIG);
+  const jr = deriveJobCards(EVENTS, CONFIG, nowLocalDT());
   if(jr.length){
     m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
     const bars = cel("div", { class:"card", style:"max-width:560px" });
-    jr.forEach(r => {
-      bars.append(cel("div", { style:"margin-bottom:8px" }, [
-        cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.fp + "/" + r.pieces + " · " + r.fpy + "%")]),
-        cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
-      ]));
-    });
+    jr.forEach(r => bars.append(cel("div", { style:"margin-bottom:8px" }, [
+      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.fp + "/" + r.pieces + " · " + r.fpy + "%")]),
+      cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
+    ])));
     m.append(bars);
 
     m.append(cel("h3", { class:"sub" }, "By job card"));
     const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-    ["J/C","Component","Pieces","Cleared","First-pass","→ Eng","Re-strips","Wax","FPY"].forEach((c, i) => hr.append(cel("th", i >= 2 ? { class:"num" } : {}, c)));
+    ["J/C", "Component", "Pieces", "Cleared", "First-pass", "In bath", "→ Eng", "Re-strips", "FPY"].forEach((c, i) => hr.append(cel("th", i >= 2 ? { class:"num" } : {}, c)));
     t.append(cel("thead", {}, hr));
     const tb = cel("tbody");
-    jr.forEach(r => {
-      const tr = cel("tr");
-      tr.append(tcell(r.jc)); tr.append(tcell(r.component));
-      [r.pieces, r.cleared, r.fp, r.eng, r.reStrips, r.wax, r.fpy + "%"].forEach(v => tr.append(cel("td", { class:"num" }, String(v))));
-      tb.append(tr);
-    });
+    jr.forEach(r => { const tr = cel("tr"); tr.append(tcell(r.jc)); tr.append(tcell(r.component));
+      [r.pieces, r.cleared, r.fp, r.inBath, r.eng, r.reStrips, r.fpy + "%"].forEach(v => tr.append(cel("td", { class:"num" }, String(v)))); tb.append(tr); });
     t.append(tb); wrap.append(t); m.append(wrap);
   }
 
@@ -856,6 +1056,7 @@ function vDash(m){
       const c = cel("div", { class:"card", style:"flex:1;min-width:200px;max-width:260px;cursor:pointer", onclick:() => showBath(s.bath) });
       c.append(cel("div", { style:"display:flex;justify-content:space-between;align-items:center;margin-bottom:6px" }, [cel("b", {}, s.bath), s.active ? (s.flags.length ? pill("out of band", "p-red") : pill("in band", "p-green")) : pill("disposed", "p-grey")]));
       if(s.lastChem) c.append(cel("div", { class:"muted", style:"font-size:12px" }, "Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d")));
+      if(s.contents.length) c.append(cel("div", { style:"font-size:12px;margin-top:2px" }, s.contents.length + " part(s) in bath"));
       if(s.chem.length > 1) c.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:34, limit:CONFIG.feMax }));
       row.append(c);
     });
@@ -868,9 +1069,9 @@ function vSettings(m){
   m.append(cel("h2", { class:"sec" }, "Settings"));
   const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
-  const lim = [["tempSet","Temperature setpoint °C"],["tempTol","Temp tolerance ± °C"],["hclMin","Free HCl % minimum"],["hclMax","Free HCl % maximum"],["feMax","Iron Fe max ppm"],["maxCycles","Max cycles / piece"],["maxHours","Max immersion h / piece"],["maxBathAge","Max bath life (days)"]];
+  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"]];
   const lg = cel("div", { class:"twocol" });
-  lim.forEach(([k, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[k], oninput:async e => { CONFIG[k] = +e.target.value; await saveConfig(); renderAttention(); renderNav(); } })])));
+  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key], oninput:async e => { CONFIG[key] = +e.target.value; await saveConfig(); renderAttention(); renderNav(); } })])));
   c1.append(lg); m.append(c1);
 
   const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
@@ -889,16 +1090,20 @@ function vSettings(m){
   c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, "Data is stored in this browser, on this PC only. Use “Backup” (top bar) regularly, and “Import” to restore or move to another machine."));
   m.append(c3);
 }
-function emptyState(){ return cel("div", { class:"empty" }, [cel("div", { style:"font-size:15px;margin-bottom:6px" }, "No events yet"), cel("div", {}, "Use “Log event” to start, or load the example from Settings → Data.")]); }
 
-/* ---------------------------- export / import ------------------------- */
+/* --- export / import --- */
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = cel("a", { href:u, download:name }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
-$("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:1, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
+$("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:2, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
 $("#exportCsv").onclick = () => {
-  const cols = ["eventId","datetime","type","bath","jc","component","serial","cycle","hclPct","fePpm","temp","hclAddedL","waterAddedL","h3po4AddedL","timeIn","timeOut","result","waxFailure","disposalReason","status","operator","notes"];
+  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "result", "waxFailure", "open", "anomaly"];
+  const { records } = deriveImmersions(EVENTS, nowLocalDT());
   const lines = [cols.join(",")];
-  EVENTS.forEach(e => lines.push(cols.map(c => { let v = e[c] == null ? "" : String(e[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(",")));
-  download("strip_historian_events_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
+  records.forEach(r => {
+    const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
+      hours:r.open ? ("in bath " + (r.elapsedH || 0) + "h") : (r.hours == null ? "" : r.hours), result:r.result || "", waxFailure:r.waxFailure || "", open:r.open ? "yes" : "", anomaly:r.anomaly || "" };
+    lines.push(cols.map(c => { let v = row[c] == null ? "" : String(row[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(","));
+  });
+  download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
 };
 $("#importBtn").onclick = () => $("#importFile").click();
 $("#importFile").onchange = e => {
@@ -918,48 +1123,57 @@ $("#importFile").onchange = e => {
   r.readAsText(f); e.target.value = "";
 };
 
-/* ---------------------------- example data ---------------------------- */
+/* --- example data --- */
 async function loadExample(){
   if(EVENTS.length && !confirm("Add example data on top of existing events?")) return;
-  const ex = [];
-  const push = o => ex.push(o);
-
-  // ---- Bath 102-103: a charge that ages out (iron climbs past the limit) ----
-  push({ datetime:"2026-03-13T08:00", type:"Bath Fill", bath:"102-103", hclAddedL:300, waterAddedL:700, h3po4AddedL:100, operator:"Maint", notes:"new charge" });
-  push({ datetime:"2026-03-13T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:21, fePpm:30, operator:"Maint" });
-  push({ datetime:"2026-03-18T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:19, fePpm:70, operator:"Maint" });
-  push({ datetime:"2026-03-19T07:30", type:"HCl Top-Up", bath:"102-103", hclAddedL:120, operator:"Maint", notes:"restore free acid" });
-  push({ datetime:"2026-03-22T09:00", type:"Chemistry Check", bath:"102-103", temp:89, hclPct:17, fePpm:110, operator:"Maint" });
-  push({ datetime:"2026-03-23T09:00", type:"Chemistry Check", bath:"102-103", temp:88, hclPct:14, fePpm:160, operator:"Maint", notes:"acid low, iron high" });
-
-  // J/C 7261 — GT26 R2011 V3, six serials going through cycles in 102-103
-  const ser = ["7261-01","7261-02","7261-03","7261-04","7261-05","7261-06"];
-  ser.forEach((s, i) => push({ datetime:"2026-03-22T08:00", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:1, timeIn:"08:00", timeOut:"15:30", result:(i === 0 || i === 3) ? "Cleared" : "Re-strip", operator:"Diang" }));
-  ["7261-02","7261-03","7261-05","7261-06"].forEach(s => push({ datetime:"2026-03-22T20:30", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:2, timeIn:"20:30", timeOut:"02:00", result:s === "7261-02" ? "Cleared" : "Re-strip", operator:"JM" }));
-  [["7261-03","Cleared","None"],["7261-05","Re-strip","Complete mask loss"],["7261-06","Re-strip","Complete mask loss"]]
-    .forEach(([s, r, w]) => push({ datetime:"2026-03-23T08:30", type:"Immersion", bath:"102-103", jc:"7261", component:"GT26 R2011 V3", serial:s, cycle:3, timeIn:"08:30", timeOut:"17:30", result:r, waxFailure:w, operator:"Bernabe" }));
-  push({ datetime:"2026-03-24T07:00", type:"Bath Disposal", bath:"102-103", disposalReason:"Iron limit reached", operator:"Maint" });
-
-  // ---- Bath 106-107: rescue charge for the stragglers ----
-  push({ datetime:"2026-03-23T18:00", type:"Bath Fill", bath:"106-107", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" });
-  push({ datetime:"2026-03-23T18:30", type:"Chemistry Check", bath:"106-107", temp:90, hclPct:22, fePpm:10, operator:"Maint" });
-  push({ datetime:"2026-03-23T19:00", type:"Re-Masking", jc:"7261", serial:"7261-05", operator:"Bernabe", notes:"re-waxed cooling holes before rescue dip" });
-  push({ datetime:"2026-03-23T20:00", type:"Immersion", bath:"106-107", jc:"7261", component:"GT26 R2011 V3", serial:"7261-05", cycle:4, timeIn:"20:00", timeOut:"02:00", result:"Re-strip", operator:"Diang" });
-  push({ datetime:"2026-03-24T09:00", type:"Engineering Review", jc:"7261", serial:"7261-05", status:"Engineering review", operator:"QA", notes:"4 cycles + wax loss" });
-  push({ datetime:"2026-03-24T09:05", type:"Engineering Review", jc:"7261", serial:"7261-06", status:"Scrap", operator:"QA", notes:"3 cycles, complete mask loss" });
-
-  // ---- Bath 202-203: a clean line for contrast (good first-pass yield) ----
-  push({ datetime:"2026-03-20T08:00", type:"Bath Fill", bath:"202-203", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" });
-  push({ datetime:"2026-03-20T08:30", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:21, fePpm:15, operator:"Maint" });
-  ["7440-01","7440-02","7440-03"].forEach((s, i) => push({ datetime:"2026-03-21T08:00", type:"Immersion", bath:"202-203", jc:"7440", component:"GT26 R2012 V2", serial:s, cycle:1, timeIn:"08:00", timeOut:"14:00", result:"Cleared", operator:"Diang" }));
-  push({ datetime:"2026-03-25T09:00", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:20, fePpm:45, operator:"Maint" });
-
+  const D0 = new Date();
+  const agoDT = mins => { const x = new Date(D0.getTime() - mins * 60000); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+  const C = "GT26 R2011 V3", C2 = "GT26 R2012 V2";
+  const ex = [
+    // --- Bath 102-103: a charge that ages out as iron climbs past the limit ---
+    { datetime:"2026-03-13T08:00", type:"Bath Fill", bath:"102-103", hclAddedL:300, waterAddedL:700, h3po4AddedL:100, operator:"Maint", notes:"new charge" },
+    { datetime:"2026-03-13T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:21, fePpm:30, operator:"Maint" },
+    { datetime:"2026-03-18T09:00", type:"Chemistry Check", bath:"102-103", temp:90, hclPct:19, fePpm:70, operator:"Maint" },
+    { datetime:"2026-03-19T07:30", type:"HCl Top-Up", bath:"102-103", hclAddedL:120, operator:"Maint", notes:"restore free acid" },
+    { datetime:"2026-03-22T09:00", type:"Chemistry Check", bath:"102-103", temp:89, hclPct:17, fePpm:110, operator:"Maint" },
+    { datetime:"2026-03-23T09:00", type:"Chemistry Check", bath:"102-103", temp:88, hclPct:14, fePpm:160, operator:"Maint", notes:"acid low, iron high" },
+    // J/C 7261 — six parts loaded together, pulled in several partial extractions
+    { datetime:"2026-03-22T08:00", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-01","7261-02","7261-03","7261-04","7261-05","7261-06"], operator:"Diang" },
+    { datetime:"2026-03-22T15:30", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-01", result:"Cleared", waxFailure:"None" }, { serial:"7261-04", result:"Cleared", waxFailure:"None" }] },
+    { datetime:"2026-03-22T18:00", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-02", result:"Cleared", waxFailure:"None" }, { serial:"7261-03", result:"Re-strip", waxFailure:"None" }] },
+    { datetime:"2026-03-22T20:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"Complete mask loss" }, { serial:"7261-06", result:"Re-strip", waxFailure:"Complete mask loss" }] },
+    // cycle 2 for the three re-strips
+    { datetime:"2026-03-22T20:30", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-03","7261-05","7261-06"], operator:"JM" },
+    { datetime:"2026-03-23T02:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-03", result:"Cleared", waxFailure:"None" }] },
+    { datetime:"2026-03-23T04:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"None" }, { serial:"7261-06", result:"Re-strip", waxFailure:"None" }] },
+    { datetime:"2026-03-24T07:00", type:"Bath Disposal", bath:"102-103", disposalReason:"Iron limit reached", operator:"Maint" },
+    // --- Bath 106-107: rescue charge for the two stragglers (cycle 3) ---
+    { datetime:"2026-03-23T18:00", type:"Bath Fill", bath:"106-107", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
+    { datetime:"2026-03-23T18:30", type:"Chemistry Check", bath:"106-107", temp:90, hclPct:22, fePpm:10, operator:"Maint" },
+    { datetime:"2026-03-23T19:00", type:"Re-Masking", jc:"7261", serial:"7261-05", operator:"Bernabe", notes:"re-waxed cooling holes" },
+    { datetime:"2026-03-23T19:05", type:"Re-Masking", jc:"7261", serial:"7261-06", operator:"Bernabe" },
+    { datetime:"2026-03-23T20:00", type:"Load In", bath:"106-107", jc:"7261", component:C, serials:["7261-05","7261-06"], operator:"Diang" },
+    { datetime:"2026-03-24T02:00", type:"Extraction", bath:"106-107", operator:"Diang", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"None" }, { serial:"7261-06", result:"Re-strip", waxFailure:"None" }] },
+    { datetime:"2026-03-24T09:00", type:"Engineering Review", jc:"7261", serial:"7261-05", status:"Engineering review", operator:"QA", notes:"3 cycles + wax loss" },
+    { datetime:"2026-03-24T09:05", type:"Engineering Review", jc:"7261", serial:"7261-06", status:"Scrap", operator:"QA", notes:"3 cycles, complete mask loss" },
+    // --- Bath 202-203: a clean line (good first-pass yield) ---
+    { datetime:"2026-03-20T08:00", type:"Bath Fill", bath:"202-203", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
+    { datetime:"2026-03-20T08:30", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:21, fePpm:15, operator:"Maint" },
+    { datetime:"2026-03-21T08:00", type:"Load In", bath:"202-203", jc:"7440", component:C2, serials:["7440-01","7440-02","7440-03"], operator:"Diang" },
+    { datetime:"2026-03-21T14:00", type:"Extraction", bath:"202-203", operator:"Diang", items:[{ serial:"7440-01", result:"Cleared", waxFailure:"None" }, { serial:"7440-02", result:"Cleared", waxFailure:"None" }, { serial:"7440-03", result:"Cleared", waxFailure:"None" }] },
+    { datetime:"2026-03-25T09:00", type:"Chemistry Check", bath:"202-203", temp:90, hclPct:20, fePpm:45, operator:"Maint" },
+    // --- Bath 206-207: a live batch still in the tank right now ---
+    { datetime:agoDT(60 * 30), type:"Bath Fill", bath:"206-207", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
+    { datetime:agoDT(60 * 29), type:"Chemistry Check", bath:"206-207", temp:90, hclPct:21, fePpm:12, operator:"Maint" },
+    { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04"], operator:"Diang" },
+    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared", waxFailure:"None" }] }
+  ];
   for(const e of ex) await addEvent(e);
   flash("Example loaded (" + ex.length + " events)");
   activeTab = "Dashboard"; render();
 }
 
-/* -------------------------------- boot -------------------------------- */
+/* boot */
 (async function(){
   try { await openDB(); await loadAll(); }
   catch(err){ document.body.innerHTML = "<p style='padding:20px'>This app needs a browser with IndexedDB. Error: " + esc(err.message || err) + "</p>"; return; }
