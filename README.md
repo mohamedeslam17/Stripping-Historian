@@ -99,6 +99,16 @@ already true:
   more — without blocking the entry.
 - **Autofill** — typing/scanning a known serial fills in its J/C and component;
   the extraction list pre‑ticks parts already over the max immersion time.
+- **Capacity & prediction** — tanks have a configurable capacity; loads that would
+  overfill are flagged, the fill level shows on each tank, and a full bath is never
+  offered as a rescue. The iron trend is projected to the limit ("spent in ~2 days")
+  so changes can be planned, not reacted to.
+- **Data‑health audit** (Dashboard) — a whole‑record scan for states that emerge
+  over time and entry‑time checks can't catch: anomalies, parts left in a disposed
+  bath, over‑capacity tanks, parts stuck past the max immersion time, stalled
+  re‑strips, and overdue chemistry — each with a one‑click fix.
+- **Undo** — the last add / edit / delete can be reverted from the toast or with
+  Ctrl/Cmd‑Z.
 
 **Configurable limits** (Settings): temperature setpoint/tolerance, free‑HCl band,
 iron limit, max cycles & hours per piece, max bath life, bath IDs, operators.

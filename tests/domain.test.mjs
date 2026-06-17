@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","TYPES","F","TYPE_PILL"
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -300,6 +300,50 @@ test("deriveSuggestions: re-mask before re-load when the last dip had wax failur
   assert.ok(sug.some(s => s.action.type === "remask" && s.action.serial === "A"));
   assert.ok(!sug.some(s => s.action.type === "reload"), "re-load is withheld until the part is re-masked");
 });
+/* ===================== bath capacity & iron projection ===================== */
+test("bath capacity: free slots, and a load that would overfill warns", () => {
+  const cfg = { ...CONFIG, bathCapacity:2 };
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A", "B"])];
+  const s = D.deriveBath(events, cfg, "B1", NOW);
+  assert.equal(s.capacity, 2);
+  assert.equal(s.free, 0);
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["C"] }, events, cfg, NOW).some(x => x.level === "red" && /capacity 2/.test(x.msg)));
+});
+test("deriveBath projects the iron trend toward the limit", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-01T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:20 }),
+    ev({ datetime:"2026-03-03T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:60 })
+  ];
+  const s = D.deriveBath(events, CONFIG, "B1", "2026-03-03T12:00");
+  assert.equal(s.feSlope, 20);     // +20 ppm/day
+  assert.equal(s.feProjDays, 2);   // 60 -> 100 at 20/day
+});
+test("suggestRescueBath skips a full bath even if it has the lowest iron", () => {
+  const cfg = { ...CONFIG, bathCapacity:1 };
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:10 }),
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }), ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:30 }),
+    load("2026-03-10T10:00", "B1", ["X"])
+  ];
+  assert.equal(D.suggestRescueBath(events, cfg, "2026-03-10T12:00", ""), "B2");
+});
+
+/* ===================== data-health audit ===================== */
+test("deriveIssues flags anomalies, disposed-bath parts, over-capacity, and stuck parts", () => {
+  assert.ok(D.deriveIssues([extract("2026-03-02T10:00", "B1", [{ serial:"Z", result:"Cleared" }])], CONFIG, NOW).some(i => /not in bath/.test(i.title)));
+
+  const disposed = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A"]), ev({ datetime:"2026-03-03T08:00", type:"Bath Disposal", bath:"B1", disposalReason:"Iron limit reached" })];
+  assert.ok(D.deriveIssues(disposed, CONFIG, NOW).some(i => /inside a disposed bath/.test(i.title)));
+
+  const cfg = { ...CONFIG, bathCapacity:1 };
+  const over = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A", "B"])];
+  assert.ok(D.deriveIssues(over, cfg, "2026-03-02T12:00").some(i => /over capacity/i.test(i.title)));
+
+  const stuck = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-01T08:00", "B1", ["A"])];
+  assert.ok(D.deriveIssues(stuck, CONFIG, "2026-03-03T08:00").some(i => /stuck in bath/.test(i.title)));
+});
+
 test("deriveSuggestions: dispose a spent bath, extract an over-hours part, review an over-limit piece", () => {
   const spent = [ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-11T08:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:160 })];
   assert.ok(D.deriveSuggestions(spent, CONFIG, "2026-03-11T12:00").some(s => s.action.type === "dispose" && s.action.bath === "B1"));
