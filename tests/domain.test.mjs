@@ -26,7 +26,7 @@ const EXPORTS = [
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
   "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues",
-  "waxFailures","lastUnresolvedWax","TYPES","F","TYPE_PILL"
+  "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -334,6 +334,39 @@ test("suggestions withhold re-load until re-masking, then offer it", () => {
 
   const after = waxed.concat(ev({ datetime:"2026-03-10T11:30", type:"Re-Masking", serial:"A" }));
   assert.ok(D.deriveSuggestions(after, CONFIG, "2026-03-10T12:00").some(s => s.action.type === "reload" && s.action.serials.includes("A")));
+});
+
+test("wax failure is tracked per masked area; a re-mask resolves only the areas it covers", () => {
+  const cfg = { ...CONFIG, maskAreas:["Cooling holes", "Part body"] };
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Partial mask loss" }, { area:"Part body", severity:"Complete mask loss" }] }])
+  ];
+  assert.deepEqual(D.unresolvedWaxAreas(events, "A").map(x => x.area).sort(), ["Cooling holes", "Part body"]);
+  assert.equal(D.derivePieces(events, cfg, NOW)[0].status.s, "Needs re-mask");
+
+  const partial = events.concat(ev({ datetime:"2026-03-02T11:00", type:"Re-Masking", serial:"A", areas:["Cooling holes"] }));
+  assert.deepEqual(D.unresolvedWaxAreas(partial, "A").map(x => x.area), ["Part body"]);
+  assert.equal(D.derivePieces(partial, cfg, NOW)[0].status.s, "Needs re-mask", "part body still unresolved");
+
+  const full = partial.concat(ev({ datetime:"2026-03-02T12:00", type:"Re-Masking", serial:"A", areas:["Part body"] }));
+  assert.equal(D.unresolvedWaxAreas(full, "A").length, 0);
+  assert.equal(D.derivePieces(full, cfg, NOW)[0].status.s, "Awaiting re-strip");
+});
+test("waxAreasOf reads the new per-area shape and the legacy single field", () => {
+  assert.deepEqual(D.waxAreasOf({ wax:[{ area:"Cooling holes", severity:"Partial mask loss" }] }), [{ area:"Cooling holes", severity:"Partial mask loss" }]);
+  assert.deepEqual(D.waxAreasOf({ waxFailure:"Complete mask loss" }), [{ area:"Mask", severity:"Complete mask loss" }]);
+  assert.deepEqual(D.waxAreasOf({ waxFailure:"None" }), []);
+  assert.deepEqual(D.waxAreasOf({}), []);
+});
+test("a whole-part re-masking (no areas) resolves every failed area", () => {
+  const events = [
+    load("2026-03-02T08:00", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Partial mask loss" }, { area:"Part body", severity:"Partial mask loss" }] }]),
+    ev({ datetime:"2026-03-02T11:00", type:"Re-Masking", serial:"A" })   // no areas => covers all
+  ];
+  assert.equal(D.unresolvedWaxAreas(events, "A").length, 0);
 });
 
 /* ===================== bath capacity & iron projection ===================== */

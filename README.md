@@ -91,12 +91,14 @@ already true:
   parts to engineering, dispose a spent bath, top up low acid, extract parts that
   have been in too long, log an overdue titration. Pieces and bath/piece dialogs
   carry the same one‑click actions.
-- **Wax failure → re‑mask → re‑strip is one linked chain.** A wax failure is only
-  discovered when a part is pulled, so it's recorded **on the extraction** (per
-  part). That puts the part in a **Needs re‑mask** state — it is **blocked from
-  re‑loading** (a red warning) until a re‑masking resolves it. The re‑mask carries
-  a link back to the wax failure it fixes, shown in the timeline and Quality log;
-  the suggested re‑mask prefills that link automatically.
+- **Wax failure → re‑mask → re‑strip is one linked chain, per masked area.** A wax
+  failure is only discovered when a part is pulled, so it's recorded **on the
+  extraction** — and **per masked area** (e.g. *cooling holes* vs the *part body*,
+  configurable), since those fail independently. Any failed area puts the part in a
+  **Needs re‑mask** state and **blocks re‑loading** (red warning) until resolved. A
+  re‑masking resolves **only the areas it covers**, so a part with two failed areas
+  stays blocked until both are re‑waxed. The suggested re‑mask prefills exactly the
+  unresolved areas, and the link shows in the timeline and Quality log.
 - **Relationship‑aware warnings** — logging something illogical is flagged before
   you save: disposing a bath that **still has parts in it**, re‑masking a part
   that's **currently submerged**, re‑loading a part that already **cleared** or is

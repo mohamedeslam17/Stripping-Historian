@@ -124,7 +124,10 @@
   .seg button{border:none;background:#fff;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line)}
   .seg button:last-child{border-right:none}
   .seg button.on{background:var(--accent);color:#fff}
+  .seg.wrap{flex-wrap:wrap}
   .seg.wax button.on{background:var(--amber);color:#fff}
+  .seg.wax button.on.partial{background:var(--amber);color:#fff}
+  .seg.wax button.on.full{background:var(--red);color:#fff}
 
   svg.chart{display:block;max-width:100%}
   .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
@@ -229,6 +232,7 @@ const DEFAULT_CONFIG = {
   maxCycles: 3, maxHours: 24,
   maxBathAge: 30,
   bathCapacity: 12,
+  maskAreas: ["Cooling holes", "Part body"],
   baths: ["102-103", "106-107", "202-203", "206-207"],
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
 };
@@ -305,8 +309,8 @@ const TYPES = {
   "HCl Top-Up":       { desc:"add acid",            fields:[F.bath,F.hcl,F.op,F.notes] },
   "Water Top-Up":     { desc:"add water",           fields:[F.bath,F.water,F.op,F.notes] },
   "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
-  "Wax Failure":      { desc:"masking defect",      fields:[F.bath,F.jc,F.serial,F.wax,F.op,F.notes] },
-  "Re-Masking":       { desc:"part re-waxed",       fields:[F.jc,F.serial,F.op,F.notes] },
+  "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
+  "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  fields:[F.jc,F.serial,F.op,F.notes] },
   "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
   "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
@@ -345,9 +349,9 @@ function deriveImmersions(events, nowDT){
     } else if(e.type === "Extraction"){
       (e.items || []).forEach(it => {
         const s = it.serial, r = open.get(s);
-        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.wax = it.wax || null; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
         else records.push({ serial:s, bath:e.bath || "", jc:"", component:"", cycle:(cyc.get(s) || 0),
-          inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None",
+          inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null,
           hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
       });
     } else if(e.type === "Immersion"){ // legacy self-contained dip
@@ -365,26 +369,41 @@ function bathContents(events, nowDT, bath){
   return [...open.values()].filter(r => !bath || r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
 }
 
-// Every wax failure observed for a serial — they are discovered at extraction
-// (and, rarely, logged standalone). Sorted oldest-first.
+// A wax failure is per masked AREA (e.g. cooling holes vs the part body), each
+// with a severity. Reads the new {wax:[{area,severity}]} shape and the older
+// single {waxFailure} field (area "Mask") for back-compat.
+function waxAreasOf(obj){
+  if(obj && Array.isArray(obj.wax)) return obj.wax.filter(x => x && x.severity && x.severity !== "None").map(x => ({ area:x.area || "Mask", severity:x.severity }));
+  if(obj && obj.waxFailure && obj.waxFailure !== "None") return [{ area:obj.waxArea || "Mask", severity:obj.waxFailure }];
+  return [];
+}
+function remaskAreasOf(e){ return (Array.isArray(e.areas) && e.areas.length) ? e.areas : null; } // null = covers all areas
+function waxSummary(obj){ return waxAreasOf(obj).map(x => x.area + (x.severity === "Complete mask loss" ? " (full)" : x.severity === "Partial mask loss" ? " (partial)" : "")).join(", "); }
+
+// Every per-area wax failure observed for a serial (discovered at extraction).
 function waxFailures(events, serial){
   const out = [];
+  const add = (datetime, areas, event) => areas.forEach(a => out.push({ datetime, area:a.area, severity:a.severity, detail:a.severity, event }));
   events.forEach(e => {
-    if(e.type === "Wax Failure" && e.serial === serial && e.waxFailure && e.waxFailure !== "None") out.push({ datetime:e.datetime, detail:e.waxFailure, event:e });
-    else if(e.type === "Immersion" && e.serial === serial && e.waxFailure && e.waxFailure !== "None") out.push({ datetime:e.datetime, detail:e.waxFailure, event:e });
-    else if(e.type === "Extraction") (e.items || []).forEach(it => { if(it.serial === serial && it.waxFailure && it.waxFailure !== "None") out.push({ datetime:e.datetime, detail:it.waxFailure, event:e }); });
+    if(e.type === "Extraction") (e.items || []).forEach(it => { if(it.serial === serial) add(e.datetime, waxAreasOf(it), e); });
+    else if((e.type === "Wax Failure" || e.type === "Immersion") && e.serial === serial) add(e.datetime, waxAreasOf(e), e);
   });
   return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
 }
-// The most recent wax failure that has NOT yet been resolved by a re-masking —
-// i.e. the part cannot be re-stripped until it is re-masked. null if clear.
-function lastUnresolvedWax(events, serial){
+// Areas whose most-recent failure has not been resolved by a later re-masking
+// that covers that area. The part can't be re-stripped while any remain.
+function unresolvedWaxAreas(events, serial){
   const fails = waxFailures(events, serial);
-  if(!fails.length) return null;
-  const lastFail = fails[fails.length - 1];
-  const remask = events.filter(e => e.type === "Re-Masking" && e.serial === serial).map(e => e.datetime).sort().slice(-1)[0] || null;
-  return (remask && remask >= lastFail.datetime) ? null : lastFail;
+  if(!fails.length) return [];
+  const latest = new Map();
+  fails.forEach(f => { const c = latest.get(f.area); if(!c || f.datetime > c.datetime) latest.set(f.area, f); });
+  const remasks = events.filter(e => e.type === "Re-Masking" && e.serial === serial).map(e => ({ datetime:e.datetime, areas:remaskAreasOf(e) }));
+  const out = [];
+  latest.forEach((f, area) => { if(!remasks.some(r => r.datetime >= f.datetime && (r.areas == null || r.areas.includes(area)))) out.push(f); });
+  return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
 }
+// Back-compat single-value accessor: the most recent unresolved area failure.
+function lastUnresolvedWax(events, serial){ const u = unresolvedWaxAreas(events, serial); return u.length ? u[u.length - 1] : null; }
 
 function pieceStatusFor(recs, engEvents, config, needsRemask){
   const open = recs.some(r => r.open);
@@ -417,18 +436,19 @@ function derivePieces(events, config, nowDT){
     const recs = o.recs.slice().sort((a, b) => String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
     const evs = eventsForSerial(events, o.serial);
     const eng = evs.filter(e => e.type === "Engineering Review");
-    const unresolvedWax = lastUnresolvedWax(events, o.serial);
-    const st = pieceStatusFor(recs, eng, config, !!unresolvedWax);
+    const unresolvedWax = unresolvedWaxAreas(events, o.serial);
+    const st = pieceStatusFor(recs, eng, config, unresolvedWax.length > 0);
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
       cycles:recs.length, hours:st.hours,
-      wax: recs.filter(r => r.waxFailure && r.waxFailure !== "None").length + evs.filter(e => e.type === "Wax Failure").length,
+      wax: recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
       firstPass: recs.length > 0 && recs[0].result === "Cleared",
-      needsRemask: !!unresolvedWax, waxFail: unresolvedWax || null,
+      needsRemask: unresolvedWax.length > 0,
+      waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area + " (" + (u.severity === "Complete mask loss" ? "full" : "partial") + ")").join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
       status:st, recs, events:evs
     });
   });
@@ -454,7 +474,7 @@ function deriveBath(events, config, bath, nowDT){
   const contents = [...open.values()].filter(r => r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
   const loadH = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)), 0));
   const parts = new Set(recs.map(r => r.serial)).size;
-  const wax = recs.filter(r => r.waxFailure && r.waxFailure !== "None").length + evs.filter(e => within(e) && e.type === "Wax Failure").length;
+  const wax = recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
   const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
   const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
   const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
@@ -529,14 +549,14 @@ function deriveDefects(events){
   const out = [];
   events.forEach(e => {
     if(e.type === "Engineering Review") out.push({ e, kind:"Eng review", detail:e.status || "", serial:e.serial || "", bath:e.bath || "" });
-    else if(e.type === "Re-Masking") out.push({ e, kind:"Re-mask", detail:(e.waxFailure ? "resolves " + e.waxFailure : "") + (e.notes ? (e.waxFailure ? " · " : "") + e.notes : ""), serial:e.serial || "", bath:e.bath || "" });
-    else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:e.waxFailure || "", serial:e.serial || "", bath:e.bath || "" });
+    else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "" }); }
+    else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
-      if(it.waxFailure && it.waxFailure !== "None") out.push({ e, kind:"Wax failure", detail:it.waxFailure, serial:it.serial, bath:e.bath || "" });
+      if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
       if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
     });
     else if(e.type === "Immersion"){
-      if(e.waxFailure && e.waxFailure !== "None") out.push({ e, kind:"Wax failure", detail:e.waxFailure, serial:e.serial || "", bath:e.bath || "" });
+      if(waxAreasOf(e).length) out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
       if(e.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:e.serial || "", bath:e.bath || "" });
     }
   });
@@ -578,8 +598,8 @@ function eventWarnings(d, events, config, nowDT){
         else if(p.status.s === "→ Engineering") add("red", `${s} is awaiting engineering review — disposition it before re-stripping`);
         if((p.cycles + 1) > config.maxCycles) add("red", `${s} would be cycle ${p.cycles + 1} (> max ${config.maxCycles}) — route to engineering`);
       }
-      const uw = lastUnresolvedWax(others, s);
-      if(uw) add("red", `${s} has an unresolved wax failure (${uw.detail}) — re-mask it before re-loading`);
+      const uw = unresolvedWaxAreas(others, s);
+      if(uw.length) add("red", `${s} has an unresolved wax failure (${uw.map(x => x.area).join(", ")}) — re-mask it before re-loading`);
       const last = lastSerialDT(s); if(last && d.datetime && d.datetime < last) add("amber", `${s}: this load is dated before its last recorded event (${fmtDT(last)})`);
     });
   }
@@ -667,7 +687,7 @@ function deriveSuggestions(events, config, nowDT){
     g.serials.push(p.serial); groups.set(key, g);
   });
   groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:g.bath ? "→ bath " + g.bath : "no healthy bath available", action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  needRemask.forEach(p => out.push({ level:"amber", icon:"▦", title:`Re-mask ${p.serial}${p.waxFail ? " — " + p.waxFail.detail : ""}`, detail:(p.jc ? p.jc + " · " : "") + "blocks re-strip until resolved", action:{ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }));
+  needRemask.forEach(p => out.push({ level:"amber", icon:"▦", title:`Re-mask ${p.serial}${p.waxFail ? " — " + p.waxFail.detail : ""}`, detail:(p.jc ? p.jc + " · " : "") + "blocks re-strip until resolved", action:{ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }));
   pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
@@ -691,7 +711,7 @@ function deriveIssues(events, config, nowDT){
   pieces.forEach(p => {
     if(p.status.s === "→ Engineering"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 1) out.push({ level:"amber", icon:"⚑", title:`${p.serial} awaiting engineering disposition (${d} d)`, detail:p.jc || "", action:{ type:"engineering", serial:p.serial, jc:p.jc } }); }
     else if(p.status.s === "Awaiting re-strip"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 3) out.push({ level:"amber", icon:"⏳", title:`${p.serial} awaiting re-strip for ${d} days`, detail:p.jc || "", action:{ type:"viewpiece", serial:p.serial } }); }
-    else if(p.status.s === "Needs re-mask"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 2) out.push({ level:"amber", icon:"▦", title:`${p.serial} needs re-masking (${p.waxFail ? p.waxFail.detail : "wax failure"}) for ${d} days`, detail:p.jc || "", action:{ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }); }
+    else if(p.status.s === "Needs re-mask"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 2) out.push({ level:"amber", icon:"▦", title:`${p.serial} needs re-masking (${p.waxFail ? p.waxFail.detail : "wax failure"}) for ${d} days`, detail:p.jc || "", action:{ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }); }
   });
   baths.filter(b => b.active).forEach(b => { const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime; const d = daysBetween(lastChemDT, nowDT); if(d !== "" && d >= 3) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${d} days`, detail:"", action:{ type:"chem", bath:b.bath } }); });
 
@@ -799,7 +819,7 @@ function eventDetail(e){
   const d = [];
   if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
   if(e.type === "Load In"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} in${e.bath ? " → " + e.bath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
-  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => i.waxFailure && i.waxFailure !== "None").length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
+  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => waxAreasOf(i).length).length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
   if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} ${e.result || ""}`);
   if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
@@ -812,8 +832,8 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
-  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (it.waxFailure && it.waxFailure !== "None" ? " · ⚠ wax: " + it.waxFailure : "")) : ("extraction from " + (e.bath || "bath")); }
-  if(e.type === "Re-Masking") return "re-masked" + (e.waxFailure ? " — resolves wax failure (" + e.waxFailure + ")" : "") + (e.notes ? " · " + e.notes : "");
+  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
+  if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
   return eventDetail(e);
 }
 
@@ -903,6 +923,8 @@ function renderDrawer(){
     const custom = TYPES[formType].custom;
     if(custom === "load") buildLoadFields(fields, refreshWarn);
     else if(custom === "extract") buildExtractFields(fields, refreshWarn);
+    else if(custom === "remask") buildRemaskFields(fields, refreshWarn);
+    else if(custom === "waxfail") buildWaxFailFields(fields, refreshWarn);
     else buildGenericFields(fields, refreshWarn);
     body.append(warnBox);
     foot.append(saveBtn, cel("button", { class:"btn", onclick:closeDrawer }, "Cancel"), hint);
@@ -922,7 +944,7 @@ function startExtraction(bath){ formType = "Extraction"; editId = null; formData
 function startAction(a){
   editId = null; const t = a.type;
   if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
-  else if(t === "remask") formData = { type:"Re-Masking", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", resolvesEventId:a.resolvesEventId || null, waxFailure:a.waxFailure || "" }, formType = "Re-Masking";
+  else if(t === "remask") formData = { type:"Re-Masking", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", areas:Array.isArray(a.areas) ? a.areas.slice() : null, resolvesEventId:a.resolvesEventId || null, waxFailure:a.waxFailure || "" }, formType = "Re-Masking";
   else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
   else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
   else if(t === "topup-hcl") formData = { type:"HCl Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "HCl Top-Up";
@@ -930,7 +952,7 @@ function startAction(a){
   else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Chemistry Check";
   else if(t === "viewbath"){ showBath(a.bath); return; }
   else if(t === "viewpiece"){ showSerial(a.serial); return; }
-  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", wax:"None", checked:true }); }
+  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", waxAreas:{}, checked:true }); }
   else return;
   openDrawer();
 }
@@ -955,6 +977,58 @@ function buildGenericFields(card, refreshWarn){
     two.append(fieldNode(name, label, kind, e => { formData[name] = e.target.value; refreshWarn(); })); });
   card.append(two);
   if(needList) appendOpList(card);
+}
+
+const SEV_ORDER = ["None", "Partial mask loss", "Complete mask loss"];
+// Per-area severity chips that cycle ok -> partial -> full loss (used for
+// recording a wax failure, at extraction and on the standalone event).
+function areaSeverityControl(stateMap, onChange){
+  const wrap = cel("div", { class:"seg wax wrap" });
+  (CONFIG.maskAreas || []).forEach(area => {
+    const paint = () => { const sev = stateMap[area] || "None"; b.className = sev === "Complete mask loss" ? "on full" : sev === "Partial mask loss" ? "on partial" : ""; b.title = area + ": " + sev; };
+    const b = cel("button", { type:"button", onclick:() => { stateMap[area] = SEV_ORDER[(SEV_ORDER.indexOf(stateMap[area] || "None") + 1) % 3]; paint(); onChange(); } }, area);
+    paint(); wrap.append(b);
+  });
+  return wrap;
+}
+// Multi-select area toggles (used when recording which areas were re-masked).
+function areaToggleControl(getSel, setSel, onChange){
+  const wrap = cel("div", { class:"seg wrap" });
+  (CONFIG.maskAreas || []).forEach(area => {
+    const b = cel("button", { type:"button", class:(getSel() || []).includes(area) ? "on" : "", onclick:() => {
+      let s = (getSel() || []).slice(); s.includes(area) ? s = s.filter(x => x !== area) : s.push(area); setSel(s); b.className = s.includes(area) ? "on" : ""; onChange();
+    } }, area);
+    wrap.append(b);
+  });
+  return wrap;
+}
+
+function buildRemaskFields(card, refreshWarn){
+  appendOpList(card);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("serial", "Serial", "text", e => { formData.serial = e.target.value; refreshWarn(); }));
+  card.append(two);
+  if(!Array.isArray(formData.areas)){ const uw = formData.serial ? unresolvedWaxAreas(EVENTS, formData.serial) : []; formData.areas = uw.length ? uw.map(u => u.area) : (CONFIG.maskAreas || []).slice(); }
+  card.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Areas re-masked"), areaToggleControl(() => formData.areas, s => { formData.areas = s; }, refreshWarn)]));
+  card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+}
+
+function buildWaxFailFields(card, refreshWarn){
+  appendOpList(card);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("bath", "Bath", "baths", e => { formData.bath = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
+  card.append(two);
+  card.append(fieldNode("serial", "Serial", "text", e => { formData.serial = e.target.value; refreshWarn(); }));
+  formData._waxAreas = formData._waxAreas || {};
+  if(Array.isArray(formData.wax)) formData.wax.forEach(x => { formData._waxAreas[x.area] = x.severity; });
+  const sync = () => { formData.wax = Object.keys(formData._waxAreas).filter(a => formData._waxAreas[a] && formData._waxAreas[a] !== "None").map(a => ({ area:a, severity:formData._waxAreas[a] })); };
+  card.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Mask areas — tap to cycle ok / partial / full loss"), areaSeverityControl(formData._waxAreas, () => { sync(); refreshWarn(); })]));
+  sync();
+  card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
 }
 
 function buildLoadFields(card, refreshWarn){
@@ -1017,18 +1091,18 @@ function buildExtractFields(card, refreshWarn){
   two.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
   card.append(two);
   formData._rows = formData._rows || {};
-  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => ({ serial:s, result:formData._rows[s].result, waxFailure:formData._rows[s].wax })); }
+  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => { const st = formData._rows[s], m = st.waxAreas || {}; return { serial:s, result:st.result, wax:Object.keys(m).filter(a => m[a] && m[a] !== "None").map(a => ({ area:a, severity:m[a] })) }; }); }
   function rebuild(){
     cont.innerHTML = "";
     if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:4px 0" }, "Select a bath to see what is currently in it.")); sync(); return; }
     let rows;
     if(editId != null && Array.isArray(formData.items) && !Object.keys(formData._rows).length){
-      formData.items.forEach(it => formData._rows[it.serial] = { result:it.result || "Cleared", wax:it.waxFailure || "None", checked:true });
+      formData.items.forEach(it => { const m = {}; waxAreasOf(it).forEach(x => m[x.area] = x.severity); formData._rows[it.serial] = { result:it.result || "Cleared", waxAreas:m, checked:true }; });
       rows = formData.items.map(it => ({ serial:it.serial, inDT:null, elapsedH:null }));
     } else {
       const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
       rows = contents.slice();
-      contents.forEach(r => { if(!formData._rows[r.serial]) formData._rows[r.serial] = { result:"Cleared", wax:"None", checked:r.elapsedH >= CONFIG.maxHours }; });
+      contents.forEach(r => { if(!formData._rows[r.serial]) formData._rows[r.serial] = { result:"Cleared", waxAreas:{}, checked:r.elapsedH >= CONFIG.maxHours }; });
       Object.keys(formData._rows).forEach(s => { if(!rows.find(r => r.serial === s)) rows.push({ serial:s, inDT:null, elapsedH:null }); });
     }
     if(!rows.length){ cont.append(cel("div", { class:"warn-line warn-amber" }, "Nothing is currently recorded in bath " + formData.bath + ".")); sync(); return; }
@@ -1047,9 +1121,9 @@ function buildExtractFields(card, refreshWarn){
       const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
       const seg = cel("div", { class:"seg" });
       ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
-      const wseg = cel("div", { class:"seg wax", title:"Wax failure" });
-      [["None", "Wax ✓"], ["Partial mask loss", "Partial"], ["Complete mask loss", "Full loss"]].forEach(([v, lab]) => wseg.append(cel("button", { type:"button", class:st.wax === v ? "on" : "", onclick:() => { st.wax = v; if(v !== "None") st.checked = true; sync(); refreshWarn(); rebuild(); } }, lab)));
-      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, wseg]);
+      if(!st.waxAreas) st.waxAreas = {};
+      const wseg = areaSeverityControl(st.waxAreas, () => { if(Object.values(st.waxAreas).some(v => v && v !== "None")){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; } sync(); refreshWarn(); rebuild(); });
+      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "wax areas"), wseg])]);
       boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
     });
     cont.append(boxEl); sync();
@@ -1207,7 +1281,7 @@ function vPieces(m){
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
     const act = cel("div", { class:"btnrow" });
-    if(r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"remask", serial:r.serial, jc:r.jc, resolvesEventId:r.waxFail && r.waxFail.event ? r.waxFail.event.id : null, waxFailure:r.waxFail ? r.waxFail.detail : "" }) }, "Re-mask"));
+    if(r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"remask", serial:r.serial, jc:r.jc, areas:r.waxFail ? r.waxFail.areas : null, resolvesEventId:r.waxFail && r.waxFail.event ? r.waxFail.event.id : null, waxFailure:r.waxFail ? r.waxFail.detail : "" }) }, "Re-mask"));
     if(r.status.s === "Awaiting re-strip") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, "Re-load"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
     act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
@@ -1245,7 +1319,7 @@ function showSerial(serial){
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
   if(p.status.s === "Needs re-mask"){
-    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" }); } }, "Re-mask"));
+    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" }); } }, "Re-mask"));
   } else if(p.status.s === "Awaiting re-strip"){
     foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, "Re-load"));
   } else if(p.status.s === "→ Engineering"){
@@ -1458,6 +1532,7 @@ function vSettings(m){
   c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), oninput:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
   m.append(c2);
 
@@ -1480,7 +1555,7 @@ $("#exportCsv").onclick = () => {
   const lines = [cols.join(",")];
   records.forEach(r => {
     const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
-      hours:r.open ? ("in bath " + (r.elapsedH || 0) + "h") : (r.hours == null ? "" : r.hours), result:r.result || "", waxFailure:r.waxFailure || "", open:r.open ? "yes" : "", anomaly:r.anomaly || "" };
+      hours:r.open ? ("in bath " + (r.elapsedH || 0) + "h") : (r.hours == null ? "" : r.hours), result:r.result || "", waxFailure:waxSummary(r), open:r.open ? "yes" : "", anomaly:r.anomaly || "" };
     lines.push(cols.map(c => { let v = row[c] == null ? "" : String(row[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(","));
   });
   download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
@@ -1543,10 +1618,10 @@ async function loadExample(){
     { datetime:"2026-03-22T08:00", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-01","7261-02","7261-03","7261-04","7261-05","7261-06"], operator:"Diang" },
     { datetime:"2026-03-22T15:30", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-01", result:"Cleared", waxFailure:"None" }, { serial:"7261-04", result:"Cleared", waxFailure:"None" }] },
     { datetime:"2026-03-22T18:00", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-02", result:"Cleared", waxFailure:"None" }, { serial:"7261-03", result:"Re-strip", waxFailure:"None" }] },
-    { datetime:"2026-03-22T20:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"Complete mask loss" }, { serial:"7261-06", result:"Re-strip", waxFailure:"Complete mask loss" }] },
-    // 7261-05/06 came out with a wax failure -> must be re-masked before they can be re-stripped
-    { datetime:"2026-03-22T20:15", type:"Re-Masking", jc:"7261", serial:"7261-05", waxFailure:"Complete mask loss", operator:"Bernabe", notes:"re-waxed cooling holes" },
-    { datetime:"2026-03-22T20:18", type:"Re-Masking", jc:"7261", serial:"7261-06", waxFailure:"Complete mask loss", operator:"Bernabe" },
+    { datetime:"2026-03-22T20:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Complete mask loss" }] }, { serial:"7261-06", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Complete mask loss" }] }] },
+    // 7261-05/06 lost the cooling-holes mask -> must be re-masked there before they can be re-stripped
+    { datetime:"2026-03-22T20:15", type:"Re-Masking", jc:"7261", serial:"7261-05", areas:["Cooling holes"], operator:"Bernabe", notes:"re-waxed cooling holes" },
+    { datetime:"2026-03-22T20:18", type:"Re-Masking", jc:"7261", serial:"7261-06", areas:["Cooling holes"], operator:"Bernabe" },
     // cycle 2 for the three re-strips
     { datetime:"2026-03-22T20:30", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-03","7261-05","7261-06"], operator:"JM" },
     { datetime:"2026-03-23T02:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-03", result:"Cleared", waxFailure:"None" }] },
@@ -1569,7 +1644,7 @@ async function loadExample(){
     { datetime:agoDT(60 * 30), type:"Bath Fill", bath:"206-207", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
     { datetime:agoDT(60 * 29), type:"Chemistry Check", bath:"206-207", temp:90, hclPct:21, fePpm:12, operator:"Maint" },
     { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04","7501-05"], operator:"Diang" },
-    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared", waxFailure:"None" }, { serial:"7501-04", result:"Re-strip", waxFailure:"Partial mask loss" }] }
+    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared" }, { serial:"7501-04", result:"Re-strip", wax:[{ area:"Part body", severity:"Partial mask loss" }] }] }
   ];
   for(const e of ex) await addEvent(e);
   flash("Example loaded (" + ex.length + " events)");
