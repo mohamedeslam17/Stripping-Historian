@@ -445,7 +445,6 @@ function eventWarnings(d, events, config, nowDT){
   }
   if(d.type === "Load In"){
     const serials = d.serials || [];
-    if(!serials.length) w.push({ level:"amber", msg:"No serials entered" });
     if(d.bath){
       const bs = deriveBath(others, config, d.bath, nowDT);
       if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} was disposed ${fmtDate(bs.disposal.datetime)}` });
@@ -462,7 +461,6 @@ function eventWarnings(d, events, config, nowDT){
   }
   if(d.type === "Extraction"){
     const items = d.items || [];
-    if(!items.length) w.push({ level:"amber", msg:"No parts selected to extract" });
     if(d.bath){
       const bs = deriveBath(others, config, d.bath, nowDT);
       if(bs.disposal) w.push({ level:"red", msg:`Bath ${d.bath} is disposed` });
@@ -668,21 +666,29 @@ function vLog(m){
   card.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, dtLabel), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
 
   const warnBox = cel("div", { style:"margin-top:4px" });
+  const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update event" : "Save event");
+  const hint = cel("span", { class:"muted", style:"font-size:12px;align-self:center" });
+  function formIncomplete(){
+    if(formType === "Load In") return (formData.serials || []).length ? "" : "Enter at least one serial to save";
+    if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
+    return "";
+  }
   function refreshWarn(){
     warnBox.innerHTML = "";
     eventWarnings(formData, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
       warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
+    const inc = formIncomplete(); saveBtn.disabled = !!inc; hint.textContent = inc;
   }
   const body = cel("div", {}); card.append(body);
   const custom = TYPES[formType].custom;
   if(custom === "load") buildLoadFields(body, refreshWarn);
   else if(custom === "extract") buildExtractFields(body, refreshWarn);
   else buildGenericFields(body, refreshWarn);
-  card.append(warnBox); refreshWarn();
-  card.append(cel("div", { style:"margin-top:8px;display:flex;gap:8px" }, [
-    cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update event" : "Save event"),
-    cel("button", { class:"btn", onclick:() => { formType = null; editId = null; render(); } }, "Cancel")
+  card.append(warnBox);
+  card.append(cel("div", { style:"margin-top:8px;display:flex;gap:8px;align-items:center" }, [
+    saveBtn, cel("button", { class:"btn", onclick:() => { formType = null; editId = null; render(); } }, "Cancel"), hint
   ]));
+  refreshWarn();
   m.append(card);
   card.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
 }
