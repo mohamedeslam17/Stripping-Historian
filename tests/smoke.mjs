@@ -1,7 +1,7 @@
 /* Headless smoke test: boot the real app from index.html against a tiny
  * in-memory DOM + IndexedDB shim, load the example data, then render every
- * tab, both custom forms, and the modals. Catches runtime errors in the view
- * layer that the syntax gate and pure-domain tests cannot.
+ * tab, the log drawer (each form), and the modals. Catches view-layer runtime
+ * errors that the syntax gate and pure-domain tests cannot.
  *
  * Run with:  node tests/smoke.mjs
  */
@@ -15,9 +15,9 @@ const scriptSrc = html.slice(html.indexOf("<script>") + "<script>".length, html.
 
 /* ---- minimal DOM ---- */
 function elNode(tag){
-  return {
-    tag, children: [], attrs: {}, style: {}, nodeType: 1, className: "", value: "", checked: false, textContent: "",
-    _html: "",
+  const node = {
+    tag, children: [], attrs: {}, style: {}, nodeType: 1, className: "", value: "", checked: false, textContent: "", _html: "",
+    classList: { add(){}, remove(){}, toggle(){}, contains(){ return false; } },
     setAttribute(k, v){ this.attrs[k] = v; if(k === "value") this.value = v; },
     getAttribute(k){ return this.attrs[k]; },
     addEventListener(){}, removeEventListener(){},
@@ -28,6 +28,7 @@ function elNode(tag){
     get innerHTML(){ return this._html; },
     querySelector(){ return null; }
   };
+  return node;
 }
 const registry = {};
 const document = {
@@ -69,40 +70,44 @@ const handle = new Function(
   "document", "window", "indexedDB", "Blob", "URL", "FileReader", "alert", "confirm",
   scriptSrc + "\n;return {" +
     "run:t=>{activeTab=t;render();}," +
-    "openForm:t=>{startNew(t);}," +
+    "openForm:t=>startNew(t)," +
+    "loadBath:b=>startLoad(b)," +
+    "extractBath:b=>startExtraction(b)," +
+    "closeDrawer:()=>closeDrawer()," +
     "serialHistory:s=>showSerial(s)," +
     "bathModal:b=>showBath(b)," +
     "loadExample:()=>loadExample()," +
     "clickExport:()=>{document.querySelector('#exportCsv').onclick();document.querySelector('#exportJson').onclick();}," +
     "mainKids:()=>document.querySelector('#main').children.length," +
+    "drawerKids:()=>document.querySelector('#drawerRoot').children.length," +
     "pieces:()=>derivePieces(EVENTS,CONFIG,nowLocalDT())," +
     "eventsLen:()=>EVENTS.length };"
 )(document, window, indexedDB, Blob, URL, FileReader, alert, confirm);
 
 let failed = 0;
-function ok(cond, msg){ if(cond){ console.log("ok   - " + msg); } else { console.log("FAIL - " + msg); failed++; } }
+function ok(cond, msg){ console.log((cond ? "ok   - " : "FAIL - ") + msg); if(!cond) failed++; }
 function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, label + "  →  " + (e && e.stack ? e.stack.split("\n")[0] : e)); } }
 
 (async function(){
-  await tick(); // let boot openDB/loadAll/render finish
+  await tick();
   ok(handle.eventsLen() === 0, "boots with an empty store");
 
   await handle.loadExample();
   await tick();
   ok(handle.eventsLen() > 25, "example data loaded (" + handle.eventsLen() + " events)");
 
-  for(const tab of ["Log event", "Event log", "Pieces", "Baths", "Quality", "Dashboard", "Settings"]){
+  for(const tab of ["Floor", "Dashboard", "Pieces", "Baths", "Events", "Quality", "Settings"]){
     safe("renders tab: " + tab, () => { handle.run(tab); if(handle.mainKids() < 1) throw new Error("empty main"); });
   }
 
-  safe("renders the Load In form", () => handle.openForm("Load In"));
-  safe("renders the Extraction form", () => handle.openForm("Extraction"));
-  safe("renders Chemistry Check form", () => handle.openForm("Chemistry Check"));
+  safe("opens the Load In drawer (chip input)", () => { handle.openForm("Load In"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens Load for a specific bath", () => { handle.loadBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Extraction drawer with live contents", () => { handle.extractBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Chemistry Check drawer", () => { handle.openForm("Chemistry Check"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
   const ps = handle.pieces();
   ok(ps.length > 0, "derives pieces from the example (" + ps.length + ")");
-  const inBath = ps.filter(p => p.status.s === "In bath");
-  ok(inBath.length >= 3, "example leaves parts in a bath (" + inBath.length + " in bath)");
+  ok(ps.filter(p => p.status.s === "In bath").length >= 3, "example leaves parts in a bath (" + ps.filter(p => p.status.s === "In bath").length + " in bath)");
   safe("opens a piece history modal", () => handle.serialHistory(ps[0].serial));
   safe("opens a bath modal", () => handle.bathModal("102-103"));
   safe("opens the live bath modal", () => handle.bathModal("206-207"));

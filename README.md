@@ -32,9 +32,15 @@ loaded again — that's its next cycle.
 
 1. Open `index.html` (double‑click, or serve the folder).
 2. Go to **Settings → Data → Load example data** to explore a realistic dataset.
-3. Use **Log event** to record real events; everything else updates automatically.
-4. Hit **Backup** (top bar) to save a JSON snapshot; **Import** restores it on any
-   machine.
+3. The **Floor** screen is home: one card per tank showing what's currently in it,
+   with **Load in** / **Extract** buttons. Use the **＋ Log event** drawer (sidebar)
+   for anything else; everything updates automatically.
+4. Hit **Backup** (sidebar) to save a JSON snapshot; **Import** restores it.
+
+A desktop‑oriented console: a left sidebar nav, a slide‑in **Log** drawer, and
+keyboard shortcuts — **L** load · **E** extract · **N** new event · **/** search.
+Serials are entered as **chips** (type/paste, Enter to add; ranges like
+`7261-01..06` expand).
 
 > Because storage is per‑browser/per‑PC, treat **Backup** as your save button and
 > keep snapshots somewhere durable.
@@ -59,6 +65,8 @@ loaded again — that's its next cycle.
 
 **Derived views**
 
+- **Floor** — the landing screen: a live card per tank (what's in it + elapsed
+  time) with one‑click Load / Extract.
 - **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
   and a status (`In bath`, `Awaiting re‑strip`, `Cleared`, `→ Engineering`,
   `Scrap`, …), filterable. Click *history* for a full timeline and a printable
