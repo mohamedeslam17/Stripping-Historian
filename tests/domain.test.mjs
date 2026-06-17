@@ -24,7 +24,8 @@ const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf(
 const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
-  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","TYPES","F","TYPE_PILL"
+  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -197,9 +198,11 @@ test("defects expand per extracted item (wax + re-strip)", () => {
 
 /* -------------------------- entry warnings ------------------------- */
 test("eventWarnings: chemistry over limits", () => {
-  const w = D.eventWarnings({ type:"Chemistry Check", bath:"B1", fePpm:160, hclPct:14, temp:80 }, [], CONFIG, NOW);
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" })];
+  const w = D.eventWarnings({ type:"Chemistry Check", bath:"B1", fePpm:160, hclPct:14, temp:80 }, events, CONFIG, NOW);
   assert.equal(w.length, 3);
   assert.ok(w.some(x => x.level === "red" && /Iron 160/.test(x.msg)));
+  assert.ok(w.some(x => x.level === "amber" && /HCl 14/.test(x.msg)));
 });
 test("eventWarnings: a load that would exceed max cycles, or re-loads a part already in a bath", () => {
   const prior = [
@@ -239,4 +242,73 @@ test("eventsForSerial finds the serial inside load/extract arrays", () => {
   ];
   assert.equal(D.eventsForSerial(events, "A").length, 2);
   assert.equal(D.eventsForSerial(events, "B").length, 2);
+});
+
+/* ===================== smart layer: relationship warnings ===================== */
+test("warns about disposing a bath that still holds parts", () => {
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A", "B"])];
+  const w = D.eventWarnings({ type:"Bath Disposal", bath:"B1" }, events, CONFIG, NOW);
+  assert.ok(w.some(x => x.level === "red" && /still holds 2 part/.test(x.msg)));
+});
+test("warns about re-masking a part that is currently in a bath", () => {
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A"])];
+  const w = D.eventWarnings({ type:"Re-Masking", serial:"A" }, events, CONFIG, NOW);
+  assert.ok(w.some(x => x.level === "red" && /extract it before re-masking/.test(x.msg)));
+});
+test("warns about re-loading a cleared part, or one awaiting engineering", () => {
+  const cleared = [load("2026-03-02T08:00", "B1", ["A"]), extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Cleared" }])];
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"] }, cleared, CONFIG, NOW).some(x => /already Cleared/.test(x.msg)));
+  const overCycle = [];
+  for(let c = 0; c < 3; c++){ overCycle.push(load(`2026-03-02T0${c}:00`, "B1", ["P"]), extract(`2026-03-02T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["P"] }, overCycle, CONFIG, NOW).some(x => x.level === "red" && /awaiting engineering/.test(x.msg)));
+});
+test("warns when an extraction time is before the part went in", () => {
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T10:00", "B1", ["A"])];
+  const w = D.eventWarnings({ type:"Extraction", bath:"B1", datetime:"2026-03-02T09:00", items:[{ serial:"A", result:"Cleared" }] }, events, CONFIG, NOW);
+  assert.ok(w.some(x => x.level === "red" && /before it went in/.test(x.msg)));
+});
+
+/* ===================== smart layer: suggestions / autofill ===================== */
+test("lookupSerial recovers J/C and component from history", () => {
+  assert.deepEqual(D.lookupSerial([load("2026-03-01T08:00", "B1", ["A", "B"], { jc:"J7", component:"GT" })], "A"), { jc:"J7", component:"GT" });
+});
+test("suggestRescueBath picks a healthy bath (lowest iron), honoring exclusions", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:30 }),
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }), ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 })
+  ];
+  assert.equal(D.suggestRescueBath(events, CONFIG, "2026-03-10T12:00", ""), "B2");
+  assert.equal(D.suggestRescueBath(events, CONFIG, "2026-03-10T12:00", "B2"), "B1");
+});
+test("deriveSuggestions: re-load an awaiting part into a suggested rescue bath", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:30 }),
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 }),
+    load("2026-03-10T09:00", "B1", ["A"], { jc:"J", component:"C" }), extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip" }])
+  ];
+  const reload = D.deriveSuggestions(events, CONFIG, "2026-03-10T12:00").find(s => s.action.type === "reload");
+  assert.ok(reload, "should suggest a re-load");
+  assert.deepEqual(reload.action.serials, ["A"]);
+  assert.equal(reload.action.bath, "B2");        // healthy, and not the bath it just came from
+});
+test("deriveSuggestions: re-mask before re-load when the last dip had wax failure", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-10T09:00", "B1", ["A"]), extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
+  ];
+  const sug = D.deriveSuggestions(events, CONFIG, "2026-03-10T12:00");
+  assert.ok(sug.some(s => s.action.type === "remask" && s.action.serial === "A"));
+  assert.ok(!sug.some(s => s.action.type === "reload"), "re-load is withheld until the part is re-masked");
+});
+test("deriveSuggestions: dispose a spent bath, extract an over-hours part, review an over-limit piece", () => {
+  const spent = [ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-11T08:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:160 })];
+  assert.ok(D.deriveSuggestions(spent, CONFIG, "2026-03-11T12:00").some(s => s.action.type === "dispose" && s.action.bath === "B1"));
+
+  const stuck = [ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-10T08:00", "B1", ["A"])];
+  const overH = D.deriveSuggestions(stuck, CONFIG, "2026-03-12T08:00").find(s => s.action.type === "extract");
+  assert.ok(overH && overH.action.preselect.includes("A"), "over-hours part should be offered for extraction");
+
+  const eng = [];
+  for(let c = 0; c < 3; c++){ eng.push(load(`2026-03-10T0${c}:00`, "B1", ["P"]), extract(`2026-03-10T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
+  assert.ok(D.deriveSuggestions(eng, CONFIG, "2026-03-10T20:00").some(s => s.action.type === "engineering" && s.action.serial === "P"));
 });

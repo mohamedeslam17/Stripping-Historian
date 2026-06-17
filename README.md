@@ -81,10 +81,24 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 - **Dashboard** — first‑pass yield, re‑strip rate, engineering load, bath status,
   and a per‑job‑card rollup.
 
-**Live guidance.** While logging, the form surfaces soft warnings — iron over the
-limit, a dip that would exceed max cycles, immersing in a disposed/out‑of‑band
-bath — without blocking the entry. Baths out of band and pieces awaiting
-disposition are surfaced in a banner and as nav badges.
+**Smart guidance (it knows the state of every bath and piece).** The event stream
+is treated as a **state machine**, so the app relates each action to what is
+already true:
+
+- **Suggested next actions** — the Floor shows a ranked "what to do next" list and
+  each item **prefills the drawer**: re‑load awaiting parts into a suggested healthy
+  **rescue bath** (re‑mask first if the last dip lost its wax), send over‑limit
+  parts to engineering, dispose a spent bath, top up low acid, extract parts that
+  have been in too long, log an overdue titration. Pieces and bath/piece dialogs
+  carry the same one‑click actions.
+- **Relationship‑aware warnings** — logging something illogical is flagged before
+  you save: disposing a bath that **still has parts in it**, re‑masking a part
+  that's **currently submerged**, re‑loading a part that already **cleared** or is
+  **awaiting engineering**, an extraction dated **before** the part went in, a load
+  **back‑dated** before the part's last event, chemistry on an inactive bath, and
+  more — without blocking the entry.
+- **Autofill** — typing/scanning a known serial fills in its J/C and component;
+  the extraction list pre‑ticks parts already over the max immersion time.
 
 **Configurable limits** (Settings): temperature setpoint/tolerance, free‑HCl band,
 iron limit, max cycles & hours per piece, max bath life, bath IDs, operators.

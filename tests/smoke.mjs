@@ -81,6 +81,8 @@ const handle = new Function(
     "mainKids:()=>document.querySelector('#main').children.length," +
     "drawerKids:()=>document.querySelector('#drawerRoot').children.length," +
     "pieces:()=>derivePieces(EVENTS,CONFIG,nowLocalDT())," +
+    "suggestions:()=>deriveSuggestions(EVENTS,CONFIG,nowLocalDT())," +
+    "doAction:a=>startAction(a)," +
     "eventsLen:()=>EVENTS.length };"
 )(document, window, indexedDB, Blob, URL, FileReader, alert, confirm);
 
@@ -104,6 +106,10 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   safe("opens Load for a specific bath", () => { handle.loadBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Extraction drawer with live contents", () => { handle.extractBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Chemistry Check drawer", () => { handle.openForm("Chemistry Check"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+
+  const sug = handle.suggestions();
+  ok(sug.length > 0, "derives next-action suggestions (" + sug.length + ")");
+  safe("a suggestion prefills the drawer", () => { handle.doAction(sug[0].action); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
   const ps = handle.pieces();
   ok(ps.length > 0, "derives pieces from the example (" + ps.length + ")");
