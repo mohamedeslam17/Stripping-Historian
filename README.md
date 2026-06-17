@@ -91,6 +91,12 @@ already true:
   parts to engineering, dispose a spent bath, top up low acid, extract parts that
   have been in too long, log an overdue titration. Pieces and bath/piece dialogs
   carry the same one‑click actions.
+- **Wax failure → re‑mask → re‑strip is one linked chain.** A wax failure is only
+  discovered when a part is pulled, so it's recorded **on the extraction** (per
+  part). That puts the part in a **Needs re‑mask** state — it is **blocked from
+  re‑loading** (a red warning) until a re‑masking resolves it. The re‑mask carries
+  a link back to the wax failure it fixes, shown in the timeline and Quality log;
+  the suggested re‑mask prefills that link automatically.
 - **Relationship‑aware warnings** — logging something illogical is flagged before
   you save: disposing a bath that **still has parts in it**, re‑masking a part
   that's **currently submerged**, re‑loading a part that already **cleared** or is

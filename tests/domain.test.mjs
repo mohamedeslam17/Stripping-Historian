@@ -25,7 +25,8 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues","TYPES","F","TYPE_PILL"
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues",
+  "waxFailures","lastUnresolvedWax","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -300,6 +301,41 @@ test("deriveSuggestions: re-mask before re-load when the last dip had wax failur
   assert.ok(sug.some(s => s.action.type === "remask" && s.action.serial === "A"));
   assert.ok(!sug.some(s => s.action.type === "reload"), "re-load is withheld until the part is re-masked");
 });
+/* ===================== wax failure -> re-mask -> re-strip chain ===================== */
+test("a part is 'Needs re-mask' after a wax failure, until a re-masking resolves it", () => {
+  const fail = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"], { jc:"J" }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
+  ];
+  assert.equal(D.lastUnresolvedWax(fail, "A").detail, "Complete mask loss");
+  assert.equal(D.derivePieces(fail, CONFIG, NOW)[0].status.s, "Needs re-mask");
+
+  const resolved = fail.concat(ev({ datetime:"2026-03-02T12:00", type:"Re-Masking", serial:"A" }));
+  assert.equal(D.lastUnresolvedWax(resolved, "A"), null);
+  assert.equal(D.derivePieces(resolved, CONFIG, NOW)[0].status.s, "Awaiting re-strip");
+});
+test("re-loading a part with an unresolved wax failure is flagged red", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Partial mask loss" }])
+  ];
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /unresolved wax failure/.test(x.msg)));
+});
+test("suggestions withhold re-load until re-masking, then offer it", () => {
+  const waxed = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:10 }),
+    load("2026-03-10T09:00", "B1", ["A"]), extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
+  ];
+  const s1 = D.deriveSuggestions(waxed, CONFIG, "2026-03-10T12:00");
+  assert.ok(s1.some(s => s.action.type === "remask" && s.action.serial === "A"));
+  assert.ok(!s1.some(s => s.action.type === "reload"), "no re-load while the mask is still failed");
+
+  const after = waxed.concat(ev({ datetime:"2026-03-10T11:30", type:"Re-Masking", serial:"A" }));
+  assert.ok(D.deriveSuggestions(after, CONFIG, "2026-03-10T12:00").some(s => s.action.type === "reload" && s.action.serials.includes("A")));
+});
+
 /* ===================== bath capacity & iron projection ===================== */
 test("bath capacity: free slots, and a load that would overfill warns", () => {
   const cfg = { ...CONFIG, bathCapacity:2 };

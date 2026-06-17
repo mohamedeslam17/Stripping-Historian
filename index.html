@@ -89,6 +89,7 @@
   .p-green{background:var(--green-bg);color:var(--green)} .p-amber{background:var(--amber-bg);color:var(--amber)}
   .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:var(--grey-bg);color:#5b6770}
   .p-blue{background:var(--blue-bg);color:var(--blue)}
+  .p-purple{background:#ece3f5;color:#6b3fa0}
   .tag{display:inline-flex;align-items:center;gap:6px;background:#eef2f4;border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12px;margin:2px 4px 0 0}
   .tag.flagbad{background:var(--red-bg);border-color:#eebfbc;color:var(--red)}
 
@@ -364,7 +365,28 @@ function bathContents(events, nowDT, bath){
   return [...open.values()].filter(r => !bath || r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
 }
 
-function pieceStatusFor(recs, engEvents, config){
+// Every wax failure observed for a serial — they are discovered at extraction
+// (and, rarely, logged standalone). Sorted oldest-first.
+function waxFailures(events, serial){
+  const out = [];
+  events.forEach(e => {
+    if(e.type === "Wax Failure" && e.serial === serial && e.waxFailure && e.waxFailure !== "None") out.push({ datetime:e.datetime, detail:e.waxFailure, event:e });
+    else if(e.type === "Immersion" && e.serial === serial && e.waxFailure && e.waxFailure !== "None") out.push({ datetime:e.datetime, detail:e.waxFailure, event:e });
+    else if(e.type === "Extraction") (e.items || []).forEach(it => { if(it.serial === serial && it.waxFailure && it.waxFailure !== "None") out.push({ datetime:e.datetime, detail:it.waxFailure, event:e }); });
+  });
+  return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
+}
+// The most recent wax failure that has NOT yet been resolved by a re-masking —
+// i.e. the part cannot be re-stripped until it is re-masked. null if clear.
+function lastUnresolvedWax(events, serial){
+  const fails = waxFailures(events, serial);
+  if(!fails.length) return null;
+  const lastFail = fails[fails.length - 1];
+  const remask = events.filter(e => e.type === "Re-Masking" && e.serial === serial).map(e => e.datetime).sort().slice(-1)[0] || null;
+  return (remask && remask >= lastFail.datetime) ? null : lastFail;
+}
+
+function pieceStatusFor(recs, engEvents, config, needsRemask){
   const open = recs.some(r => r.open);
   const cleared = recs.some(r => r.result === "Cleared");
   const cycles = recs.length;
@@ -380,6 +402,7 @@ function pieceStatusFor(recs, engEvents, config){
   if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
   if(cycles >= config.maxCycles || totalH >= config.maxHours)
                                      return { s:"→ Engineering",    cls:"p-red",   ...base };
+  if(needsRemask)                    return { s:"Needs re-mask",    cls:"p-purple", ...base };
   if(cycles > 0)                     return { s:"Awaiting re-strip", cls:"p-amber", ...base };
   return { s:"—", cls:"p-grey", ...base };
 }
@@ -394,7 +417,8 @@ function derivePieces(events, config, nowDT){
     const recs = o.recs.slice().sort((a, b) => String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
     const evs = eventsForSerial(events, o.serial);
     const eng = evs.filter(e => e.type === "Engineering Review");
-    const st = pieceStatusFor(recs, eng, config);
+    const unresolvedWax = lastUnresolvedWax(events, o.serial);
+    const st = pieceStatusFor(recs, eng, config, !!unresolvedWax);
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
@@ -404,6 +428,7 @@ function derivePieces(events, config, nowDT){
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
       firstPass: recs.length > 0 && recs[0].result === "Cleared",
+      needsRemask: !!unresolvedWax, waxFail: unresolvedWax || null,
       status:st, recs, events:evs
     });
   });
@@ -504,7 +529,7 @@ function deriveDefects(events){
   const out = [];
   events.forEach(e => {
     if(e.type === "Engineering Review") out.push({ e, kind:"Eng review", detail:e.status || "", serial:e.serial || "", bath:e.bath || "" });
-    else if(e.type === "Re-Masking") out.push({ e, kind:"Re-mask", detail:e.notes || "", serial:e.serial || "", bath:e.bath || "" });
+    else if(e.type === "Re-Masking") out.push({ e, kind:"Re-mask", detail:(e.waxFailure ? "resolves " + e.waxFailure : "") + (e.notes ? (e.waxFailure ? " · " : "") + e.notes : ""), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:e.waxFailure || "", serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
       if(it.waxFailure && it.waxFailure !== "None") out.push({ e, kind:"Wax failure", detail:it.waxFailure, serial:it.serial, bath:e.bath || "" });
@@ -553,6 +578,8 @@ function eventWarnings(d, events, config, nowDT){
         else if(p.status.s === "→ Engineering") add("red", `${s} is awaiting engineering review — disposition it before re-stripping`);
         if((p.cycles + 1) > config.maxCycles) add("red", `${s} would be cycle ${p.cycles + 1} (> max ${config.maxCycles}) — route to engineering`);
       }
+      const uw = lastUnresolvedWax(others, s);
+      if(uw) add("red", `${s} has an unresolved wax failure (${uw.detail}) — re-mask it before re-loading`);
       const last = lastSerialDT(s); if(last && d.datetime && d.datetime < last) add("amber", `${s}: this load is dated before its last recorded event (${fmtDT(last)})`);
     });
   }
@@ -576,11 +603,8 @@ function eventWarnings(d, events, config, nowDT){
   if((d.type === "HCl Top-Up" || d.type === "Water Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
   if(d.type === "Re-Masking" && d.serial){
     const p = pieceOf(d.serial);
-    if(p){
-      if(p.inBath) add("red", `${d.serial} is currently in bath ${p.currentBath} — extract it before re-masking`);
-      else if(p.status.s === "Cleared" || p.status.s === "Accepted") add("amber", `${d.serial} is already ${p.status.s} — re-masking is unusual`);
-      else if(p.recs.length){ const last = p.recs[p.recs.length - 1]; if(!(last.waxFailure && last.waxFailure !== "None")) add("amber", `No wax failure recorded on ${d.serial}'s last dip — re-masking may be unnecessary`); }
-    }
+    if(p && p.inBath) add("red", `${d.serial} is currently in bath ${p.currentBath} — extract it before re-masking`);
+    else if(!lastUnresolvedWax(others, d.serial)) add("amber", `No unresolved wax failure for ${d.serial} — re-masking may be unnecessary`);
   }
   if(d.type === "Engineering Review" && d.serial){
     const p = pieceOf(d.serial);
@@ -634,18 +658,16 @@ function deriveSuggestions(events, config, nowDT){
 
   const needRemask = [], groups = new Map();
   pieces.forEach(p => {
+    if(p.status.s === "Needs re-mask"){ needRemask.push(p); return; }   // wax failure must be resolved first
     if(p.status.s !== "Awaiting re-strip") return;
     const last = p.recs[p.recs.length - 1];
-    const waxed = last && last.waxFailure && last.waxFailure !== "None";
-    const remaskAfter = events.some(e => e.type === "Re-Masking" && e.serial === p.serial && (!last || !last.outDT || e.datetime >= last.outDT));
-    if(waxed && !remaskAfter){ needRemask.push(p); return; }
     const rb = rescue(last ? last.bath : "");
     const key = (p.jc || "") + "|" + rb;
     const g = groups.get(key) || { jc:p.jc, component:p.component, bath:rb, serials:[] };
     g.serials.push(p.serial); groups.set(key, g);
   });
   groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:g.bath ? "→ bath " + g.bath : "no healthy bath available", action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  needRemask.forEach(p => out.push({ level:"amber", icon:"▦", title:`Re-mask ${p.serial} — wax failure last dip`, detail:p.jc || "", action:{ type:"remask", serial:p.serial, jc:p.jc } }));
+  needRemask.forEach(p => out.push({ level:"amber", icon:"▦", title:`Re-mask ${p.serial}${p.waxFail ? " — " + p.waxFail.detail : ""}`, detail:(p.jc ? p.jc + " · " : "") + "blocks re-strip until resolved", action:{ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }));
   pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
@@ -669,6 +691,7 @@ function deriveIssues(events, config, nowDT){
   pieces.forEach(p => {
     if(p.status.s === "→ Engineering"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 1) out.push({ level:"amber", icon:"⚑", title:`${p.serial} awaiting engineering disposition (${d} d)`, detail:p.jc || "", action:{ type:"engineering", serial:p.serial, jc:p.jc } }); }
     else if(p.status.s === "Awaiting re-strip"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 3) out.push({ level:"amber", icon:"⏳", title:`${p.serial} awaiting re-strip for ${d} days`, detail:p.jc || "", action:{ type:"viewpiece", serial:p.serial } }); }
+    else if(p.status.s === "Needs re-mask"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 2) out.push({ level:"amber", icon:"▦", title:`${p.serial} needs re-masking (${p.waxFail ? p.waxFail.detail : "wax failure"}) for ${d} days`, detail:p.jc || "", action:{ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }); }
   });
   baths.filter(b => b.active).forEach(b => { const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime; const d = daysBetween(lastChemDT, nowDT); if(d !== "" && d >= 3) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${d} days`, detail:"", action:{ type:"chem", bath:b.bath } }); });
 
@@ -789,7 +812,8 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
-  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (it.waxFailure && it.waxFailure !== "None" ? " · wax: " + it.waxFailure : "")) : ("extraction from " + (e.bath || "bath")); }
+  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (it.waxFailure && it.waxFailure !== "None" ? " · ⚠ wax: " + it.waxFailure : "")) : ("extraction from " + (e.bath || "bath")); }
+  if(e.type === "Re-Masking") return "re-masked" + (e.waxFailure ? " — resolves wax failure (" + e.waxFailure + ")" : "") + (e.notes ? " · " + e.notes : "");
   return eventDetail(e);
 }
 
@@ -860,6 +884,7 @@ function renderDrawer(){
     body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Load In (parts into a bath) and Extraction (parts out), so you never need the out-time up front."));
   } else {
     body.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
+    if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#ece3f5;color:#6b3fa0" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
     const warnBox = cel("div", { style:"margin-top:4px" });
     const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update" : "Save");
     const hint = cel("span", { class:"muted", style:"font-size:12px;align-self:center" });
@@ -897,7 +922,7 @@ function startExtraction(bath){ formType = "Extraction"; editId = null; formData
 function startAction(a){
   editId = null; const t = a.type;
   if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
-  else if(t === "remask") formData = { type:"Re-Masking", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Re-Masking";
+  else if(t === "remask") formData = { type:"Re-Masking", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", resolvesEventId:a.resolvesEventId || null, waxFailure:a.waxFailure || "" }, formType = "Re-Masking";
   else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
   else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
   else if(t === "topup-hcl") formData = { type:"HCl Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "HCl Top-Up";
@@ -1160,6 +1185,7 @@ function vPieces(m){
   const all = derivePieces(EVENTS, CONFIG, nowLocalDT());
   const filt = {
     "All": () => true, "In bath": r => r.status.s === "In bath",
+    "Needs re-mask": r => r.status.s === "Needs re-mask",
     "Awaiting": r => r.status.s === "Awaiting re-strip", "Cleared": r => r.status.s === "Cleared" || r.status.s === "Accepted",
     "→ Engineering": r => r.status.s === "→ Engineering"
   };
@@ -1181,6 +1207,7 @@ function vPieces(m){
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
     const act = cel("div", { class:"btnrow" });
+    if(r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"remask", serial:r.serial, jc:r.jc, resolvesEventId:r.waxFail && r.waxFail.event ? r.waxFail.event.id : null, waxFailure:r.waxFail ? r.waxFail.detail : "" }) }, "Re-mask"));
     if(r.status.s === "Awaiting re-strip") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, "Re-load"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
     act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
@@ -1217,9 +1244,9 @@ function showSerial(serial){
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
-  if(p.status.s === "Awaiting re-strip"){
-    const lastDip = p.recs[p.recs.length - 1], waxed = lastDip && lastDip.waxFailure && lastDip.waxFailure !== "None";
-    if(waxed) foot.push(cel("button", { class:"btn", onclick:() => { closeModal(); startAction({ type:"remask", serial:p.serial, jc:p.jc }); } }, "Re-mask"));
+  if(p.status.s === "Needs re-mask"){
+    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"remask", serial:p.serial, jc:p.jc, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" }); } }, "Re-mask"));
+  } else if(p.status.s === "Awaiting re-strip"){
     foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, "Re-load"));
   } else if(p.status.s === "→ Engineering"){
     foot.push(cel("button", { class:"btn danger", onclick:() => { closeModal(); startAction({ type:"engineering", serial:p.serial, jc:p.jc }); } }, "Engineering review"));
@@ -1517,6 +1544,9 @@ async function loadExample(){
     { datetime:"2026-03-22T15:30", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-01", result:"Cleared", waxFailure:"None" }, { serial:"7261-04", result:"Cleared", waxFailure:"None" }] },
     { datetime:"2026-03-22T18:00", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-02", result:"Cleared", waxFailure:"None" }, { serial:"7261-03", result:"Re-strip", waxFailure:"None" }] },
     { datetime:"2026-03-22T20:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"Complete mask loss" }, { serial:"7261-06", result:"Re-strip", waxFailure:"Complete mask loss" }] },
+    // 7261-05/06 came out with a wax failure -> must be re-masked before they can be re-stripped
+    { datetime:"2026-03-22T20:15", type:"Re-Masking", jc:"7261", serial:"7261-05", waxFailure:"Complete mask loss", operator:"Bernabe", notes:"re-waxed cooling holes" },
+    { datetime:"2026-03-22T20:18", type:"Re-Masking", jc:"7261", serial:"7261-06", waxFailure:"Complete mask loss", operator:"Bernabe" },
     // cycle 2 for the three re-strips
     { datetime:"2026-03-22T20:30", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-03","7261-05","7261-06"], operator:"JM" },
     { datetime:"2026-03-23T02:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-03", result:"Cleared", waxFailure:"None" }] },
@@ -1525,8 +1555,6 @@ async function loadExample(){
     // --- Bath 106-107: rescue charge for the two stragglers (cycle 3) ---
     { datetime:"2026-03-23T18:00", type:"Bath Fill", bath:"106-107", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
     { datetime:"2026-03-23T18:30", type:"Chemistry Check", bath:"106-107", temp:90, hclPct:22, fePpm:10, operator:"Maint" },
-    { datetime:"2026-03-23T19:00", type:"Re-Masking", jc:"7261", serial:"7261-05", operator:"Bernabe", notes:"re-waxed cooling holes" },
-    { datetime:"2026-03-23T19:05", type:"Re-Masking", jc:"7261", serial:"7261-06", operator:"Bernabe" },
     { datetime:"2026-03-23T20:00", type:"Load In", bath:"106-107", jc:"7261", component:C, serials:["7261-05","7261-06"], operator:"Diang" },
     { datetime:"2026-03-24T02:00", type:"Extraction", bath:"106-107", operator:"Diang", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"None" }, { serial:"7261-06", result:"Re-strip", waxFailure:"None" }] },
     { datetime:"2026-03-24T09:00", type:"Engineering Review", jc:"7261", serial:"7261-05", status:"Engineering review", operator:"QA", notes:"3 cycles + wax loss" },
@@ -1540,8 +1568,8 @@ async function loadExample(){
     // --- Bath 206-207: a live batch still in the tank right now ---
     { datetime:agoDT(60 * 30), type:"Bath Fill", bath:"206-207", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
     { datetime:agoDT(60 * 29), type:"Chemistry Check", bath:"206-207", temp:90, hclPct:21, fePpm:12, operator:"Maint" },
-    { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04"], operator:"Diang" },
-    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared", waxFailure:"None" }] }
+    { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04","7501-05"], operator:"Diang" },
+    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared", waxFailure:"None" }, { serial:"7501-04", result:"Re-strip", waxFailure:"Partial mask loss" }] }
   ];
   for(const e of ex) await addEvent(e);
   flash("Example loaded (" + ex.length + " events)");
