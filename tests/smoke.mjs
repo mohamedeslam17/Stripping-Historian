@@ -110,6 +110,8 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   safe("opens the Chemistry Check drawer", () => { handle.openForm("Chemistry Check"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("a re-load of a wax-failed part shows the inline re-mask step", () => { handle.doAction({ type:"reload", serials:["7501-04"], bath:"206-207", jc:"7501" }); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
+  safe("the drawer renders exactly once and does not stack on re-open", () => { handle.openForm("Load In"); handle.openForm("Load In"); const k = handle.drawerKids(); if(k !== 2) throw new Error("expected 1 drawer (scrim+panel = 2 nodes), got " + k); handle.closeDrawer(); });
+
   const sug = handle.suggestions();
   ok(sug.length > 0, "derives next-action suggestions (" + sug.length + ")");
   safe("a suggestion prefills the drawer", () => { handle.doAction(sug[0].action); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });

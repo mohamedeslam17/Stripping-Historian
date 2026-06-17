@@ -62,6 +62,8 @@ test("parseSerials expands ranges and dedupes", () => {
   assert.deepEqual(D.parseSerials("7261-01..7261-03, 7261-09"), ["7261-01","7261-02","7261-03","7261-09"]);
   assert.deepEqual(D.parseSerials("A1\nA2 A2,A3"), ["A1","A2","A3"]);
   assert.deepEqual(D.parseSerials(""), []);
+  // a pasted Excel column: tabs, CRLF newlines, and quoted cells
+  assert.deepEqual(D.parseSerials('7261-01\t7261-02\r\n"7261-03"\n7261-04'), ["7261-01", "7261-02", "7261-03", "7261-04"]);
 });
 
 /* --------------------- load / extract pairing ---------------------- */

@@ -273,7 +273,7 @@ function nextEventId(dateStr, events){
 function parseSerials(text){
   if(!text) return [];
   const out = [], add = s => { if(s && !out.includes(s)) out.push(s); };
-  String(text).split(/[\s,;]+/).map(t => t.trim()).filter(Boolean).forEach(tok => {
+  String(text).split(/[\s,;]+/).map(t => t.trim().replace(/^["']+|["']+$/g, "")).filter(Boolean).forEach(tok => {
     const parts = tok.split("..");
     if(parts.length === 2){
       const lm = parts[0].match(/^(.*?)(\d+)$/);
@@ -910,13 +910,14 @@ function renderDrawer(){
     cel("button", { class:"x", title:"Close", onclick:closeDrawer }, "✕")
   ]));
   const body = cel("div", { class:"drawer-b" });
-  const tabs = cel("div", { class:"typetabs" });
-  Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab" + (formType === t ? " on" : ""), onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
-  body.append(tabs);
   const foot = cel("div", { class:"drawer-f" });
   if(!formType){
+    const tabs = cel("div", { class:"typetabs" });
+    Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab", onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+    body.append(tabs);
     body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Load In (parts into a bath) and Extraction (parts out), so you never need the out-time up front."));
   } else {
+    if(editId == null) body.append(cel("button", { class:"btn sm", style:"margin-bottom:12px", onclick:() => { formType = null; formData = { datetime:nowLocalDT() }; renderDrawer(); } }, "‹ Change event type"));
     body.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
     if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#ece3f5;color:#6b3fa0" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
     const warnBox = cel("div", { style:"margin-top:4px" });
@@ -1066,7 +1067,7 @@ function buildLoadFields(card, refreshWarn){
   };
   const wrap = cel("div", { class:"field" }, lbl);
   wrap.append(chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshRemask(); refreshWarn(); }));
-  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type or paste a serial and press Enter. Ranges like 7261-01..06 expand. Known serials fill in J/C & component."));
+  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
 
   // Re-masking happens here, as part of the re-dip: any entered part that came
@@ -1095,15 +1096,19 @@ function buildLoadFields(card, refreshWarn){
 function chipInput(initial, onChange){
   const list = (initial || []).slice();
   const box = cel("div", { class:"chipbox" });
-  const input = cel("input", { type:"text", placeholder:"add serial…" });
+  const input = cel("input", { type:"text", placeholder:"type or paste serials (Excel column, commas, spaces)…" });
   const emit = () => onChange(list.slice());
   function paint(){ box.innerHTML = ""; list.forEach((s, i) => box.append(cel("span", { class:"chip" }, [cel("b", {}, s), cel("i", { title:"remove", onclick:ev => { ev.stopPropagation(); list.splice(i, 1); paint(); emit(); input.focus(); } }, "✕")]))); box.append(input); }
   const addTokens = text => { let added = false; parseSerials(text).forEach(s => { if(!list.includes(s)){ list.push(s); added = true; } }); if(added){ paint(); emit(); } };
+  // Auto-commit whenever a separator appears in the field. This makes pasting a
+  // column from Excel (tabs / newlines) or a comma/space list reliable, even if
+  // the browser's paste event doesn't fire.
+  input.addEventListener("input", () => { if(/[\s,;]/.test(input.value)){ const v = input.value; input.value = ""; addTokens(v); } });
   input.addEventListener("keydown", e => {
     if(e.key === "Enter" || e.key === "," || e.key === "Tab"){ if(input.value.trim()){ e.preventDefault(); addTokens(input.value); input.value = ""; input.focus(); } }
     else if(e.key === "Backspace" && !input.value && list.length){ list.pop(); paint(); emit(); input.focus(); }
   });
-  input.addEventListener("paste", e => { const t = (e.clipboardData || window.clipboardData).getData("text"); if(t){ e.preventDefault(); addTokens(t); input.value = ""; } });
+  input.addEventListener("paste", e => { const t = ((e.clipboardData || window.clipboardData) || { getData:() => "" }).getData("text"); if(t){ e.preventDefault(); addTokens(t); input.value = ""; } });
   input.addEventListener("blur", () => { if(input.value.trim()){ addTokens(input.value); input.value = ""; } box.classList.remove("focus"); });
   input.addEventListener("focus", () => box.classList.add("focus"));
   box.addEventListener("click", () => input.focus());
@@ -1177,7 +1182,7 @@ async function saveForm(){
   } else {
     await addEvent(rec); const newId = rec.id; setUndo("add " + rec.eventId, async () => { await removeEvent(newId); });
     flash("Saved " + rec.eventId, { label:"Undo", fn:doUndo });
-    const t = formType; formData = { datetime:nowLocalDT(), type:t }; if(t === "Extraction") formData._rows = {};
+    drawerOpen = false; formType = null; formData = {};
   }
   render();
 }
