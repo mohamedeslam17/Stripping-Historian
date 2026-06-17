@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues","deriveRootCauses",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -310,9 +310,9 @@ test("a part is 'Needs re-mask' after a wax failure, until a re-masking resolves
   const fail = [
     ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
     load("2026-03-02T08:00", "B1", ["A"], { jc:"J" }),
-    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }])
   ];
-  assert.equal(D.lastUnresolvedWax(fail, "A").detail, "Complete mask loss");
+  assert.equal(D.lastUnresolvedWax(fail, "A").area, "Cooling holes");
   assert.equal(D.derivePieces(fail, CONFIG, NOW)[0].status.s, "Needs re-mask");
 
   const resolved = fail.concat(ev({ datetime:"2026-03-02T12:00", type:"Re-Masking", serial:"A" }));
@@ -347,7 +347,7 @@ test("wax failure is tracked per masked area; a re-mask resolves only the areas 
   const events = [
     ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
     load("2026-03-02T08:00", "B1", ["A"]),
-    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Partial mask loss" }, { area:"Part body", severity:"Complete mask loss" }] }])
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:["Cooling holes", "Part body"] }])
   ];
   assert.deepEqual(D.unresolvedWaxAreas(events, "A").map(x => x.area).sort(), ["Cooling holes", "Part body"]);
   assert.equal(D.derivePieces(events, cfg, NOW)[0].status.s, "Needs re-mask");
@@ -360,16 +360,17 @@ test("wax failure is tracked per masked area; a re-mask resolves only the areas 
   assert.equal(D.unresolvedWaxAreas(full, "A").length, 0);
   assert.equal(D.derivePieces(full, cfg, NOW)[0].status.s, "Awaiting re-strip");
 });
-test("waxAreasOf reads the new per-area shape and the legacy single field", () => {
-  assert.deepEqual(D.waxAreasOf({ wax:[{ area:"Cooling holes", severity:"Partial mask loss" }] }), [{ area:"Cooling holes", severity:"Partial mask loss" }]);
-  assert.deepEqual(D.waxAreasOf({ waxFailure:"Complete mask loss" }), [{ area:"Mask", severity:"Complete mask loss" }]);
+test("waxAreasOf reads the simple name list, the old {area} shape, and the legacy field", () => {
+  assert.deepEqual(D.waxAreasOf({ wax:["Cooling holes", "Part body"] }), ["Cooling holes", "Part body"]);
+  assert.deepEqual(D.waxAreasOf({ wax:[{ area:"Cooling holes" }] }), ["Cooling holes"]);   // old shape still readable
+  assert.deepEqual(D.waxAreasOf({ waxFailure:"Complete mask loss" }), ["Mask"]);            // legacy single field
   assert.deepEqual(D.waxAreasOf({ waxFailure:"None" }), []);
   assert.deepEqual(D.waxAreasOf({}), []);
 });
 test("a whole-part re-masking (no areas) resolves every failed area", () => {
   const events = [
     load("2026-03-02T08:00", "B1", ["A"]),
-    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Partial mask loss" }, { area:"Part body", severity:"Partial mask loss" }] }]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:["Cooling holes", "Part body"] }]),
     ev({ datetime:"2026-03-02T11:00", type:"Re-Masking", serial:"A" })   // no areas => covers all
   ];
   assert.equal(D.unresolvedWaxAreas(events, "A").length, 0);
@@ -384,16 +385,6 @@ test("bath capacity: free slots, and a load that would overfill warns", () => {
   assert.equal(s.free, 0);
   assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["C"] }, events, cfg, NOW).some(x => x.level === "red" && /capacity 2/.test(x.msg)));
 });
-test("deriveBath projects the iron trend toward the limit", () => {
-  const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
-    ev({ datetime:"2026-03-01T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:20 }),
-    ev({ datetime:"2026-03-03T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:60 })
-  ];
-  const s = D.deriveBath(events, CONFIG, "B1", "2026-03-03T12:00");
-  assert.equal(s.feSlope, 20);     // +20 ppm/day
-  assert.equal(s.feProjDays, 2);   // 60 -> 100 at 20/day
-});
 test("suggestRescueBath skips a full bath even if it has the lowest iron", () => {
   const cfg = { ...CONFIG, bathCapacity:1 };
   const events = [
@@ -402,21 +393,6 @@ test("suggestRescueBath skips a full bath even if it has the lowest iron", () =>
     load("2026-03-10T10:00", "B1", ["X"])
   ];
   assert.equal(D.suggestRescueBath(events, cfg, "2026-03-10T12:00", ""), "B2");
-});
-
-/* ===================== data-health audit ===================== */
-test("deriveIssues flags anomalies, disposed-bath parts, over-capacity, and stuck parts", () => {
-  assert.ok(D.deriveIssues([extract("2026-03-02T10:00", "B1", [{ serial:"Z", result:"Cleared" }])], CONFIG, NOW).some(i => /not in bath/.test(i.title)));
-
-  const disposed = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A"]), ev({ datetime:"2026-03-03T08:00", type:"Bath Disposal", bath:"B1", disposalReason:"Iron limit reached" })];
-  assert.ok(D.deriveIssues(disposed, CONFIG, NOW).some(i => /inside a disposed bath/.test(i.title)));
-
-  const cfg = { ...CONFIG, bathCapacity:1 };
-  const over = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-02T08:00", "B1", ["A", "B"])];
-  assert.ok(D.deriveIssues(over, cfg, "2026-03-02T12:00").some(i => /over capacity/i.test(i.title)));
-
-  const stuck = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }), load("2026-03-01T08:00", "B1", ["A"])];
-  assert.ok(D.deriveIssues(stuck, CONFIG, "2026-03-03T08:00").some(i => /stuck in bath/.test(i.title)));
 });
 
 test("deriveSuggestions: dispose a spent bath, extract an over-hours part, review an over-limit piece", () => {
@@ -432,62 +408,11 @@ test("deriveSuggestions: dispose a spent bath, extract an over-hours part, revie
   assert.ok(D.deriveSuggestions(eng, CONFIG, "2026-03-10T20:00").some(s => s.action.type === "engineering" && s.action.serial === "P"));
 });
 
-/* ===================== bath as a vessel: volume, consumption, load ===================== */
-test("deriveBath tracks current volume from fill + top-ups", () => {
-  const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1", hclAddedL:300, waterAddedL:700, h3po4AddedL:100 }),
-    ev({ datetime:"2026-03-02T08:00", type:"Water Top-Up", bath:"B1", waterAddedL:20 }),
-    ev({ datetime:"2026-03-03T08:00", type:"Water Top-Up", bath:"B1", waterAddedL:15 }),
-    ev({ datetime:"2026-03-04T08:00", type:"HCl Top-Up", bath:"B1", hclAddedL:10 })
-  ];
-  const s = D.deriveBath(events, CONFIG, "B1", NOW);
-  assert.equal(s.volume, 1145);             // 1100 fill + 35 water + 10 HCl
-  assert.equal(s.hclAdded, 310);
-});
-test("deriveBath computes consumption KPIs (HCl per part / per load, iron load)", () => {
-  const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1", hclAddedL:280, waterAddedL:720 }),
-    ev({ datetime:"2026-03-01T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:50 }),
-    load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
-    extract("2026-03-02T12:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Cleared" }, { serial:"C", result:"Cleared" }, { serial:"D", result:"Cleared" }])
-  ];
-  const s = D.deriveBath(events, CONFIG, "B1", "2026-03-04T08:00");
-  assert.equal(s.parts, 4);
-  assert.equal(s.loads, 1);
-  assert.equal(s.hclPerPart, 70);           // 280 / 4
-  assert.equal(s.hclPerLoad, 280);          // 280 / 1
-  assert.equal(s.feLoadG, 50);              // 50 mg/L * 1000 L / 1000 = 50 g
-});
-test("deriveBath scales load by component units when configured", () => {
-  const cfg = { ...CONFIG, componentUnits: { Blade: 5, Vane: 1 } };
-  const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
-    load("2026-03-02T08:00", "B1", ["A"], { component:"Blade" }),
-    load("2026-03-02T08:00", "B1", ["B"], { component:"Vane" }),
-    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Cleared" }])
-  ];
-  const s = D.deriveBath(events, cfg, "B1", NOW);
-  assert.equal(s.loadUnits, 6);             // 5 (blade) + 1 (vane)
-});
-
-/* ===================== part stop conditions & root cause ===================== */
+/* ===================== part stop conditions ===================== */
 test("a part over the cycle/hour limit is held for engineering with a stated reason", () => {
   const events = [];
   for(let c = 0; c < 3; c++){ events.push(load(`2026-03-02T0${c}:00`, "B1", ["P"]), extract(`2026-03-02T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
   const p = D.derivePieces(events, CONFIG, NOW)[0];
   assert.equal(p.status.s, "→ Engineering");
   assert.match(p.status.reason, /3 cycles/);
-});
-test("deriveRootCauses builds a Pareto of losses (default Unknown)", () => {
-  const events = [
-    load("2026-03-02T08:00", "B1", ["A", "B", "C"]),
-    extract("2026-03-02T10:00", "B1", [
-      { serial:"A", result:"Re-strip", rootCause:"Iron high" },
-      { serial:"B", result:"Re-strip", rootCause:"Iron high" },
-      { serial:"C", result:"Re-strip" }
-    ])
-  ];
-  const rc = D.deriveRootCauses(events);
-  assert.deepEqual(rc[0], { cause:"Iron high", count:2 });
-  assert.ok(rc.some(x => x.cause === "Unknown" && x.count === 1));
 });

@@ -77,16 +77,12 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
   (with elapsed time), plus per‑bath state for the **current charge** (resets after
   a refill): age, latest chemistry, piece‑hour load, parts processed, and
   **out‑of‑band flags**. Trend charts for Fe / HCl / temp with limit lines and
-  control bands. The bath is modelled as a **vessel**, not just a log: **current
-  volume** (fill + top‑ups), **consumption** (HCl per part / per load / per day),
-  **iron load (g)**, and **load** in both piece‑hours and configurable
-  **component load‑units** (a tank of 5 blades ≠ 50 vanes).
+  control bands.
 - **Quality** — an instant defect database (wax failures, re‑masks, engineering
-  reviews, re‑strips), filterable by kind, with a **root‑cause Pareto** (Bath
-  chemistry / Iron high / Temperature / Masking / Operator / Component / Unknown,
-  configurable).
-- **Dashboard** — first‑pass yield, re‑strip rate, engineering load, a per‑job‑card
-  rollup, bath status, and a **chemical‑consumption & bath‑life** table.
+  reviews, re‑strips), filterable by kind.
+- **Dashboard** — a **visual of every tank with the parts currently inside it**,
+  plus a few headline KPIs (parts in baths, awaiting re‑strip, in engineering,
+  wax failures, first‑pass yield) and first‑pass yield by job card.
 - **Stop conditions** — a part over the cycle/hour limit is automatically held for
   engineering, with the breached limit stated as the reason.
 
@@ -117,19 +113,15 @@ already true:
   more — without blocking the entry.
 - **Autofill** — typing/scanning a known serial fills in its J/C and component;
   the extraction list pre‑ticks parts already over the max immersion time.
-- **Capacity & prediction** — tanks have a configurable capacity; loads that would
-  overfill are flagged, the fill level shows on each tank, and a full bath is never
-  offered as a rescue. The iron trend is projected to the limit ("spent in ~2 days")
-  so changes can be planned, not reacted to.
-- **Data‑health audit** (Dashboard) — a whole‑record scan for states that emerge
-  over time and entry‑time checks can't catch: anomalies, parts left in a disposed
-  bath, over‑capacity tanks, parts stuck past the max immersion time, stalled
-  re‑strips, and overdue chemistry — each with a one‑click fix.
+- **Capacity** — tanks have a configurable capacity; loads that would overfill are
+  flagged, the fill level shows on each tank, and a full bath is never offered as a
+  rescue.
 - **Undo** — the last add / edit / delete can be reverted from the toast or with
   Ctrl/Cmd‑Z.
 
 **Configurable limits** (Settings): temperature setpoint/tolerance, free‑HCl band,
-iron limit, max cycles & hours per piece, max bath life, bath IDs, operators.
+iron limit, max cycles & hours per piece, max bath life, bath capacity, bath IDs,
+masked areas, operators.
 
 ---
 

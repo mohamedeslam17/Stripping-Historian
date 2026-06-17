@@ -82,7 +82,6 @@ const handle = new Function(
     "drawerKids:()=>document.querySelector('#drawerRoot').children.length," +
     "pieces:()=>derivePieces(EVENTS,CONFIG,nowLocalDT())," +
     "suggestions:()=>deriveSuggestions(EVENTS,CONFIG,nowLocalDT())," +
-    "issues:()=>deriveIssues(EVENTS,CONFIG,nowLocalDT())," +
     "doAction:a=>startAction(a)," +
     "modalKids:()=>document.querySelector('#modalRoot').children.length," +
     "eventsLen:()=>EVENTS.length };"
@@ -115,10 +114,6 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   const sug = handle.suggestions();
   ok(sug.length > 0, "derives next-action suggestions (" + sug.length + ")");
   safe("a suggestion prefills the drawer", () => { handle.doAction(sug[0].action); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
-
-  const iss = handle.issues();
-  ok(iss.length > 0, "derives data-health issues (" + iss.length + ")");
-  safe("a viewbath action opens the bath modal", () => { handle.doAction({ type:"viewbath", bath:"102-103" }); if(handle.modalKids() < 1) throw new Error("no modal"); });
 
   const ps = handle.pieces();
   ok(ps.length > 0, "derives pieces from the example (" + ps.length + ")");
