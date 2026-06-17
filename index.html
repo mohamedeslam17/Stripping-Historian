@@ -974,7 +974,7 @@ function renderDrawer(){
     const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update" : "Save");
     const hint = cel("span", { class:"muted", style:"font-size:12px;align-self:center" });
     function formIncomplete(){
-      if(formType === "Load In") return (formData.serials || []).length ? "" : "Add at least one serial";
+      if(formType === "Load In") return !formData.bath ? "Select a bath" : ((formData.serials || []).length ? "" : "Add at least one serial");
       if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
       if(formType === "Parts Received") return (formData.serials || []).length ? "" : "Add at least one serial";
       if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0) ? "" : "Enter an HCl or water amount";
@@ -1346,7 +1346,7 @@ function buildExtractFields(card, refreshWarn){
 
 async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
-  if(rec.type === "Load In"){ rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Load In"){ if(!rec.bath){ alert("Select a bath."); return; } rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
   if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
   if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0)){ alert("Enter an HCl or water amount."); return; } }
@@ -1643,6 +1643,20 @@ function vDash(m){
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
   if(EVENTS.length) m.append(suggestionsPanel());
+  // Safety net: open parts whose bath isn't one of the configured tanks (or that
+  // were saved with no bath) would otherwise be invisible — surface them so they
+  // can be recovered. Click one to edit its load and assign a bath.
+  if(EVENTS.length){
+    const orphan = bathContents(EVENTS, now, "").filter(r => !CONFIG.baths.includes(r.bath));
+    if(orphan.length){
+      const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#e6b3b0" });
+      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to set its bath, or delete the load in Events.")]));
+      const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+      orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
+      oc.append(chips);
+      m.append(oc);
+    }
+  }
   if(EVENTS.length) m.append(parkedPanel());
   m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
   if(!EVENTS.length){ m.append(emptyState()); return; }
