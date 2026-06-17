@@ -19,7 +19,9 @@ On the floor you rarely know the out‑time when a part goes in, parts go in as 
 
 - **Add parts** (*Load In*) — *N* parts go INTO a bath. The event timestamp *is*
   the time‑in. Serials are entered as a list, with range shorthand like
-  `7261-01..06`, **or picked from the parked list** (see below).
+  `7261-01..06`, **or picked from the waiting area** (see below). The destination
+  drop‑down also offers **Waiting area** — choose it to **park** the serials
+  without a bath (stored as *Parts Received*) instead of dipping them.
 - **Remove parts** (*Extraction*) — pull **some** of what's currently in that bath.
   The form shows you the **live bath contents** as a checklist; you tick the parts
   coming out and set each result (Cleared / Re‑strip / Hold). Parts you don't tick
@@ -61,10 +63,10 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 
 | Event | Purpose |
 |---|---|
-| **Add parts** (*Load In*) | *N* parts INTO a bath (time in); serials as a list / range / from the parked list. Also where a part's failed mask areas are **re‑masked** before the re‑dip |
+| **Add parts** (*Load In*) | *N* parts INTO a **bath**, or into the **Waiting area** (parked, no bath). Serials as a list / range / from the waiting area. Also where failed mask areas are **re‑masked** before the re‑dip |
 | **Remove parts** (*Extraction*) | Pull some parts OUT (time out, per‑part result + **per‑area wax failure**) |
 | **Move** (*Transfer*) | Move all or some of a bath's parts to another bath (same dip continues) |
-| **Parts Received** | Park serials received in the tech's area, ready to add to any bath |
+| Parts Received | The waiting area — serials parked, not yet in a bath (created by *Add parts → Waiting area*) |
 | Bath Fill | **Complete fill** — new charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
 | Top‑Up | **Partial addition** — top up acid and/or water between checks |
@@ -82,10 +84,10 @@ Settings):
   a **visual of every tank with the parts currently inside it** (over‑hours parts
   in red, out‑of‑band tanks in red), each carrying its chemistry summary, status
   and one‑click **Add parts / Remove parts / Move / Chem / Top up / Dispose**
-  (Top up offers a **complete fill** or a **partial addition**); a **parked parts**
-  panel (serials received but not yet in a bath); the headline KPIs; the
-  **next‑action suggestions**; and first‑pass yield by job card. Click a tank for
-  full chemistry charts and contents.
+  (Top up offers a **complete fill** or a **partial addition**); a **Waiting area**
+  panel (serials parked, not yet in a bath); the headline KPIs; the **next‑action
+  suggestions**; and first‑pass yield by job card. Click a tank for full chemistry
+  charts and contents.
 - **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
   and a status (`In bath`, `Awaiting re‑strip`, `Needs re‑mask`, `Cleared`,
   `→ Engineering`, `Scrap`, …), filterable. Click *history* for a full timeline and
@@ -126,10 +128,12 @@ already true:
   (awaiting another strip, or blocked needing a re‑mask) are tracked as *idle*. When
   you open **Add parts**, they're listed as **"Waiting to go back in" — tap to add**
   (or *Add all*), so you never lose track of a part sitting on the bench.
-- **Parked parts** — a tech logs serials as they're **received** in their area
-  (**Receive parts**). They sit in a parked list on the Dashboard, and appear in a
-  **drop‑down** in the **Add parts** form for any bath — pick one (or *Add all*),
-  on top of typing brand‑new serials. A part leaves the parked list once it's loaded.
+- **Waiting area** — parts received but not yet in a bath. Add them with the
+  regular **Add parts** form by choosing **Waiting area** as the destination (no
+  separate flow). They show in the Waiting‑area panel on the Dashboard, and appear
+  in a **drop‑down** in the **Add parts** form for any bath — pick one (or *Add
+  all*), on top of typing brand‑new serials. A part leaves the waiting area once
+  it's loaded into a bath.
 - **Capacity** — tanks have a configurable capacity; loads that would overfill are
   flagged, the fill level shows on each tank, and a full bath is never offered as a
   rescue.

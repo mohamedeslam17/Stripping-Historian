@@ -319,7 +319,7 @@ const TYPES = {
   "Load In":          { desc:"parts INTO a bath (time in)",  custom:"load",    fields:[F.bath,F.jc,F.component,F.op,F.notes] },
   "Extraction":       { desc:"parts OUT of a bath (time out)",custom:"extract", fields:[F.bath,F.op,F.notes] },
   "Transfer":         { desc:"move parts to another bath",   custom:"move",    fields:[F.bath,F.op,F.notes] },
-  "Parts Received":   { desc:"log serials received in your area (parked)", custom:"received", fields:[F.jc,F.component,F.op,F.notes] },
+  "Parts Received":   { desc:"add serials to the waiting area (not in a bath)", custom:"received", hidden:true, fields:[F.jc,F.component,F.op,F.notes] },
   "Chemistry Check":  { desc:"titration result",   fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
   "Top-Up":           { desc:"partial top-up — add acid and/or water", fields:[F.bath,F.hcl,F.water,F.op,F.notes] },
   "Bath Fill":        { desc:"complete fill — new charge",   fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
@@ -332,8 +332,11 @@ const TYPES = {
 };
 // Friendly UI labels for the operator-facing actions. The stored event `type`
 // stays "Load In" / "Extraction" (the formal ledger); only the display changes.
-const TYPE_LABEL = { "Load In":"Add parts", "Extraction":"Remove parts" };
+const TYPE_LABEL = { "Load In":"Add parts", "Extraction":"Remove parts", "Parts Received":"Waiting area" };
 const typeLabel = t => TYPE_LABEL[t] || t;
+// Sentinel chosen in the Add-parts bath drop-down to park serials in the waiting
+// area instead of a bath. Never stored: a save with it becomes a Parts Received.
+const WAITING_AREA = "__waiting__";
 const TYPE_PILL = {
   "Load In":"p-blue","Extraction":"p-grey","Immersion":"p-grey","Chemistry Check":"p-grey",
   "Bath Fill":"p-green","Bath Disposal":"p-red","Wax Failure":"p-red","Re-Masking":"p-amber",
@@ -679,6 +682,9 @@ function eventWarnings(d, events, config, nowDT){
       (d.serials || []).forEach(s => { if(!idx.has(s)) add("amber", `${s} is not currently in bath ${d.bath}`); });
     }
   }
+  if(d.type === "Parts Received"){
+    (d.serials || []).forEach(s => { const p = pieceOf(s); if(p && p.inBath) add("amber", `${s} is currently in bath ${p.currentBath} — it can't also be waiting`); });
+  }
   if(d.type === "Re-Masking" && d.serial){
     const p = pieceOf(d.serial);
     if(p && p.inBath) add("red", `${d.serial} is currently in bath ${p.currentBath} — extract it before re-masking`);
@@ -886,7 +892,7 @@ function eventDetail(e){
   if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
   if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); d.push(p.join(" · ") || "top-up"); }
   if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""}${e.toBath ? " → " + e.toBath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
-  if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} received: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
+  if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} → waiting area: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Wax Failure") d.push(e.waxFailure || "");
   if(e.type === "Engineering Review") d.push(e.status || "");
   if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
@@ -896,7 +902,7 @@ function eventDetail(e){
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
   if(e.type === "Transfer") return "moved " + (e.bath || "bath") + " → " + (e.toBath || "bath");
-  if(e.type === "Parts Received") return "received in area" + (e.jc ? " · " + e.jc : "");
+  if(e.type === "Parts Received") return "added to waiting area" + (e.jc ? " · " + e.jc : "");
   if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
   if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
   return eventDetail(e);
@@ -983,7 +989,9 @@ function renderDrawer(){
     }
     function refreshWarn(){
       warnBox.innerHTML = "";
-      eventWarnings(formData, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
+      // Adding to the waiting area is a "park", not a bath dip — check it as such.
+      const draft = (formType === "Load In" && formData.bath === WAITING_AREA) ? Object.assign({}, formData, { type:"Parts Received", bath:"" }) : formData;
+      eventWarnings(draft, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
         warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
       const inc = formIncomplete(); saveBtn.disabled = !!inc; hint.textContent = inc;
     }
@@ -1011,7 +1019,6 @@ function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assig
 function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "" }; openDrawer(); }
 function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", _rows:{} }; openDrawer(); }
 function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[] }; openDrawer(); }
-function startReceive(){ formType = "Parts Received"; editId = null; formData = { datetime:nowLocalDT(), type:"Parts Received", serials:[] }; openDrawer(); }
 // "Complete fill" = a fresh full charge; prefill the volumes from the last fill.
 function startCompleteFill(bath){
   const lf = (deriveBath(EVENTS, CONFIG, bath, nowLocalDT()).lastFill) || {};
@@ -1108,8 +1115,18 @@ function buildLoadFields(card, refreshWarn){
   const jcField = fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); });
   const compField = fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); });
   const jcInput = jcField.querySelector("input"), compInput = compField.querySelector("input");
+  // Destination: a bath, or the waiting area (parked, not in a bath). No empty
+  // option, so parts always land somewhere — the waiting area is the default.
+  if(!formData.bath) formData.bath = WAITING_AREA;
+  const bathField = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath / destination"));
+  const bsel = cel("select", {}, cel("option", { value:WAITING_AREA }, "Waiting area (not in a bath yet)"));
+  CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b)));
+  if(formData.bath && formData.bath !== WAITING_AREA && !CONFIG.baths.includes(formData.bath)) bsel.append(cel("option", { value:formData.bath }, formData.bath + " (unknown bath)"));
+  bsel.value = formData.bath;
+  bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshParked(); refreshWarn(); });
+  bathField.append(bsel);
   const two = cel("div", { class:"twocol" });
-  two.append(fieldNode("bath", "Bath", "baths", e => { formData.bath = e.target.value; refreshWarn(); }));
+  two.append(bathField);
   two.append(jcField, compField);
   two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
   card.append(two);
@@ -1129,15 +1146,16 @@ function buildLoadFields(card, refreshWarn){
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
 
-  // Parked parts — serials the tech logged on receiving. Pick from the drop-down
-  // to add one (or add all); typing new serials above still works as before.
+  // Waiting area — serials parked, not yet in a bath. Pick from the drop-down to
+  // add one (or add all). Hidden when the destination IS the waiting area.
   const parkedWrap = cel("div", {}); card.append(parkedWrap);
   function refreshParked(){
     parkedWrap.innerHTML = "";
+    if(formData.bath === WAITING_AREA) return;
     const parked = parkedParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
     if(!parked.length) return;
-    parkedWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Parked / received (" + parked.length + ") — select to add"));
-    const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add a parked part…"));
+    parkedWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Waiting area (" + parked.length + ") — select to add"));
+    const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add from waiting area…"));
     parked.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : ""))));
     sel.addEventListener("input", () => { if(sel.value){ chipBox.addOne(sel.value); sel.value = ""; } });
     const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => parked.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
@@ -1184,7 +1202,8 @@ function buildLoadFields(card, refreshWarn){
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
 }
 
-// Parts Received: park serials a tech got in their area, ready to add to a bath.
+// Waiting-area entry (Parts Received): serials parked, not yet in a bath. Reached
+// when editing an existing waiting-area entry; new ones come from the Add-parts form.
 function buildReceiveFields(card, refreshWarn){
   appendOpList(card);
   const two = cel("div", { class:"twocol" });
@@ -1193,12 +1212,12 @@ function buildReceiveFields(card, refreshWarn){
   card.append(two);
   formData.serials = formData.serials || [];
   const count = cel("span", { class:"muted", style:"font-weight:400" });
-  const lbl = cel("label", { class:"f", style:"display:flex;justify-content:space-between" }, [cel("span", {}, "Serials received"), count]);
+  const lbl = cel("label", { class:"f", style:"display:flex;justify-content:space-between" }, [cel("span", {}, "Serials in waiting area"), count]);
   const setCount = () => { const n = formData.serials.length; count.textContent = n ? (n + " part" + (n > 1 ? "s" : "")) : ""; };
   const wrap = cel("div", { class:"field" }, lbl);
   const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); refreshWarn(); });
   wrap.append(chipBox);
-  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type or paste the serials you received. They're parked here and offered in the drop-down when you add parts to a bath. Ranges like 7261-01..06 expand."));
+  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Serials parked in the waiting area, offered in the drop-down when you add parts to a bath. Ranges like 7261-01..06 expand."));
   card.append(wrap); setCount();
   card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
@@ -1346,7 +1365,13 @@ function buildExtractFields(card, refreshWarn){
 
 async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
-  if(rec.type === "Load In"){ if(!rec.bath){ alert("Select a bath."); return; } rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Load In"){
+    if(!rec.bath){ alert("Select a bath or the waiting area."); return; }
+    rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", "));
+    if(!rec.serials.length){ alert("Enter at least one serial."); return; }
+    // Waiting area = park the serials (not a bath dip): store as Parts Received.
+    if(rec.bath === WAITING_AREA){ rec.type = "Parts Received"; delete rec.bath; delete rec.remask; }
+  }
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
   if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
   if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0)){ alert("Enter an HCl or water amount."); return; } }
@@ -1587,18 +1612,18 @@ function vQuality(m){
 }
 
 /* --- Dashboard (Floor + Baths + KPIs in one) --- */
-// Parked parts: serials received in the tech's area, not yet in a bath. Logged
-// here as they arrive; offered in the Add-parts drop-down for any bath.
+// Waiting area: serials parked, not yet in a bath. Added via the Add-parts form
+// (choose "Waiting area" as the destination) and offered in its drop-down.
 function parkedPanel(){
   const parked = parkedParts(EVENTS, CONFIG, nowLocalDT());
   const card = cel("div", { class:"card", style:"margin-bottom:16px" });
   card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
-    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Parked parts — received, not yet in a bath (" + parked.length + ")"),
-    cel("button", { class:"btn sm", onclick:startReceive }, "＋ Receive parts")
+    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Waiting area — parts not in a bath yet (" + parked.length + ")"),
+    cel("button", { class:"btn sm", onclick:() => startLoad(WAITING_AREA) }, "＋ Add to waiting area")
   ]));
-  if(!parked.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing parked. Log serials as you receive them so they're ready to add to a bath.")); return card; }
+  if(!parked.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Add parts and choose “Waiting area” to park serials before they go into a bath.")); return card; }
   const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-  parked.slice(0, 80).forEach(p => chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + "received " + fmtDT(p.datetime) + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component }) }, "＋ " + p.serial)));
+  parked.slice(0, 80).forEach(p => chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + "waiting since " + fmtDT(p.datetime) + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component }) }, "＋ " + p.serial)));
   card.append(chips);
   return card;
 }
@@ -1634,8 +1659,7 @@ function vDash(m){
   m.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" }, [
     cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Add parts"),
     cel("button", { class:"btn", onclick:() => startExtraction("") }, "Remove parts"),
-    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check"),
-    cel("button", { class:"btn", onclick:startReceive }, "Receive parts")
+    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check")
   ]));
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
@@ -1650,9 +1674,9 @@ function vDash(m){
     const orphan = bathContents(EVENTS, now, "").filter(r => !CONFIG.baths.includes(r.bath));
     if(orphan.length){
       const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#e6b3b0" });
-      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to set its bath, or delete the load in Events.")]));
+      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
       const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-      orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
+      orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath or the waiting area", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
       oc.append(chips);
       m.append(oc);
     }
