@@ -292,14 +292,16 @@ test("deriveSuggestions: re-load an awaiting part into a suggested rescue bath",
   assert.deepEqual(reload.action.serials, ["A"]);
   assert.equal(reload.action.bath, "B2");        // healthy, and not the bath it just came from
 });
-test("deriveSuggestions: re-mask before re-load when the last dip had wax failure", () => {
+test("a wax-failed part is offered as a re-load (re-mask is handled in the load form, not a separate event)", () => {
   const events = [
     ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),
     load("2026-03-10T09:00", "B1", ["A"]), extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
   ];
   const sug = D.deriveSuggestions(events, CONFIG, "2026-03-10T12:00");
-  assert.ok(sug.some(s => s.action.type === "remask" && s.action.serial === "A"));
-  assert.ok(!sug.some(s => s.action.type === "reload"), "re-load is withheld until the part is re-masked");
+  const r = sug.find(s => s.action.type === "reload" && s.action.serials.includes("A"));
+  assert.ok(r, "the part is offered for re-load");
+  assert.match(r.detail, /re-mask/);
+  assert.ok(!sug.some(s => s.action.type === "remask"), "no standalone re-mask suggestion");
 });
 /* ===================== wax failure -> re-mask -> re-strip chain ===================== */
 test("a part is 'Needs re-mask' after a wax failure, until a re-masking resolves it", () => {
@@ -321,19 +323,21 @@ test("re-loading a part with an unresolved wax failure is flagged red", () => {
     load("2026-03-02T08:00", "B1", ["A"]),
     extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Partial mask loss" }])
   ];
-  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /unresolved wax failure/.test(x.msg)));
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /wax failure/.test(x.msg)));
 });
-test("suggestions withhold re-load until re-masking, then offer it", () => {
-  const waxed = [
-    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:10 }),
-    load("2026-03-10T09:00", "B1", ["A"]), extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip", waxFailure:"Complete mask loss" }])
+test("re-masking recorded inside a Load In resolves the wax failure", () => {
+  const failed = [
+    ev({ datetime:"2026-03-02T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:30", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Complete mask loss" }] }])
   ];
-  const s1 = D.deriveSuggestions(waxed, CONFIG, "2026-03-10T12:00");
-  assert.ok(s1.some(s => s.action.type === "remask" && s.action.serial === "A"));
-  assert.ok(!s1.some(s => s.action.type === "reload"), "no re-load while the mask is still failed");
-
-  const after = waxed.concat(ev({ datetime:"2026-03-10T11:30", type:"Re-Masking", serial:"A" }));
-  assert.ok(D.deriveSuggestions(after, CONFIG, "2026-03-10T12:00").some(s => s.action.type === "reload" && s.action.serials.includes("A")));
+  // loading A again with no re-mask is still flagged red
+  assert.ok(D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"] }, failed, CONFIG, NOW).some(x => x.level === "red" && /wax failure/.test(x.msg)));
+  // ticking the re-masked area in the load clears the warning...
+  assert.ok(!D.eventWarnings({ type:"Load In", bath:"B1", serials:["A"], remask:[{ serial:"A", areas:["Cooling holes"] }] }, failed, CONFIG, NOW).some(x => /wax failure/.test(x.msg)));
+  // ...and once committed, the part is no longer Needs re-mask
+  const resolved = failed.concat(ev({ datetime:"2026-03-02T11:00", type:"Load In", bath:"B1", serials:["A"], remask:[{ serial:"A", areas:["Cooling holes"] }] }));
+  assert.equal(D.unresolvedWaxAreas(resolved, "A").length, 0);
 });
 
 test("wax failure is tracked per masked area; a re-mask resolves only the areas it covers", () => {

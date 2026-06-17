@@ -309,8 +309,8 @@ const TYPES = {
   "HCl Top-Up":       { desc:"add acid",            fields:[F.bath,F.hcl,F.op,F.notes] },
   "Water Top-Up":     { desc:"add water",           fields:[F.bath,F.water,F.op,F.notes] },
   "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
-  "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
-  "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  fields:[F.jc,F.serial,F.op,F.notes] },
+  "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", hidden:true, fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
+  "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  hidden:true, fields:[F.jc,F.serial,F.op,F.notes] },
   "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
   "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
@@ -378,6 +378,16 @@ function waxAreasOf(obj){
   return [];
 }
 function remaskAreasOf(e){ return (Array.isArray(e.areas) && e.areas.length) ? e.areas : null; } // null = covers all areas
+// Re-masking is recorded as part of the re-dip (on the Load In event), or, for
+// legacy data, as a standalone Re-Masking event. Both count as resolving wax.
+function remaskActions(events, serial){
+  const out = [];
+  events.forEach(e => {
+    if(e.type === "Re-Masking" && e.serial === serial) out.push({ datetime:e.datetime, areas:remaskAreasOf(e) });
+    else if(e.type === "Load In" && Array.isArray(e.remask)){ const r = e.remask.find(x => x.serial === serial); if(r) out.push({ datetime:e.datetime, areas:(Array.isArray(r.areas) && r.areas.length) ? r.areas : null }); }
+  });
+  return out;
+}
 function waxSummary(obj){ return waxAreasOf(obj).map(x => x.area + (x.severity === "Complete mask loss" ? " (full)" : x.severity === "Partial mask loss" ? " (partial)" : "")).join(", "); }
 
 // Every per-area wax failure observed for a serial (discovered at extraction).
@@ -397,7 +407,7 @@ function unresolvedWaxAreas(events, serial){
   if(!fails.length) return [];
   const latest = new Map();
   fails.forEach(f => { const c = latest.get(f.area); if(!c || f.datetime > c.datetime) latest.set(f.area, f); });
-  const remasks = events.filter(e => e.type === "Re-Masking" && e.serial === serial).map(e => ({ datetime:e.datetime, areas:remaskAreasOf(e) }));
+  const remasks = remaskActions(events, serial);
   const out = [];
   latest.forEach((f, area) => { if(!remasks.some(r => r.datetime >= f.datetime && (r.areas == null || r.areas.includes(area)))) out.push(f); });
   return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
@@ -599,7 +609,12 @@ function eventWarnings(d, events, config, nowDT){
         if((p.cycles + 1) > config.maxCycles) add("red", `${s} would be cycle ${p.cycles + 1} (> max ${config.maxCycles}) — route to engineering`);
       }
       const uw = unresolvedWaxAreas(others, s);
-      if(uw.length) add("red", `${s} has an unresolved wax failure (${uw.map(x => x.area).join(", ")}) — re-mask it before re-loading`);
+      if(uw.length){
+        const rm = (d.remask || []).find(x => x.serial === s);
+        const covered = rm ? (Array.isArray(rm.areas) && rm.areas.length ? rm.areas : null) : [];
+        const remaining = covered == null ? [] : uw.filter(a => !covered.includes(a.area));
+        if(remaining.length) add("red", `${s} has a wax failure (${remaining.map(x => x.area).join(", ")}) — re-mask it before re-loading`);
+      }
       const last = lastSerialDT(s); if(last && d.datetime && d.datetime < last) add("amber", `${s}: this load is dated before its last recorded event (${fmtDT(last)})`);
     });
   }
@@ -676,18 +691,17 @@ function deriveSuggestions(events, config, nowDT){
     if(dd !== "" && dd >= 2) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
   });
 
-  const needRemask = [], groups = new Map();
+  const groups = new Map();
   pieces.forEach(p => {
-    if(p.status.s === "Needs re-mask"){ needRemask.push(p); return; }   // wax failure must be resolved first
-    if(p.status.s !== "Awaiting re-strip") return;
+    if(p.status.s !== "Awaiting re-strip" && p.status.s !== "Needs re-mask") return;
     const last = p.recs[p.recs.length - 1];
     const rb = rescue(last ? last.bath : "");
     const key = (p.jc || "") + "|" + rb;
-    const g = groups.get(key) || { jc:p.jc, component:p.component, bath:rb, serials:[] };
-    g.serials.push(p.serial); groups.set(key, g);
+    const g = groups.get(key) || { jc:p.jc, component:p.component, bath:rb, serials:[], remask:0 };
+    g.serials.push(p.serial); if(p.status.s === "Needs re-mask") g.remask++;
+    groups.set(key, g);
   });
-  groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:g.bath ? "→ bath " + g.bath : "no healthy bath available", action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  needRemask.forEach(p => out.push({ level:"amber", icon:"▦", title:`Re-mask ${p.serial}${p.waxFail ? " — " + p.waxFail.detail : ""}`, detail:(p.jc ? p.jc + " · " : "") + "blocks re-strip until resolved", action:{ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }));
+  groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:(g.bath ? "→ bath " + g.bath : "no healthy bath available") + (g.remask ? " · re-mask " + g.remask + " first" : ""), action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
   pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
@@ -711,7 +725,7 @@ function deriveIssues(events, config, nowDT){
   pieces.forEach(p => {
     if(p.status.s === "→ Engineering"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 1) out.push({ level:"amber", icon:"⚑", title:`${p.serial} awaiting engineering disposition (${d} d)`, detail:p.jc || "", action:{ type:"engineering", serial:p.serial, jc:p.jc } }); }
     else if(p.status.s === "Awaiting re-strip"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 3) out.push({ level:"amber", icon:"⏳", title:`${p.serial} awaiting re-strip for ${d} days`, detail:p.jc || "", action:{ type:"viewpiece", serial:p.serial } }); }
-    else if(p.status.s === "Needs re-mask"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 2) out.push({ level:"amber", icon:"▦", title:`${p.serial} needs re-masking (${p.waxFail ? p.waxFail.detail : "wax failure"}) for ${d} days`, detail:p.jc || "", action:{ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" } }); }
+    else if(p.status.s === "Needs re-mask"){ const last = p.events[p.events.length - 1]; const d = last ? daysBetween(last.datetime, nowDT) : ""; if(d !== "" && d >= 2) out.push({ level:"amber", icon:"▦", title:`${p.serial} needs re-masking (${p.waxFail ? p.waxFail.detail : "wax failure"}) for ${d} days`, detail:p.jc || "", action:{ type:"reload", serials:[p.serial], bath:suggestRescueBath(events, config, nowDT, p.lastBath), jc:p.jc, component:p.component } }); }
   });
   baths.filter(b => b.active).forEach(b => { const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime; const d = daysBetween(lastChemDT, nowDT); if(d !== "" && d >= 3) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${d} days`, detail:"", action:{ type:"chem", bath:b.bath } }); });
 
@@ -897,7 +911,7 @@ function renderDrawer(){
   ]));
   const body = cel("div", { class:"drawer-b" });
   const tabs = cel("div", { class:"typetabs" });
-  Object.keys(TYPES).forEach(t => tabs.append(cel("button", { class:"typetab" + (formType === t ? " on" : ""), onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+  Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab" + (formType === t ? " on" : ""), onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
   body.append(tabs);
   const foot = cel("div", { class:"drawer-f" });
   if(!formType){
@@ -944,7 +958,6 @@ function startExtraction(bath){ formType = "Extraction"; editId = null; formData
 function startAction(a){
   editId = null; const t = a.type;
   if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
-  else if(t === "remask") formData = { type:"Re-Masking", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", areas:Array.isArray(a.areas) ? a.areas.slice() : null, resolvesEventId:a.resolvesEventId || null, waxFailure:a.waxFailure || "" }, formType = "Re-Masking";
   else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
   else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
   else if(t === "topup-hcl") formData = { type:"HCl Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "HCl Top-Up";
@@ -992,9 +1005,9 @@ function areaSeverityControl(stateMap, onChange){
   return wrap;
 }
 // Multi-select area toggles (used when recording which areas were re-masked).
-function areaToggleControl(getSel, setSel, onChange){
+function areaToggleControl(getSel, setSel, onChange, areasList){
   const wrap = cel("div", { class:"seg wrap" });
-  (CONFIG.maskAreas || []).forEach(area => {
+  (areasList || CONFIG.maskAreas || []).forEach(area => {
     const b = cel("button", { type:"button", class:(getSel() || []).includes(area) ? "on" : "", onclick:() => {
       let s = (getSel() || []).slice(); s.includes(area) ? s = s.filter(x => x !== area) : s.push(area); setSel(s); b.className = s.includes(area) ? "on" : ""; onChange();
     } }, area);
@@ -1052,9 +1065,29 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  wrap.append(chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshWarn(); }));
+  wrap.append(chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshRemask(); refreshWarn(); }));
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type or paste a serial and press Enter. Ranges like 7261-01..06 expand. Known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
+
+  // Re-masking happens here, as part of the re-dip: any entered part that came
+  // out with a wax failure must have its failed areas re-masked before loading.
+  const remaskWrap = cel("div", {}); card.append(remaskWrap);
+  function refreshRemask(){
+    remaskWrap.innerHTML = "";
+    const needing = (formData.serials || []).map(s => ({ serial:s, areas:unresolvedWaxAreas(EVENTS, s).map(a => a.area) })).filter(x => x.areas.length);
+    formData.remask = (formData.remask || []).filter(r => needing.some(n => n.serial === r.serial));
+    if(!needing.length) return;
+    remaskWrap.append(cel("div", { class:"warn-line", style:"background:#ece3f5;color:#6b3fa0;margin-top:4px" }, [cel("span", {}, "▦"), cel("span", {}, "Wax failure on these parts — tick the areas you re-masked before re-dipping:")]));
+    needing.forEach(x => {
+      let entry = formData.remask.find(r => r.serial === x.serial);
+      if(!entry){ entry = { serial:x.serial, areas:x.areas.slice() }; formData.remask.push(entry); } // default: re-masked all failed areas
+      remaskWrap.append(cel("div", { class:"field", style:"margin-bottom:8px" }, [
+        cel("label", { class:"f" }, x.serial + " — re-masked"),
+        areaToggleControl(() => entry.areas, s => { entry.areas = s; }, refreshWarn, x.areas)
+      ]));
+    });
+  }
+  refreshRemask();
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
 }
 
@@ -1281,8 +1314,7 @@ function vPieces(m){
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
     const act = cel("div", { class:"btnrow" });
-    if(r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"remask", serial:r.serial, jc:r.jc, areas:r.waxFail ? r.waxFail.areas : null, resolvesEventId:r.waxFail && r.waxFail.event ? r.waxFail.event.id : null, waxFailure:r.waxFail ? r.waxFail.detail : "" }) }, "Re-mask"));
-    if(r.status.s === "Awaiting re-strip") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, "Re-load"));
+    if(r.status.s === "Awaiting re-strip" || r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, r.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
     act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
     tr.append(cel("td", {}, act));
@@ -1318,10 +1350,8 @@ function showSerial(serial){
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
-  if(p.status.s === "Needs re-mask"){
-    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"remask", serial:p.serial, jc:p.jc, areas:p.waxFail ? p.waxFail.areas : null, resolvesEventId:p.waxFail && p.waxFail.event ? p.waxFail.event.id : null, waxFailure:p.waxFail ? p.waxFail.detail : "" }); } }, "Re-mask"));
-  } else if(p.status.s === "Awaiting re-strip"){
-    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, "Re-load"));
+  if(p.status.s === "Needs re-mask" || p.status.s === "Awaiting re-strip"){
+    foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, p.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
   } else if(p.status.s === "→ Engineering"){
     foot.push(cel("button", { class:"btn danger", onclick:() => { closeModal(); startAction({ type:"engineering", serial:p.serial, jc:p.jc }); } }, "Engineering review"));
   }
@@ -1619,11 +1649,8 @@ async function loadExample(){
     { datetime:"2026-03-22T15:30", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-01", result:"Cleared", waxFailure:"None" }, { serial:"7261-04", result:"Cleared", waxFailure:"None" }] },
     { datetime:"2026-03-22T18:00", type:"Extraction", bath:"102-103", operator:"Diang", items:[{ serial:"7261-02", result:"Cleared", waxFailure:"None" }, { serial:"7261-03", result:"Re-strip", waxFailure:"None" }] },
     { datetime:"2026-03-22T20:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Complete mask loss" }] }, { serial:"7261-06", result:"Re-strip", wax:[{ area:"Cooling holes", severity:"Complete mask loss" }] }] },
-    // 7261-05/06 lost the cooling-holes mask -> must be re-masked there before they can be re-stripped
-    { datetime:"2026-03-22T20:15", type:"Re-Masking", jc:"7261", serial:"7261-05", areas:["Cooling holes"], operator:"Bernabe", notes:"re-waxed cooling holes" },
-    { datetime:"2026-03-22T20:18", type:"Re-Masking", jc:"7261", serial:"7261-06", areas:["Cooling holes"], operator:"Bernabe" },
-    // cycle 2 for the three re-strips
-    { datetime:"2026-03-22T20:30", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-03","7261-05","7261-06"], operator:"JM" },
+    // cycle 2 — 7261-05/06 are re-masked (cooling holes) as part of this re-dip
+    { datetime:"2026-03-22T20:30", type:"Load In", bath:"102-103", jc:"7261", component:C, serials:["7261-03","7261-05","7261-06"], operator:"JM", remask:[{ serial:"7261-05", areas:["Cooling holes"] }, { serial:"7261-06", areas:["Cooling holes"] }] },
     { datetime:"2026-03-23T02:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-03", result:"Cleared", waxFailure:"None" }] },
     { datetime:"2026-03-23T04:00", type:"Extraction", bath:"102-103", operator:"JM", items:[{ serial:"7261-05", result:"Re-strip", waxFailure:"None" }, { serial:"7261-06", result:"Re-strip", waxFailure:"None" }] },
     { datetime:"2026-03-24T07:00", type:"Bath Disposal", bath:"102-103", disposalReason:"Iron limit reached", operator:"Maint" },

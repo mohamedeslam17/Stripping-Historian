@@ -53,15 +53,17 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 
 | Event | Purpose |
 |---|---|
-| **Load In** | *N* parts INTO a bath (time in); serials as a list / range |
-| **Extraction** | Pull some parts OUT (time out, per‑part result + wax) |
+| **Load In** | *N* parts INTO a bath (time in); serials as a list / range. Also where a part's failed mask areas are **re‑masked** before the re‑dip |
+| **Extraction** | Pull some parts OUT (time out, per‑part result + **per‑area wax failure**) |
 | Bath Fill | New charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
 | HCl / Water Top‑Up | Maintain the charge between checks |
-| Wax Failure | Masking defect on a part |
-| Re‑Masking | Part re‑waxed before another dip |
 | Engineering Review | Disposition a part (Accepted / Scrap / Return / Hold…) |
 | Bath Disposal | Bath taken out of service (with reason) |
+
+> Wax failure and re‑masking are **not** standalone events — you never know a mask
+> failed until you pull the part, so wax failure is captured **on the extraction**,
+> and re‑masking is captured **on the next Load In** (the re‑dip).
 
 **Derived views**
 
@@ -91,14 +93,15 @@ already true:
   parts to engineering, dispose a spent bath, top up low acid, extract parts that
   have been in too long, log an overdue titration. Pieces and bath/piece dialogs
   carry the same one‑click actions.
-- **Wax failure → re‑mask → re‑strip is one linked chain, per masked area.** A wax
+- **Wax failure and re‑masking live in the dip, not as separate events.** A wax
   failure is only discovered when a part is pulled, so it's recorded **on the
-  extraction** — and **per masked area** (e.g. *cooling holes* vs the *part body*,
-  configurable), since those fail independently. Any failed area puts the part in a
-  **Needs re‑mask** state and **blocks re‑loading** (red warning) until resolved. A
-  re‑masking resolves **only the areas it covers**, so a part with two failed areas
-  stays blocked until both are re‑waxed. The suggested re‑mask prefills exactly the
-  unresolved areas, and the link shows in the timeline and Quality log.
+  extraction**, **per masked area** (e.g. *cooling holes* vs the *part body*,
+  configurable — those fail independently). Re‑masking is recorded **as part of the
+  next Load In**: when you re‑load a part that came out with a wax failure, the form
+  lists its failed areas and you tick the ones you re‑waxed. Any unticked area keeps
+  the part in a **Needs re‑mask** state and **blocks the re‑load** (red warning); a
+  re‑mask clears **only the areas it covers**, so a part with two failed areas stays
+  blocked until both are done. The whole chain shows in the timeline and Quality log.
 - **Relationship‑aware warnings** — logging something illogical is flagged before
   you save: disposing a bath that **still has parts in it**, re‑masking a part
   that's **currently submerged**, re‑loading a part that already **cleared** or is
