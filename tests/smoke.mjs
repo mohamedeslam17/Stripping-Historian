@@ -99,7 +99,7 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   await tick();
   ok(handle.eventsLen() > 25, "example data loaded (" + handle.eventsLen() + " events)");
 
-  for(const tab of ["Floor", "Dashboard", "Pieces", "Baths", "Events", "Quality", "Settings"]){
+  for(const tab of ["Dashboard", "Pieces", "Events", "Quality", "Settings"]){
     safe("renders tab: " + tab, () => { handle.run(tab); if(handle.mainKids() < 1) throw new Error("empty main"); });
   }
 

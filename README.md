@@ -65,24 +65,21 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 > failed until you pull the part, so wax failure is captured **on the extraction**,
 > and re‑masking is captured **on the next Load In** (the re‑dip).
 
-**Derived views**
+**Derived views** (just four screens — Dashboard, Pieces, Events, Quality, plus
+Settings):
 
-- **Floor** — the landing screen: a live card per tank (what's in it + elapsed
-  time) with one‑click Load / Extract.
+- **Dashboard** — the landing screen, with the floor + baths + KPIs in one place:
+  a **visual of every tank with the parts currently inside it** (over‑hours parts
+  in red, out‑of‑band tanks in red), each carrying its chemistry summary, status
+  and one‑click **Load in / Extract / Chem**; the headline KPIs; the **next‑action
+  suggestions**; and first‑pass yield by job card. Click a tank for full chemistry
+  charts, contents, and dispose/top‑up actions.
 - **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
-  and a status (`In bath`, `Awaiting re‑strip`, `Cleared`, `→ Engineering`,
-  `Scrap`, …), filterable. Click *history* for a full timeline and a printable
-  **strip traveler** for the quality record.
-- **Baths** — an **On the floor now** panel listing exactly what is in each tank
-  (with elapsed time), plus per‑bath state for the **current charge** (resets after
-  a refill): age, latest chemistry, piece‑hour load, parts processed, and
-  **out‑of‑band flags**. Trend charts for Fe / HCl / temp with limit lines and
-  control bands.
+  and a status (`In bath`, `Awaiting re‑strip`, `Needs re‑mask`, `Cleared`,
+  `→ Engineering`, `Scrap`, …), filterable. Click *history* for a full timeline and
+  a printable **strip traveler** for the quality record.
 - **Quality** — an instant defect database (wax failures, re‑masks, engineering
   reviews, re‑strips), filterable by kind.
-- **Dashboard** — a **visual of every tank with the parts currently inside it**,
-  plus a few headline KPIs (parts in baths, awaiting re‑strip, in engineering,
-  wax failures, first‑pass yield) and first‑pass yield by job card.
 - **Stop conditions** — a part over the cycle/hour limit is automatically held for
   engineering, with the breached limit stated as the reason.
 
@@ -113,6 +110,10 @@ already true:
   more — without blocking the entry.
 - **Autofill** — typing/scanning a known serial fills in its J/C and component;
   the extraction list pre‑ticks parts already over the max immersion time.
+- **Idle parts come back to you** — parts that came out of a tank and aren't done
+  (awaiting another strip, or blocked needing a re‑mask) are tracked as *idle*. When
+  you open a **Load In**, they're listed as **"Waiting to go back in" — tap to add**
+  (or *Add all*), so you never lose track of a part sitting on the bench.
 - **Capacity** — tanks have a configurable capacity; loads that would overfill are
   flagged, the fill level shows on each tank, and a full bath is never offered as a
   rescue.

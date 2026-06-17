@@ -125,6 +125,9 @@
   .chip i{cursor:pointer;font-style:normal;width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center}
   .chip i:hover{background:rgba(0,0,0,.10)}
   .chipbox input{border:none;outline:none;box-shadow:none!important;flex:1;min-width:120px;padding:4px;background:transparent}
+  .idlechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-2);border:1px solid var(--accent);border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .idlechip:hover{background:#d6e8ef}
+  .idlechip-tag{background:#ece3f5;color:#6b3fa0;border-radius:5px;padding:0 5px;font-size:10px}
 
   .contents{border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;margin-top:4px}
   .crow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line-2)}
@@ -708,6 +711,14 @@ function deriveSuggestions(events, config, nowDT){
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
 }
 
+// Idle parts: came out of a tank and are not finished — waiting to go back in
+// (awaiting another strip, or blocked needing a re-mask). Newest-out first.
+function idleParts(events, config, nowDT){
+  return derivePieces(events, config, nowDT)
+    .filter(p => p.status.s === "Awaiting re-strip" || p.status.s === "Needs re-mask")
+    .sort((a, b) => String((b.recs[b.recs.length - 1] || {}).outDT || "").localeCompare(String((a.recs[a.recs.length - 1] || {}).outDT || "")));
+}
+
 /* ============================= DOMAIN END =============================== */
 
 /* ----------------------------- storage -------------------------------- */
@@ -828,8 +839,8 @@ function eventDetailForSerial(e, serial){
 }
 
 /* ------------------------------ state --------------------------------- */
-const TAB_META = [["Floor","◧"], ["Dashboard","▦"], ["Pieces","◆"], ["Baths","☷"], ["Events","≣"], ["Quality","⚑"], ["Settings","⚙"]];
-let activeTab = "Floor";
+const TAB_META = [["Dashboard","▦"], ["Pieces","◆"], ["Events","≣"], ["Quality","⚑"], ["Settings","⚙"]];
+let activeTab = "Dashboard";
 let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null, drawerOpen = false;
@@ -846,8 +857,8 @@ function renderNav(){
   TAB_META.forEach(([t, ic]) => {
     const kids = [cel("span", { class:"ic" }, ic), cel("span", {}, t)];
     if(t === "Pieces" && pieces.length) kids.push(cel("span", { class:"badge" }, String(pieces.length)));
-    if(t === "Baths" && baths.length) kids.push(cel("span", { class:"badge" }, String(baths.length)));
-    if(t === "Baths" && !baths.length && inBath) kids.push(cel("span", { class:"badge info" }, String(inBath)));
+    if(t === "Dashboard" && baths.length) kids.push(cel("span", { class:"badge" }, String(baths.length)));
+    if(t === "Dashboard" && !baths.length && inBath) kids.push(cel("span", { class:"badge info" }, String(inBath)));
     nav.append(cel("button", { class:"navlink" + (t === activeTab ? " on" : ""), onclick:() => { activeTab = t; render(); } }, kids));
   });
 }
@@ -858,17 +869,17 @@ function attentionBar(){
   if(baths.length) bar.append(cel("span", {}, [cel("b", {}, String(baths.length)), " bath" + (baths.length > 1 ? "s" : "") + " out of band"]));
   if(pieces.length) bar.append(cel("span", {}, [cel("b", {}, String(pieces.length)), " piece" + (pieces.length > 1 ? "s" : "") + " awaiting disposition"]));
   bar.append(cel("span", { class:"sp" }));
-  if(baths.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Baths"; render(); } }, "View baths"));
+  if(baths.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Dashboard"; render(); } }, "View baths"));
   if(pieces.length) bar.append(cel("button", { class:"btn sm", onclick:() => { activeTab = "Pieces"; pieceFilter = "→ Engineering"; render(); } }, "View pieces"));
   return bar;
 }
-const VIEWS = { Floor:vFloor, Dashboard:vDash, Pieces:vPieces, Baths:vBaths, Events:vEventLog, Quality:vQuality, Settings:vSettings };
+const VIEWS = { Dashboard:vDash, Pieces:vPieces, Events:vEventLog, Quality:vQuality, Settings:vSettings };
 function render(){
   renderNav();
   $("#pageTitle").textContent = activeTab;
   const m = $("#main"); m.innerHTML = "";
   const ab = attentionBar(); if(ab) m.append(ab);
-  (VIEWS[activeTab] || vFloor)(m);
+  (VIEWS[activeTab] || vDash)(m);
   renderDrawer();
 }
 
@@ -1026,9 +1037,27 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  wrap.append(chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshRemask(); refreshWarn(); }));
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshIdle(); refreshRemask(); refreshWarn(); });
+  wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
+
+  // Parts that came out and are waiting to go back in — tap to add them.
+  const idleWrap = cel("div", {}); card.append(idleWrap);
+  function refreshIdle(){
+    idleWrap.innerHTML = "";
+    const idle = idleParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
+    if(!idle.length) return;
+    idleWrap.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:8px 0 5px" }, [
+      cel("label", { class:"f", style:"margin:0;flex:1" }, "Waiting to go back in (" + idle.length + ") — tap to add"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => idle.forEach(p => chipBox.addOne(p.serial)) }, "Add all")
+    ]));
+    const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+    idle.slice(0, 40).forEach(p => chips.append(cel("button", { type:"button", class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.status.s + (p.lastBath ? " · was in " + p.lastBath : ""), onclick:() => chipBox.addOne(p.serial) },
+      [cel("span", {}, "＋ " + p.serial), p.status.s === "Needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask") : null])));
+    idleWrap.append(chips);
+  }
+  refreshIdle();
 
   // Re-masking happens here, as part of the re-dip: any entered part that came
   // out with a wax failure must have its failed areas re-masked before loading.
@@ -1072,6 +1101,7 @@ function chipInput(initial, onChange){
   input.addEventListener("blur", () => { if(input.value.trim()){ addTokens(input.value); input.value = ""; } box.classList.remove("focus"); });
   input.addEventListener("focus", () => box.classList.add("focus"));
   box.addEventListener("click", () => input.focus());
+  box.addOne = s => addTokens(s);   // programmatic add (e.g. from the "waiting to go back in" suggestions)
   paint();
   return box;
 }
@@ -1173,52 +1203,6 @@ function suggestionsPanel(){
   if(sugs.length > 8) card.append(cel("div", { class:"muted", style:"font-size:12px;padding-top:8px" }, "+" + (sugs.length - 8) + " more"));
   return card;
 }
-function vFloor(m){
-  const now = nowLocalDT();
-  const baths = deriveBaths(EVENTS, CONFIG, now);
-  const k = deriveKpis(EVENTS, CONFIG, now);
-  const strip = cel("div", { class:"kpis" });
-  [["Parts in baths", k.inBath, ""], ["Active baths", k.activeBaths, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng ? "warn" : ""], ["Baths out of band", k.bathsOver, k.bathsOver ? "warn" : ""]]
-    .forEach(([l, v, c]) => strip.append(cel("div", { class:"kpi " + c }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
-  m.append(strip);
-  if(EVENTS.length) m.append(suggestionsPanel());
-
-  m.append(cel("div", { style:"display:flex;align-items:center;gap:10px;margin:2px 0 10px" }, [
-    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Tanks"),
-    cel("button", { class:"btn sm", onclick:() => startExtraction("") }, "Extract"),
-    cel("button", { class:"btn sm primary", onclick:() => startLoad("") }, "＋ Load in")
-  ]));
-  if(!EVENTS.length){ m.append(emptyState()); return; }
-  const grid = cel("div", { class:"bgrid" });
-  baths.forEach(s => {
-    const dotCls = !s.active ? "x" : (s.flags.length ? "r" : "g");
-    const c = cel("div", { class:"card bathcard", onclick:() => showBath(s.bath) });
-    c.append(cel("h3", {}, [cel("span", { class:"dot " + dotCls }), s.bath, cel("span", { style:"flex:1" }),
-      s.active ? (s.flags.length ? pill("out of band", "p-red") : pill("in band", "p-green")) : pill(s.disposal ? "disposed" : "empty", "p-grey")]));
-    c.append(cel("div", { class:"muted", style:"font-size:12px;margin:3px 0 8px" },
-      s.lastChem ? ("Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
-    if(s.active && s.capacity) c.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
-      cel("div", { class:"bar", style:"flex:1" }, cel("i", { style:"width:" + Math.min(100, Math.round(s.contents.length / s.capacity * 100)) + "%;background:" + (s.contents.length >= s.capacity ? "var(--red)" : "var(--accent)") })),
-      cel("span", { class:"muted", style:"font-size:11.5px;white-space:nowrap" }, s.contents.length + " / " + s.capacity)
-    ]));
-    if(s.contents.length){
-      const list = cel("div", {});
-      s.contents.slice(0, 7).forEach(r => list.append(cel("div", { class:"partline" }, [
-        cel("span", { class:"s" }, r.serial),
-        cel("span", { class:"t" }, r.elapsedH >= CONFIG.maxHours ? pill(round(r.elapsedH) + " h", "p-red") : (round(r.elapsedH) + " h"))
-      ])));
-      if(s.contents.length > 7) list.append(cel("div", { class:"muted", style:"font-size:12px;padding-top:5px" }, "+" + (s.contents.length - 7) + " more"));
-      c.append(list);
-    } else c.append(cel("div", { class:"faint", style:"font-size:12.5px;padding:10px 0" }, "Empty — no parts in this tank."));
-    const acts = cel("div", { class:"btnrow", style:"margin-top:12px", onclick:e => e.stopPropagation() });
-    acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
-    if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Extract"));
-    c.append(acts);
-    grid.append(c);
-  });
-  m.append(grid);
-}
-
 /* --- Event log --- */
 function vEventLog(m){
   m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
@@ -1350,40 +1334,7 @@ function printTraveler(p){
   window.print();
 }
 
-/* --- Baths --- */
-function vBaths(m){
-  m.append(cel("div", { style:"display:flex;align-items:center;gap:10px;margin-bottom:14px" }, [
-    cel("h2", { class:"sec", style:"margin:0;flex:1" }, "Baths — chemistry & current charge"),
-    cel("button", { class:"btn sm primary", onclick:() => startNew("Chemistry Check") }, "＋ Chemistry check")
-  ]));
-  const now = nowLocalDT();
-  const row = cel("div", { class:"bgrid" });
-  deriveBaths(EVENTS, CONFIG, now).forEach(s => {
-    const c = cel("div", { class:"bathcard card", onclick:() => showBath(s.bath) });
-    c.append(cel("h3", {}, [s.bath, s.active ? pill("active", "p-green") : (s.disposal ? pill("disposed", "p-grey") : pill("empty", "p-grey")), s.contents.length ? pill(s.contents.length + " in bath", "p-blue") : null]));
-    c.append(cel("div", { class:"muted", style:"font-size:12px;margin-bottom:8px" },
-      s.disposal ? ("Disposed " + fmtDate(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
-    const kv = (k, v) => c.append(cel("div", { class:"kv" }, [cel("span", {}, k), cel("span", {}, v)]));
-    kv("Age (days)", s.age === "" ? "—" : String(s.age));
-    if(s.lastChem) kv("Latest chem", "HCl " + fmtNum(s.lastChem.hclPct) + "% · Fe " + fmtNum(s.lastChem.fePpm) + " · " + fmtNum(s.lastChem.temp) + "°C");
-    kv("Load (piece-h)", String(s.loadH));
-    kv("Parts processed", String(s.parts));
-    if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:10px" }, "⚠ " + s.flags.join(" · ")));
-    else if(s.lastChem) c.append(cel("div", { class:"flagok", style:"margin-top:10px;font-size:12px" }, "✓ in band"));
-    const acts = cel("div", { style:"margin-top:10px;display:flex;gap:6px", onclick:e => e.stopPropagation() });
-    acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
-    if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startExtraction(s.bath) }, "Extract"));
-    c.append(acts);
-    if(s.chem.length > 1){
-      const sp = cel("div", { style:"margin-top:10px" });
-      sp.append(cel("div", { class:"muted", style:"font-size:11px;margin-bottom:2px" }, "Iron ppm trend (tap card for full chemistry)"));
-      sp.append(trendChart(s.chem.map(e => ({ y:+e.fePpm || 0 })), { mini:true, h:40, limit:CONFIG.feMax }));
-      c.append(sp);
-    }
-    row.append(c);
-  });
-  m.append(row);
-}
+/* --- Bath detail (modal) --- */
 function showBath(bath){
   const s = deriveBath(EVENTS, CONFIG, bath, nowLocalDT());
   const body = cel("div", {});
@@ -1452,43 +1403,51 @@ function vQuality(m){
   t.append(tb); wrap.append(t); m.append(wrap);
 }
 
-/* --- Dashboard --- */
-// A simple visual of each tank with the parts currently inside it.
-function bathVizGrid(){
-  const wrap = cel("div", { class:"tankgrid" });
-  deriveBaths(EVENTS, CONFIG, nowLocalDT()).forEach(s => {
-    const card = cel("div", { class:"tankcard", onclick:() => showBath(s.bath) });
-    const dotCls = !s.active ? "x" : (s.flags.length ? "r" : "g");
-    card.append(cel("div", { class:"tank-h" }, [
-      cel("span", { class:"dot " + dotCls }), cel("b", {}, s.bath), cel("span", { style:"flex:1" }),
-      cel("span", { class:"muted", style:"font-size:12px" }, s.active ? (s.contents.length + (s.capacity ? " / " + s.capacity : "") + " in") : (s.disposal ? "disposed" : "empty"))
-    ]));
-    const tank = cel("div", { class:"tank" + (!s.active ? " off" : (s.flags.length ? " spent" : "")) });
-    if(s.contents.length){
-      s.contents.slice(0, 18).forEach(r => tank.append(cel("span", { class:"tank-part" + (r.elapsedH >= CONFIG.maxHours ? " hot" : ""), title:r.serial + " · " + round(r.elapsedH) + " h" }, r.serial)));
-      if(s.contents.length > 18) tank.append(cel("span", { class:"tank-part" }, "+" + (s.contents.length - 18)));
-    } else tank.append(cel("span", { class:"tank-empty" }, s.disposal ? "disposed" : "empty"));
-    card.append(tank);
-    wrap.append(card);
-  });
-  return wrap;
+/* --- Dashboard (Floor + Baths + KPIs in one) --- */
+// One tank: the parts inside (visual), its chemistry summary, status and actions.
+function tankCard(s){
+  const c = cel("div", { class:"tankcard", onclick:() => showBath(s.bath) });
+  const dotCls = !s.active ? "x" : (s.flags.length ? "r" : "g");
+  c.append(cel("div", { class:"tank-h" }, [
+    cel("span", { class:"dot " + dotCls }), cel("b", {}, s.bath), cel("span", { style:"flex:1" }),
+    s.active ? (s.flags.length ? pill("out of band", "p-red") : pill("in band", "p-green")) : pill(s.disposal ? "disposed" : "empty", "p-grey")
+  ]));
+  c.append(cel("div", { class:"muted", style:"font-size:12px;margin-bottom:8px" },
+    s.lastChem ? ("Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d") + (s.capacity ? "  ·  " + s.contents.length + "/" + s.capacity + " in" : "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
+  const tank = cel("div", { class:"tank" + (!s.active ? " off" : (s.flags.length ? " spent" : "")) });
+  if(s.contents.length){
+    s.contents.slice(0, 16).forEach(r => tank.append(cel("span", { class:"tank-part" + (r.elapsedH >= CONFIG.maxHours ? " hot" : ""), title:r.serial + " · " + round(r.elapsedH) + " h" }, r.serial)));
+    if(s.contents.length > 16) tank.append(cel("span", { class:"tank-part" }, "+" + (s.contents.length - 16)));
+  } else tank.append(cel("span", { class:"tank-empty" }, s.disposal ? "disposed" : "empty"));
+  c.append(tank);
+  if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
+  const acts = cel("div", { class:"btnrow", style:"margin-top:10px", onclick:e => e.stopPropagation() });
+  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
+  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Extract"));
+  acts.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"chem", bath:s.bath }) }, "Chem"));
+  c.append(acts);
+  return c;
 }
 function vDash(m){
-  m.append(cel("h2", { class:"sec" }, "Dashboard"));
-  m.append(cel("h3", { class:"sub", style:"margin-top:0" }, "Baths — what's inside right now"));
-  m.append(bathVizGrid());
-  const k = deriveKpis(EVENTS, CONFIG, nowLocalDT());
-  const tiles = [
-    ["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""],
-    ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""],
-    ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")],
-    ["Cleared", k.cleared, ""]
-  ];
-  const kp = cel("div", { class:"kpis", style:"margin-top:16px" });
-  tiles.forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
+  const now = nowLocalDT();
+  m.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" }, [
+    cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Load in"),
+    cel("button", { class:"btn", onclick:() => startExtraction("") }, "Extract"),
+    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check")
+  ]));
+  const k = deriveKpis(EVENTS, CONFIG, now);
+  const kp = cel("div", { class:"kpis" });
+  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]
+    .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
+  if(EVENTS.length) m.append(suggestionsPanel());
+  m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
+  if(!EVENTS.length){ m.append(emptyState()); return; }
+  const grid = cel("div", { class:"tankgrid" });
+  deriveBaths(EVENTS, CONFIG, now).forEach(s => grid.append(tankCard(s)));
+  m.append(grid);
 
-  const jr = deriveJobCards(EVENTS, CONFIG, nowLocalDT());
+  const jr = deriveJobCards(EVENTS, CONFIG, now);
   if(jr.length){
     m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
     const bars = cel("div", { class:"card", style:"max-width:560px" });
@@ -1497,17 +1456,7 @@ function vDash(m){
       cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
     ])));
     m.append(bars);
-
-    m.append(cel("h3", { class:"sub" }, "By job card"));
-    const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-    ["J/C", "Component", "Pieces", "Cleared", "First-pass", "In bath", "→ Eng", "Re-strips", "FPY"].forEach((c, i) => hr.append(cel("th", i >= 2 ? { class:"num" } : {}, c)));
-    t.append(cel("thead", {}, hr));
-    const tb = cel("tbody");
-    jr.forEach(r => { const tr = cel("tr"); tr.append(tcell(r.jc)); tr.append(tcell(r.component));
-      [r.pieces, r.cleared, r.fp, r.inBath, r.eng, r.reStrips, r.fpy + "%"].forEach(v => tr.append(cel("td", { class:"num" }, String(v)))); tb.append(tr); });
-    t.append(tb); wrap.append(t); m.append(wrap);
   }
-
 }
 
 /* --- Settings --- */

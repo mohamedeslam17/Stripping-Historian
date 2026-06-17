@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -415,4 +415,19 @@ test("a part over the cycle/hour limit is held for engineering with a stated rea
   const p = D.derivePieces(events, CONFIG, NOW)[0];
   assert.equal(p.status.s, "→ Engineering");
   assert.match(p.status.reason, /3 cycles/);
+});
+
+/* ===================== idle parts (waiting to go back in) ===================== */
+test("idleParts lists parts that came out and are not finished (awaiting / needs re-mask)", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
+    extract("2026-03-02T10:00", "B1", [
+      { serial:"A", result:"Cleared" },                          // done -> not idle
+      { serial:"B", result:"Re-strip" },                         // awaiting re-strip -> idle
+      { serial:"C", result:"Re-strip", wax:["Cooling holes"] }   // needs re-mask -> idle
+    ])
+    // D never extracted -> still in bath -> not idle
+  ];
+  assert.deepEqual(D.idleParts(events, CONFIG, "2026-03-02T12:00").map(p => p.serial).sort(), ["B", "C"]);
 });
