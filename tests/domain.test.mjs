@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -430,4 +430,43 @@ test("idleParts lists parts that came out and are not finished (awaiting / needs
     // D never extracted -> still in bath -> not idle
   ];
   assert.deepEqual(D.idleParts(events, CONFIG, "2026-03-02T12:00").map(p => p.serial).sort(), ["B", "C"]);
+});
+
+/* ===================== parked parts (received in the tech's area) ===================== */
+test("parkedParts lists received serials until they are loaded into a bath", () => {
+  const base = [ev({ datetime:"2026-03-20T08:00", type:"Parts Received", serials:["P1", "P2", "P3"], jc:"J9", component:"GT" })];
+  assert.deepEqual(D.parkedParts(base, CONFIG, NOW).map(p => p.serial).sort(), ["P1", "P2", "P3"]);
+  assert.equal(D.parkedParts(base, CONFIG, NOW).find(p => p.serial === "P1").jc, "J9");   // J/C carried from the received event
+  const afterLoad = base.concat(load("2026-03-21T08:00", "B1", ["P1"]));
+  assert.deepEqual(D.parkedParts(afterLoad, CONFIG, NOW).map(p => p.serial).sort(), ["P2", "P3"]);   // P1 drops off once loaded
+});
+
+/* ===================== move parts to another bath (Transfer) ===================== */
+test("a Transfer moves parts to another bath, continuing the same cycle (not a new dip)", () => {
+  const events = [
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B2" }),
+    load("2026-03-22T08:00", "B1", ["A", "B"], { jc:"J" }),
+    ev({ datetime:"2026-03-22T10:00", type:"Transfer", bath:"B1", toBath:"B2", serials:["A"] })
+  ];
+  assert.deepEqual(D.bathContents(events, "2026-03-22T12:00", "B2").map(r => r.serial), ["A"]); // A moved into B2
+  assert.deepEqual(D.bathContents(events, "2026-03-22T12:00", "B1").map(r => r.serial), ["B"]); // B stays in B1
+  const pa = D.derivePieces(events, CONFIG, "2026-03-22T12:00").find(p => p.serial === "A");
+  assert.equal(pa.status.s, "In bath");
+  assert.equal(pa.currentBath, "B2");
+  assert.equal(pa.cycles, 1);                 // the move did NOT add a strip cycle
+  const cleared = events.concat(extract("2026-03-22T14:00", "B2", [{ serial:"A", result:"Cleared" }]));
+  const pc = D.derivePieces(cleared, CONFIG, "2026-03-22T16:00").find(p => p.serial === "A");
+  assert.equal(pc.status.s, "Cleared");
+  assert.equal(pc.cycles, 1);
+  assert.equal(pc.firstPass, true);           // moved then cleared, never re-stripped
+});
+test("eventWarnings: moving to the same bath, or a part not in the source, is flagged", () => {
+  const events = [
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B2" }),
+    load("2026-03-22T08:00", "B1", ["A"])
+  ];
+  assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /same bath/.test(x.msg)));
+  assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B2", serials:["Z"] }, events, CONFIG, NOW).some(x => /not currently in bath/.test(x.msg)));
 });

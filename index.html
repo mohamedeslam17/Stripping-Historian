@@ -318,26 +318,34 @@ const F = { // key -> [storedName, label, kind]
 const TYPES = {
   "Load In":          { desc:"parts INTO a bath (time in)",  custom:"load",    fields:[F.bath,F.jc,F.component,F.op,F.notes] },
   "Extraction":       { desc:"parts OUT of a bath (time out)",custom:"extract", fields:[F.bath,F.op,F.notes] },
+  "Transfer":         { desc:"move parts to another bath",   custom:"move",    fields:[F.bath,F.op,F.notes] },
+  "Parts Received":   { desc:"log serials received in your area (parked)", custom:"received", fields:[F.jc,F.component,F.op,F.notes] },
   "Chemistry Check":  { desc:"titration result",   fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
-  "HCl Top-Up":       { desc:"add acid",            fields:[F.bath,F.hcl,F.op,F.notes] },
-  "Water Top-Up":     { desc:"add water",           fields:[F.bath,F.water,F.op,F.notes] },
-  "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "Top-Up":           { desc:"partial top-up — add acid and/or water", fields:[F.bath,F.hcl,F.water,F.op,F.notes] },
+  "Bath Fill":        { desc:"complete fill — new charge",   fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "HCl Top-Up":       { desc:"add acid",            hidden:true, fields:[F.bath,F.hcl,F.op,F.notes] },
+  "Water Top-Up":     { desc:"add water",           hidden:true, fields:[F.bath,F.water,F.op,F.notes] },
   "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", hidden:true, fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
   "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  hidden:true, fields:[F.jc,F.serial,F.op,F.notes] },
   "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
   "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
+// Friendly UI labels for the operator-facing actions. The stored event `type`
+// stays "Load In" / "Extraction" (the formal ledger); only the display changes.
+const TYPE_LABEL = { "Load In":"Add parts", "Extraction":"Remove parts" };
+const typeLabel = t => TYPE_LABEL[t] || t;
 const TYPE_PILL = {
   "Load In":"p-blue","Extraction":"p-grey","Immersion":"p-grey","Chemistry Check":"p-grey",
   "Bath Fill":"p-green","Bath Disposal":"p-red","Wax Failure":"p-red","Re-Masking":"p-amber",
-  "Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey"
+  "Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey",
+  "Top-Up":"p-grey","Transfer":"p-blue","Parts Received":"p-purple"
 };
 
 // Events that mention a serial (it now lives inside arrays on load/extract events).
 function eventsForSerial(events, serial){
   return events.filter(e =>
     e.serial === serial ||
-    (e.type === "Load In" && (e.serials || []).includes(serial)) ||
+    ((e.type === "Load In" || e.type === "Transfer" || e.type === "Parts Received") && (e.serials || []).includes(serial)) ||
     (e.type === "Extraction" && (e.items || []).some(i => i.serial === serial))
   ).slice().sort(byDate);
 }
@@ -366,6 +374,19 @@ function deriveImmersions(events, nowDT){
         else records.push({ serial:s, bath:e.bath || "", jc:"", component:"", cycle:(cyc.get(s) || 0),
           inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null,
           hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
+      });
+    } else if(e.type === "Transfer"){
+      // Moving parts to another bath: close the open record in the source bath
+      // (not a strip outcome) and open a continuation of the SAME cycle in the
+      // destination, flagged `moved` so it is never counted as a new dip.
+      const toBath = e.toBath || "";
+      (e.serials || []).forEach(s => {
+        const r = open.get(s);
+        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; }
+        const cont = { serial:s, bath:toBath, jc:(r && r.jc) || e.jc || "", component:(r && r.component) || e.component || "",
+          cycle:r ? r.cycle : (cyc.get(s) || 0), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
+          hours:null, elapsedH:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
+        open.set(s, cont); records.push(cont);
       });
     } else if(e.type === "Immersion"){ // legacy self-contained dip
       if(!e.serial) continue;
@@ -431,7 +452,7 @@ function lastUnresolvedWax(events, serial){ const u = unresolvedWaxAreas(events,
 function pieceStatusFor(recs, engEvents, config, needsRemask){
   const open = recs.some(r => r.open);
   const cleared = recs.some(r => r.result === "Cleared");
-  const cycles = recs.length;
+  const cycles = recs.filter(r => !r.moved).length;   // a bath-to-bath move is not a new dip
   const closedH = round(recs.filter(r => !r.open).reduce((a, r) => a + (r.hours || 0), 0));
   const totalH = round(closedH + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedH || 0), 0));
   const engDisp = engEvents.length ? engEvents[engEvents.length - 1].status : "";
@@ -468,12 +489,12 @@ function derivePieces(events, config, nowDT){
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
-      cycles:recs.length, hours:st.hours,
+      cycles:recs.filter(r => !r.moved).length, hours:st.hours,
       wax: recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
-      firstPass: recs.length > 0 && recs[0].result === "Cleared",
+      firstPass: recs.some(r => r.result === "Cleared") && !recs.some(r => r.result === "Re-strip"),
       needsRemask: unresolvedWax.length > 0,
       waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area).join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
       status:st, recs, events:evs
@@ -541,6 +562,7 @@ function deriveJobCards(events, config, nowDT){
 function deriveKpis(events, config, nowDT){
   const pr = derivePieces(events, config, nowDT);
   const { records, open } = deriveImmersions(events, nowDT);
+  const realDips = records.filter(r => !r.moved).length;   // exclude bath-to-bath move continuations
   const reStrip = records.filter(r => r.result === "Re-strip").length;
   const baths = deriveBaths(events, config, nowDT);
   const clearedPieces = pr.filter(r => r.status.s === "Cleared");
@@ -551,7 +573,7 @@ function deriveKpis(events, config, nowDT){
     awaiting: pr.filter(r => r.status.s === "Awaiting re-strip").length,
     inBath: open.size,
     fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
-    dips: records.length, reStrip, reStripRate: records.length ? Math.round(reStrip / records.length * 100) : 0,
+    dips: realDips, reStrip, reStripRate: realDips ? Math.round(reStrip / realDips * 100) : 0,
     wax: records.filter(r => r.waxFailure && r.waxFailure !== "None").length + events.filter(e => e.type === "Wax Failure").length,
     bathsOver: baths.filter(b => b.active && b.flags.length).length,
     activeBaths: baths.filter(b => b.active).length,
@@ -639,7 +661,24 @@ function eventWarnings(d, events, config, nowDT){
     if(bs.contents.length) add("red", `Bath ${d.bath} still holds ${bs.contents.length} part(s): ${bs.contents.map(r => r.serial).join(", ")} — extract them first`);
   }
   if(d.type === "Bath Fill" && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.active) add("amber", `Bath ${d.bath} is already active (filled ${fmtDate(bs.lastFill.datetime)}); dispose before re-filling`); }
-  if((d.type === "HCl Top-Up" || d.type === "Water Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
+  if((d.type === "HCl Top-Up" || d.type === "Water Top-Up" || d.type === "Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
+  if(d.type === "Transfer"){
+    if(d.bath && d.toBath && d.bath === d.toBath) add("red", "Source and destination are the same bath");
+    if(d.toBath){
+      const bd = deriveBath(others, config, d.toBath, nowDT);
+      if(bd.disposal) add("red", `Bath ${d.toBath} was disposed ${fmtDate(bd.disposal.datetime)} — fill it before moving parts in`);
+      else if(!bd.lastFill) add("amber", `Bath ${d.toBath} has no fill logged`);
+      else if(bd.flags.length) add("amber", `Bath ${d.toBath}: ${bd.flags.join("; ")}`);
+      if(bd.capacity){
+        const adding = (d.serials || []).filter(s => !bd.contents.some(r => r.serial === s)).length;
+        if(bd.contents.length + adding > bd.capacity) add("red", `Bath ${d.toBath} would hold ${bd.contents.length + adding} parts (capacity ${bd.capacity})`);
+      }
+    }
+    if(d.bath){
+      const idx = new Map(bathContents(others, nowDT, d.bath).map(r => [r.serial, r]));
+      (d.serials || []).forEach(s => { if(!idx.has(s)) add("amber", `${s} is not currently in bath ${d.bath}`); });
+    }
+  }
   if(d.type === "Re-Masking" && d.serial){
     const p = pieceOf(d.serial);
     if(p && p.inBath) add("red", `${d.serial} is currently in bath ${p.currentBath} — extract it before re-masking`);
@@ -717,6 +756,26 @@ function idleParts(events, config, nowDT){
   return derivePieces(events, config, nowDT)
     .filter(p => p.status.s === "Awaiting re-strip" || p.status.s === "Needs re-mask")
     .sort((a, b) => String((b.recs[b.recs.length - 1] || {}).outDT || "").localeCompare(String((a.recs[a.recs.length - 1] || {}).outDT || "")));
+}
+
+// Parked parts: serials a tech logged as received in their area (a "Parts
+// Received" event) but has not yet loaded into a bath since — staged, awaiting
+// a first dip. A part drops off this list once it is loaded. Newest first.
+function parkedParts(events, config, nowDT){
+  const latest = new Map();
+  events.forEach(e => { if(e.type === "Parts Received") (e.serials || []).forEach(s => {
+    const c = latest.get(s);
+    if(!c || String(e.datetime) > String(c.datetime)) latest.set(s, { datetime:e.datetime, jc:e.jc || "", component:e.component || "", operator:e.operator || "" });
+  }); });
+  if(!latest.size) return [];
+  const out = [];
+  latest.forEach((info, s) => {
+    const loaded = events.some(e => e.type === "Load In" && (e.serials || []).includes(s) && String(e.datetime) >= String(info.datetime));
+    if(loaded) return;
+    const look = lookupSerial(events, s);
+    out.push({ serial:s, jc:info.jc || look.jc || "", component:info.component || look.component || "", datetime:info.datetime, operator:info.operator || "" });
+  });
+  return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
 }
 
 /* ============================= DOMAIN END =============================== */
@@ -825,6 +884,9 @@ function eventDetail(e){
   if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
   if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
+  if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); d.push(p.join(" · ") || "top-up"); }
+  if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""}${e.toBath ? " → " + e.toBath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
+  if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} received: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Wax Failure") d.push(e.waxFailure || "");
   if(e.type === "Engineering Review") d.push(e.status || "");
   if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
@@ -833,6 +895,8 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
+  if(e.type === "Transfer") return "moved " + (e.bath || "bath") + " → " + (e.toBath || "bath");
+  if(e.type === "Parts Received") return "received in area" + (e.jc ? " · " + e.jc : "");
   if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
   if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
   return eventDetail(e);
@@ -891,7 +955,7 @@ function renderDrawer(){
   if(!drawerOpen) return;
   const panel = cel("div", { class:"drawer" });
   panel.append(cel("div", { class:"drawer-h" }, [
-    cel("h3", {}, editId != null ? ("Edit · " + formType) : (formType || "Log event")),
+    cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
     cel("button", { class:"x", title:"Close", onclick:closeDrawer }, "✕")
   ]));
@@ -899,9 +963,9 @@ function renderDrawer(){
   const foot = cel("div", { class:"drawer-f" });
   if(!formType){
     const tabs = cel("div", { class:"typetabs" });
-    Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab", onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+    Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab", onclick:() => startNew(t) }, [cel("span", {}, typeLabel(t)), cel("small", {}, TYPES[t].desc)])));
     body.append(tabs);
-    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Load In (parts into a bath) and Extraction (parts out), so you never need the out-time up front."));
+    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Add parts (into a bath) and Remove parts (out), so you never need the out-time up front."));
   } else {
     if(editId == null) body.append(cel("button", { class:"btn sm", style:"margin-bottom:12px", onclick:() => { formType = null; formData = { datetime:nowLocalDT() }; renderDrawer(); } }, "‹ Change event type"));
     body.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
@@ -912,6 +976,9 @@ function renderDrawer(){
     function formIncomplete(){
       if(formType === "Load In") return (formData.serials || []).length ? "" : "Add at least one serial";
       if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
+      if(formType === "Parts Received") return (formData.serials || []).length ? "" : "Add at least one serial";
+      if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0) ? "" : "Enter an HCl or water amount";
+      if(formType === "Transfer") return !formData.bath ? "Select the source bath" : !formData.toBath ? "Select a destination bath" : ((formData.serials || []).length ? "" : "Tick the parts to move");
       return "";
     }
     function refreshWarn(){
@@ -924,6 +991,8 @@ function renderDrawer(){
     const custom = TYPES[formType].custom;
     if(custom === "load") buildLoadFields(fields, refreshWarn);
     else if(custom === "extract") buildExtractFields(fields, refreshWarn);
+    else if(custom === "move") buildMoveFields(fields, refreshWarn);
+    else if(custom === "received") buildReceiveFields(fields, refreshWarn);
     else if(custom === "remask") buildRemaskFields(fields, refreshWarn);
     else if(custom === "waxfail") buildWaxFailFields(fields, refreshWarn);
     else buildGenericFields(fields, refreshWarn);
@@ -941,14 +1010,32 @@ function startNew(t){ formType = t; editId = null; formData = { datetime:nowLoca
 function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); if(e.type === "Load In") formData._serialText = (e.serials || []).join(", "); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
 function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "" }; openDrawer(); }
 function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", _rows:{} }; openDrawer(); }
+function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[] }; openDrawer(); }
+function startReceive(){ formType = "Parts Received"; editId = null; formData = { datetime:nowLocalDT(), type:"Parts Received", serials:[] }; openDrawer(); }
+// "Complete fill" = a fresh full charge; prefill the volumes from the last fill.
+function startCompleteFill(bath){
+  const lf = (deriveBath(EVENTS, CONFIG, bath, nowLocalDT()).lastFill) || {};
+  formType = "Bath Fill"; editId = null;
+  formData = { datetime:nowLocalDT(), type:"Bath Fill", bath:bath || "", hclAddedL:lf.hclAddedL, waterAddedL:lf.waterAddedL, h3po4AddedL:lf.h3po4AddedL };
+  openDrawer();
+}
+// Top up: a complete fill (new charge) or a partial addition of acid / water.
+function startTopUp(bath){
+  const body = cel("div", {});
+  body.append(cel("div", { class:"muted", style:"margin-bottom:10px" }, "How are you topping up bath " + bath + "?"));
+  const choice = (title, desc, fn) => cel("button", { class:"typetab", style:"width:100%;margin-bottom:8px", onclick:() => { closeModal(); fn(); } }, [cel("span", {}, title), cel("small", {}, desc)]);
+  body.append(choice("Complete fill", "New full charge — HCl + water + H₃PO₄", () => startCompleteFill(bath)));
+  body.append(choice("Partial addition", "Add some acid and/or water to the existing charge", () => startAction({ type:"topup", bath })));
+  modal("Top up · Bath " + bath, body, [cel("button", { class:"btn", onclick:closeModal }, "Cancel")]);
+}
 // Open the drawer prefilled for a suggested next action.
 function startAction(a){
   editId = null; const t = a.type;
   if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
   else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
   else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
-  else if(t === "topup-hcl") formData = { type:"HCl Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "HCl Top-Up";
-  else if(t === "topup-water") formData = { type:"Water Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Water Top-Up";
+  else if(t === "topup" || t === "topup-hcl" || t === "topup-water") formData = { type:"Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Top-Up";
+  else if(t === "move"){ startMove(a.bath); return; }
   else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Chemistry Check";
   else if(t === "viewbath"){ showBath(a.bath); return; }
   else if(t === "viewpiece"){ showSerial(a.serial); return; }
@@ -1037,10 +1124,26 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshIdle(); refreshRemask(); refreshWarn(); });
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshIdle(); refreshParked(); refreshRemask(); refreshWarn(); });
   wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
+
+  // Parked parts — serials the tech logged on receiving. Pick from the drop-down
+  // to add one (or add all); typing new serials above still works as before.
+  const parkedWrap = cel("div", {}); card.append(parkedWrap);
+  function refreshParked(){
+    parkedWrap.innerHTML = "";
+    const parked = parkedParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
+    if(!parked.length) return;
+    parkedWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Parked / received (" + parked.length + ") — select to add"));
+    const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add a parked part…"));
+    parked.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : ""))));
+    sel.addEventListener("input", () => { if(sel.value){ chipBox.addOne(sel.value); sel.value = ""; } });
+    const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => parked.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
+    parkedWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
+  }
+  refreshParked();
 
   // Parts that came out and are waiting to go back in — tap to add them.
   const idleWrap = cel("div", {}); card.append(idleWrap);
@@ -1079,6 +1182,79 @@ function buildLoadFields(card, refreshWarn){
   }
   refreshRemask();
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+}
+
+// Parts Received: park serials a tech got in their area, ready to add to a bath.
+function buildReceiveFields(card, refreshWarn){
+  appendOpList(card);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); }));
+  card.append(two);
+  formData.serials = formData.serials || [];
+  const count = cel("span", { class:"muted", style:"font-weight:400" });
+  const lbl = cel("label", { class:"f", style:"display:flex;justify-content:space-between" }, [cel("span", {}, "Serials received"), count]);
+  const setCount = () => { const n = formData.serials.length; count.textContent = n ? (n + " part" + (n > 1 ? "s" : "")) : ""; };
+  const wrap = cel("div", { class:"field" }, lbl);
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); refreshWarn(); });
+  wrap.append(chipBox);
+  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type or paste the serials you received. They're parked here and offered in the drop-down when you add parts to a bath. Ranges like 7261-01..06 expand."));
+  card.append(wrap); setCount();
+  card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+}
+
+// Transfer: move some/all of a bath's contents to another bath. Picks the source
+// bath's live contents as a checklist and a destination bath.
+function buildMoveFields(card, refreshWarn){
+  appendOpList(card);
+  formData.serials = formData.serials || [];
+  const two = cel("div", { class:"twocol" });
+  const srcWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "From bath"));
+  const ssel = cel("select", {}, cel("option", { value:"" }, "—"));
+  CONFIG.baths.forEach(b => ssel.append(cel("option", { value:b }, b))); if(formData.bath) ssel.value = formData.bath;
+  ssel.addEventListener("input", () => { formData.bath = ssel.value; formData.serials = []; rebuildDest(); rebuild(); refreshWarn(); });
+  srcWrap.append(ssel);
+  const dstWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "To bath"));
+  const dsel = cel("select", {}, cel("option", { value:"" }, "—"));
+  dsel.addEventListener("input", () => { formData.toBath = dsel.value; refreshWarn(); });
+  dstWrap.append(dsel);
+  function rebuildDest(){
+    dsel.innerHTML = ""; dsel.append(cel("option", { value:"" }, "—"));
+    CONFIG.baths.filter(b => b !== formData.bath).forEach(b => dsel.append(cel("option", { value:b }, b)));
+    if(formData.toBath && formData.toBath !== formData.bath) dsel.value = formData.toBath; else formData.toBath = "";
+  }
+  rebuildDest();
+  two.append(srcWrap, dstWrap); card.append(two);
+  const cont = cel("div", {}); card.append(cont);
+  function rebuild(){
+    cont.innerHTML = "";
+    if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:4px 0" }, "Select the bath the parts are in now.")); return; }
+    const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
+    if(!contents.length){ cont.append(cel("div", { class:"warn-line warn-amber" }, "Nothing is currently in bath " + formData.bath + ".")); formData.serials = []; return; }
+    formData.serials = (formData.serials || []).filter(s => contents.some(r => r.serial === s));
+    const n = formData.serials.length;
+    cont.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:8px 0 6px" }, [
+      cel("label", { class:"f", style:"margin:0;flex:1" }, "Tick the parts to move" + (n ? " (" + n + ")" : "")),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { formData.serials = contents.map(r => r.serial); rebuild(); refreshWarn(); } }, "All"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { formData.serials = []; rebuild(); refreshWarn(); } }, "None")
+    ]));
+    const boxEl = cel("div", { class:"contents" });
+    contents.forEach(r => {
+      const checked = formData.serials.includes(r.serial);
+      const cb = cel("input", { type:"checkbox" }); cb.checked = checked;
+      cb.addEventListener("change", () => { if(cb.checked){ if(!formData.serials.includes(r.serial)) formData.serials.push(r.serial); } else formData.serials = formData.serials.filter(x => x !== r.serial); refreshWarn(); rebuild(); });
+      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "");
+      const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
+      boxEl.append(cel("div", { class:"crow" + (checked ? " on" : ""), style:"grid-template-columns:24px 1fr" }, [cb, info]));
+    });
+    cont.append(boxEl);
+  }
+  rebuild();
+  const two2 = cel("div", { class:"twocol" });
+  two2.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  two2.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+  card.append(two2);
 }
 
 // Chip entry: type/paste serials (or ranges) -> removable chips. Returns the box.
@@ -1172,6 +1348,9 @@ async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
   if(rec.type === "Load In"){ rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
+  if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0)){ alert("Enter an HCl or water amount."); return; } }
+  if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select source and destination baths."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } }
   if(editId != null){
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
     rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS);
@@ -1208,7 +1387,7 @@ function vEventLog(m){
   m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
   const chips = cel("div", { class:"chips" });
   const tSel = cel("select", { style:"width:auto", oninput:e => { logFilter.type = e.target.value; render(); } }, cel("option", { value:"" }, "All types"));
-  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, t))); tSel.value = logFilter.type;
+  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, typeLabel(t)))); tSel.value = logFilter.type;
   const bSel = cel("select", { style:"width:auto", oninput:e => { logFilter.bath = e.target.value; render(); } }, cel("option", { value:"" }, "All baths"));
   CONFIG.baths.forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
   const txt = cel("input", { style:"width:210px", placeholder:"search J/C, serial, notes…", value:logFilter.text, oninput:e => { logFilter.text = e.target.value; render(); } });
@@ -1226,11 +1405,11 @@ function vEventLog(m){
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
   rows.forEach(e => {
-    const partsCell = e.type === "Load In" ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
+    const partsCell = (e.type === "Load In" || e.type === "Transfer" || e.type === "Parts Received") ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
     const tr = cel("tr");
     tr.append(cel("td", { class:"mono" }, e.eventId || ""));
     tr.append(tcell(fmtDT(e.datetime)));
-    tr.append(cel("td", {}, pill(e.type, TYPE_PILL[e.type])));
+    tr.append(cel("td", {}, pill(typeLabel(e.type), TYPE_PILL[e.type])));
     tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(partsCell));
     tr.append(tcell(eventDetail(e)));
     tr.append(tcell(e.operator));
@@ -1288,7 +1467,7 @@ function pieceTimeline(evs, serial, recs){
     if(e.type === "Load In" && byLoad.has(e.id)) cyc = "cycle " + byLoad.get(e.id).cycle;
     else if(e.type === "Extraction" && byExtract.has(e.id)){ const r = byExtract.get(e.id); cyc = "cycle " + r.cycle + (r.hours != null ? " · " + r.hours + " h" : ""); }
     ul.append(cel("li", {}, [
-      cel("div", { class:"tl-h" }, [pill(e.type, TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), cyc ? cel("span", { class:"tag", style:"margin:0" }, cyc) : null, e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
+      cel("div", { class:"tl-h" }, [pill(typeLabel(e.type), TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), cyc ? cel("span", { class:"tag", style:"margin:0" }, cyc) : null, e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
       cel("div", { class:"tl-d" }, eventDetailForSerial(e, serial) || "")
     ]));
   });
@@ -1348,7 +1527,10 @@ function showBath(bath){
     const cw = cel("div", {});
     s.contents.forEach(r => cw.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " · " + round(r.elapsedH) + " h")));
     body.append(cw);
-    body.append(cel("div", { style:"margin-top:8px" }, cel("button", { class:"btn sm primary", onclick:() => { closeModal(); startExtraction(bath); } }, "Extract from this bath")));
+    body.append(cel("div", { class:"btnrow", style:"margin-top:8px" }, [
+      cel("button", { class:"btn sm primary", onclick:() => { closeModal(); startExtraction(bath); } }, "Remove from this bath"),
+      cel("button", { class:"btn sm", onclick:() => { closeModal(); startMove(bath); } }, "Move to another bath")
+    ]));
   }
   if(s.chem.length){
     const charts = cel("div", { class:"charts3" });
@@ -1366,10 +1548,11 @@ function showBath(bath){
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
   const act = (label, fn, cls) => cel("button", { class:"btn sm" + (cls ? " " + cls : ""), onclick:() => { closeModal(); fn(); } }, label);
-  const foot = [act("Load in", () => startLoad(bath))];
-  if(s.contents.length) foot.push(act("Extract", () => startExtraction(bath)));
+  const foot = [act("Add parts", () => startLoad(bath))];
+  if(s.contents.length) foot.push(act("Remove parts", () => startExtraction(bath)));
+  if(s.contents.length) foot.push(act("Move", () => startMove(bath)));
   foot.push(act("Chemistry", () => startAction({ type:"chem", bath })));
-  foot.push(act("Top-up HCl", () => startAction({ type:"topup-hcl", bath })));
+  foot.push(act("Top up", () => startTopUp(bath)));
   if(s.active) foot.push(act("Dispose", () => startAction({ type:"dispose", bath }), "danger"));
   foot.push(cel("button", { class:"btn primary", onclick:closeModal }, "Close"));
   modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, foot);
@@ -1404,6 +1587,21 @@ function vQuality(m){
 }
 
 /* --- Dashboard (Floor + Baths + KPIs in one) --- */
+// Parked parts: serials received in the tech's area, not yet in a bath. Logged
+// here as they arrive; offered in the Add-parts drop-down for any bath.
+function parkedPanel(){
+  const parked = parkedParts(EVENTS, CONFIG, nowLocalDT());
+  const card = cel("div", { class:"card", style:"margin-bottom:16px" });
+  card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
+    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Parked parts — received, not yet in a bath (" + parked.length + ")"),
+    cel("button", { class:"btn sm", onclick:startReceive }, "＋ Receive parts")
+  ]));
+  if(!parked.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing parked. Log serials as you receive them so they're ready to add to a bath.")); return card; }
+  const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+  parked.slice(0, 80).forEach(p => chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + "received " + fmtDT(p.datetime) + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component }) }, "＋ " + p.serial)));
+  card.append(chips);
+  return card;
+}
 // One tank: the parts inside (visual), its chemistry summary, status and actions.
 function tankCard(s){
   const c = cel("div", { class:"tankcard", onclick:() => showBath(s.bath) });
@@ -1422,18 +1620,22 @@ function tankCard(s){
   c.append(tank);
   if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
   const acts = cel("div", { class:"btnrow", style:"margin-top:10px", onclick:e => e.stopPropagation() });
-  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
-  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Extract"));
+  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Add parts"));
+  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Remove parts"));
+  if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startMove(s.bath) }, "Move"));
   acts.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"chem", bath:s.bath }) }, "Chem"));
+  acts.append(cel("button", { class:"btn sm", onclick:() => startTopUp(s.bath) }, "Top up"));
+  if(s.active) acts.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"dispose", bath:s.bath }) }, "Dispose"));
   c.append(acts);
   return c;
 }
 function vDash(m){
   const now = nowLocalDT();
   m.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" }, [
-    cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Load in"),
-    cel("button", { class:"btn", onclick:() => startExtraction("") }, "Extract"),
-    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check")
+    cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Add parts"),
+    cel("button", { class:"btn", onclick:() => startExtraction("") }, "Remove parts"),
+    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check"),
+    cel("button", { class:"btn", onclick:startReceive }, "Receive parts")
   ]));
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
@@ -1441,6 +1643,7 @@ function vDash(m){
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
   if(EVENTS.length) m.append(suggestionsPanel());
+  if(EVENTS.length) m.append(parkedPanel());
   m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
   if(!EVENTS.length){ m.append(emptyState()); return; }
   const grid = cel("div", { class:"tankgrid" });
@@ -1582,7 +1785,9 @@ async function loadExample(){
     { datetime:agoDT(60 * 30), type:"Bath Fill", bath:"206-207", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
     { datetime:agoDT(60 * 29), type:"Chemistry Check", bath:"206-207", temp:90, hclPct:21, fePpm:12, operator:"Maint" },
     { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04","7501-05"], operator:"Diang" },
-    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared" }, { serial:"7501-04", result:"Re-strip", wax:["Part body"] }] }
+    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared" }, { serial:"7501-04", result:"Re-strip", wax:["Part body"] }] },
+    // --- Parts received at the bench, parked and waiting to be added to a bath ---
+    { datetime:agoDT(60 * 5), type:"Parts Received", jc:"7501", component:C, serials:["7501-06","7501-07","7501-08"], operator:"Diang", notes:"received at bench, awaiting a tank" }
   ];
   for(const e of ex) await addEvent(e);
   flash("Example loaded (" + ex.length + " events)");

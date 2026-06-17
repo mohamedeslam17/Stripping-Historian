@@ -10,16 +10,23 @@ Operators only ever record *what happened*. Every other screen — piece tracker
 bath status, quality log, dashboard — is **derived** from that immutable stream.
 Nothing is double‑entered, and history can never disagree with itself.
 
-### Dips are split into Load In + Extraction
+### Dips are split into Add parts + Remove parts
 
 On the floor you rarely know the out‑time when a part goes in, parts go in as a
-**batch**, and they don't all come out together. So a dip is two events:
+**batch**, and they don't all come out together. So a dip is two events (shown as
+**Add parts** / **Remove parts** on the bath cards; stored as *Load In* /
+*Extraction* in the ledger):
 
-- **Load In** — *N* parts go INTO a bath. The event timestamp *is* the time‑in.
-  Serials are entered as a list, with range shorthand like `7261-01..06`.
-- **Extraction** — pull **some** of what's currently in that bath. The form shows
-  you the **live bath contents** as a checklist; you tick the parts coming out and
-  set each result (Cleared / Re‑strip / Hold). Parts you don't tick **stay in**.
+- **Add parts** (*Load In*) — *N* parts go INTO a bath. The event timestamp *is*
+  the time‑in. Serials are entered as a list, with range shorthand like
+  `7261-01..06`, **or picked from the parked list** (see below).
+- **Remove parts** (*Extraction*) — pull **some** of what's currently in that bath.
+  The form shows you the **live bath contents** as a checklist; you tick the parts
+  coming out and set each result (Cleared / Re‑strip / Hold). Parts you don't tick
+  **stay in**.
+- **Move** (*Transfer*) — relocate **all or some** of a bath's contents to another
+  bath. The part keeps its current dip (a move is **not** counted as a new strip
+  cycle); its immersion time simply carries on in the new tank.
 
 The system pairs loads → extractions per serial, counts cycles automatically,
 computes each dip's hours from the two timestamps, and always knows **what's still
@@ -32,13 +39,14 @@ loaded again — that's its next cycle.
 
 1. Open `index.html` (double‑click, or serve the folder).
 2. Go to **Settings → Data → Load example data** to explore a realistic dataset.
-3. The **Floor** screen is home: one card per tank showing what's currently in it,
-   with **Load in** / **Extract** buttons. Use the **＋ Log event** drawer (sidebar)
-   for anything else; everything updates automatically.
+3. The **Dashboard** is home: one card per tank showing what's currently in it,
+   with **Add parts / Remove parts / Move / Chem / Top up / Dispose** buttons. Use
+   the **＋ Log event** drawer (sidebar) for anything else; everything updates
+   automatically.
 4. Hit **Backup** (sidebar) to save a JSON snapshot; **Import** restores it.
 
 A desktop‑oriented console: a left sidebar nav, a slide‑in **Log** drawer, and
-keyboard shortcuts — **L** load · **E** extract · **N** new event · **/** search.
+keyboard shortcuts — **L** add parts · **E** remove parts · **N** new event · **/** search.
 Serials are entered as **chips** (type/paste, Enter to add; ranges like
 `7261-01..06` expand).
 
@@ -53,11 +61,13 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 
 | Event | Purpose |
 |---|---|
-| **Load In** | *N* parts INTO a bath (time in); serials as a list / range. Also where a part's failed mask areas are **re‑masked** before the re‑dip |
-| **Extraction** | Pull some parts OUT (time out, per‑part result + **per‑area wax failure**) |
-| Bath Fill | New charge (HCl / water / H₃PO₄ volumes) |
+| **Add parts** (*Load In*) | *N* parts INTO a bath (time in); serials as a list / range / from the parked list. Also where a part's failed mask areas are **re‑masked** before the re‑dip |
+| **Remove parts** (*Extraction*) | Pull some parts OUT (time out, per‑part result + **per‑area wax failure**) |
+| **Move** (*Transfer*) | Move all or some of a bath's parts to another bath (same dip continues) |
+| **Parts Received** | Park serials received in the tech's area, ready to add to any bath |
+| Bath Fill | **Complete fill** — new charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
-| HCl / Water Top‑Up | Maintain the charge between checks |
+| Top‑Up | **Partial addition** — top up acid and/or water between checks |
 | Engineering Review | Disposition a part (Accepted / Scrap / Return / Hold…) |
 | Bath Disposal | Bath taken out of service (with reason) |
 
@@ -71,9 +81,11 @@ Settings):
 - **Dashboard** — the landing screen, with the floor + baths + KPIs in one place:
   a **visual of every tank with the parts currently inside it** (over‑hours parts
   in red, out‑of‑band tanks in red), each carrying its chemistry summary, status
-  and one‑click **Load in / Extract / Chem**; the headline KPIs; the **next‑action
-  suggestions**; and first‑pass yield by job card. Click a tank for full chemistry
-  charts, contents, and dispose/top‑up actions.
+  and one‑click **Add parts / Remove parts / Move / Chem / Top up / Dispose**
+  (Top up offers a **complete fill** or a **partial addition**); a **parked parts**
+  panel (serials received but not yet in a bath); the headline KPIs; the
+  **next‑action suggestions**; and first‑pass yield by job card. Click a tank for
+  full chemistry charts and contents.
 - **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
   and a status (`In bath`, `Awaiting re‑strip`, `Needs re‑mask`, `Cleared`,
   `→ Engineering`, `Scrap`, …), filterable. Click *history* for a full timeline and
@@ -112,8 +124,12 @@ already true:
   the extraction list pre‑ticks parts already over the max immersion time.
 - **Idle parts come back to you** — parts that came out of a tank and aren't done
   (awaiting another strip, or blocked needing a re‑mask) are tracked as *idle*. When
-  you open a **Load In**, they're listed as **"Waiting to go back in" — tap to add**
+  you open **Add parts**, they're listed as **"Waiting to go back in" — tap to add**
   (or *Add all*), so you never lose track of a part sitting on the bench.
+- **Parked parts** — a tech logs serials as they're **received** in their area
+  (**Receive parts**). They sit in a parked list on the Dashboard, and appear in a
+  **drop‑down** in the **Add parts** form for any bath — pick one (or *Add all*),
+  on top of typing brand‑new serials. A part leaves the parked list once it's loaded.
 - **Capacity** — tanks have a configurable capacity; loads that would overfill are
   flagged, the fill level shows on each tank, and a full bath is never offered as a
   rescue.
