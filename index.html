@@ -233,6 +233,8 @@ const DEFAULT_CONFIG = {
   maxBathAge: 30,
   bathCapacity: 12,
   maskAreas: ["Cooling holes", "Part body"],
+  rootCauses: ["Bath chemistry", "Iron high", "Temperature", "Masking issue", "Operator error", "Component condition", "Unknown"],
+  componentUnits: {},
   baths: ["102-103", "106-107", "202-203", "206-207"],
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
 };
@@ -299,6 +301,7 @@ const F = { // key -> [storedName, label, kind]
   hcl:["hclAddedL","HCl added (L)","num"], water:["waterAddedL","Water added (L)","num"], h3po4:["h3po4AddedL","H₃PO₄ added (L)","num"],
   wax:["waxFailure","Wax failure","sel:None,Partial mask loss,Complete mask loss"],
   disp:["status","Disposition","sel:Accepted,Engineering review,Scrap,Return to vendor,Hold"],
+  rootCause:["rootCause","Root cause","rootcause"],
   reason:["disposalReason","Disposal reason","sel:Iron limit reached,HCl exhausted,Contamination,Scheduled change,Other"],
   op:["operator","Operator","operator"], notes:["notes","Notes","text"]
 };
@@ -311,7 +314,7 @@ const TYPES = {
   "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
   "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", hidden:true, fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
   "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  hidden:true, fields:[F.jc,F.serial,F.op,F.notes] },
-  "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
+  "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.rootCause,F.op,F.notes] },
   "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
 const TYPE_PILL = {
@@ -429,8 +432,12 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
   if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
   if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
-  if(cycles >= config.maxCycles || totalH >= config.maxHours)
-                                     return { s:"→ Engineering",    cls:"p-red",   ...base };
+  if(cycles >= config.maxCycles || totalH >= config.maxHours){
+    const why = [];
+    if(cycles >= config.maxCycles) why.push(cycles + " cycles ≥ " + config.maxCycles);
+    if(totalH >= config.maxHours) why.push(totalH + " h ≥ " + config.maxHours);
+    return { s:"→ Engineering", cls:"p-red", reason:why.join(", "), ...base };
+  }
   if(needsRemask)                    return { s:"Needs re-mask",    cls:"p-purple", ...base };
   if(cycles > 0)                     return { s:"Awaiting re-strip", cls:"p-amber", ...base };
   return { s:"—", cls:"p-grey", ...base };
@@ -515,7 +522,23 @@ function deriveBath(events, config, bath, nowDT){
     }
   }
 
-  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags, contents, capacity, free, feSlope, feProjDays };
+  // Bath as a vessel: nominal volume, consumption, and load (tracked from
+  // fills + top-ups + immersions — not just an event log).
+  const fillHcl = +((lastFill || {}).hclAddedL) || 0, fillWater = +((lastFill || {}).waterAddedL) || 0, h3po4Added = +((lastFill || {}).h3po4AddedL) || 0;
+  const volume = round(hclAdded + waterAdded + h3po4Added);
+  const loads = evs.filter(e => e.type === "Load In" && within(e)).length;
+  const hclPerPart = parts ? round(hclAdded / parts, 2) : null;
+  const hclPerLoad = loads ? round(hclAdded / loads, 1) : null;
+  const hclPerHour = loadH ? round(hclAdded / loadH, 2) : null;
+  const acidRatePerDay = (age !== "" && age > 0) ? round(hclAdded / age, 1) : null;
+  const feLoadG = (lastChem && num(lastChem.fePpm) != null && volume) ? round(+lastChem.fePpm * volume / 1000, 1) : null; // ppm(mg/L)·L/1000 = g iron
+  const unitsFor = c => { const v = +((config.componentUnits || {})[c]); return Number.isFinite(v) && v > 0 ? v : 1; };
+  const partUnits = new Map(); recs.forEach(r => { if(r.serial && !partUnits.has(r.serial)) partUnits.set(r.serial, unitsFor(r.component)); });
+  const loadUnits = round([...partUnits.values()].reduce((a, u) => a + u, 0), 1);
+  const loadUnitHours = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)) * unitsFor(r.component), 0), 1);
+
+  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, h3po4Added, age, flags, contents, capacity, free, feSlope, feProjDays,
+    volume, loads, hclPerPart, hclPerLoad, hclPerHour, acidRatePerDay, feLoadG, loadUnits, loadUnitHours };
 }
 function deriveBaths(events, config, nowDT){ return config.baths.map(b => deriveBath(events, config, b, nowDT)); }
 
@@ -558,19 +581,30 @@ function deriveKpis(events, config, nowDT){
 function deriveDefects(events){
   const out = [];
   events.forEach(e => {
-    if(e.type === "Engineering Review") out.push({ e, kind:"Eng review", detail:e.status || "", serial:e.serial || "", bath:e.bath || "" });
-    else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "" }); }
-    else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
+    if(e.type === "Engineering Review") out.push({ e, kind:"Eng review", detail:e.status || "", serial:e.serial || "", bath:e.bath || "", cause:e.rootCause || "" });
+    else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "", cause:"" }); }
+    else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "", cause:e.rootCause || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
-      if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
-      if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
+      if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "", cause:it.rootCause || "" });
+      if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "", cause:it.rootCause || "" });
     });
     else if(e.type === "Immersion"){
-      if(waxAreasOf(e).length) out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
-      if(e.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:e.serial || "", bath:e.bath || "" });
+      if(waxAreasOf(e).length) out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "", cause:e.rootCause || "" });
+      if(e.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:e.serial || "", bath:e.bath || "", cause:e.rootCause || "" });
     }
   });
   return out.sort((a, b) => byDate(a.e, b.e)).reverse();
+}
+// Pareto of process losses by root cause (configurable; "Unknown" if unset).
+function deriveRootCauses(events){
+  const map = new Map();
+  const bump = c => { const k = c || "Unknown"; map.set(k, (map.get(k) || 0) + 1); };
+  events.forEach(e => {
+    if(e.type === "Extraction") (e.items || []).forEach(it => { if(it.result === "Re-strip" || waxAreasOf(it).length) bump(it.rootCause); });
+    else if(e.type === "Engineering Review") bump(e.rootCause);
+    else if(e.type === "Immersion" && (e.result === "Re-strip" || waxAreasOf(e).length)) bump(e.rootCause);
+  });
+  return [...map.entries()].map(([cause, count]) => ({ cause, count })).sort((a, b) => b.count - a.count);
 }
 
 // Relationship-aware checks: does this draft contradict the current state of
@@ -977,6 +1011,7 @@ function fieldNode(name, label, kind, onin){
   let inp;
   if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
   else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
+  else if(kind === "rootcause"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); (CONFIG.rootCauses || []).forEach(o => inp.append(cel("option", { value:o }, o))); }
   else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
   else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
   else inp = cel("input", { type:"text", oninput:onin });
@@ -1129,13 +1164,13 @@ function buildExtractFields(card, refreshWarn){
   two.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
   card.append(two);
   formData._rows = formData._rows || {};
-  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => { const st = formData._rows[s], m = st.waxAreas || {}; return { serial:s, result:st.result, wax:Object.keys(m).filter(a => m[a] && m[a] !== "None").map(a => ({ area:a, severity:m[a] })) }; }); }
+  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => { const st = formData._rows[s], m = st.waxAreas || {}; const it = { serial:s, result:st.result, wax:Object.keys(m).filter(a => m[a] && m[a] !== "None").map(a => ({ area:a, severity:m[a] })) }; if(st.rootCause && st.result !== "Cleared") it.rootCause = st.rootCause; return it; }); }
   function rebuild(){
     cont.innerHTML = "";
     if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:4px 0" }, "Select a bath to see what is currently in it.")); sync(); return; }
     let rows;
     if(editId != null && Array.isArray(formData.items) && !Object.keys(formData._rows).length){
-      formData.items.forEach(it => { const m = {}; waxAreasOf(it).forEach(x => m[x.area] = x.severity); formData._rows[it.serial] = { result:it.result || "Cleared", waxAreas:m, checked:true }; });
+      formData.items.forEach(it => { const m = {}; waxAreasOf(it).forEach(x => m[x.area] = x.severity); formData._rows[it.serial] = { result:it.result || "Cleared", waxAreas:m, rootCause:it.rootCause || "", checked:true }; });
       rows = formData.items.map(it => ({ serial:it.serial, inDT:null, elapsedH:null }));
     } else {
       const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
@@ -1161,7 +1196,14 @@ function buildExtractFields(card, refreshWarn){
       ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
       if(!st.waxAreas) st.waxAreas = {};
       const wseg = areaSeverityControl(st.waxAreas, () => { if(Object.values(st.waxAreas).some(v => v && v !== "None")){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; } sync(); refreshWarn(); rebuild(); });
-      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "wax areas"), wseg])]);
+      const right = [seg, cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "wax areas"), wseg])];
+      if(st.result && st.result !== "Cleared"){
+        const rc = cel("select", { style:"padding:4px 6px;font-size:12px" }, cel("option", { value:"" }, "root cause…"));
+        (CONFIG.rootCauses || []).forEach(o => rc.append(cel("option", { value:o }, o))); rc.value = st.rootCause || "";
+        rc.addEventListener("input", () => { st.rootCause = rc.value; st.checked = true; sync(); refreshWarn(); });
+        right.push(rc);
+      }
+      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, right);
       boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
     });
     cont.append(boxEl); sync();
@@ -1397,9 +1439,10 @@ function vBaths(m){
       s.disposal ? ("Disposed " + fmtDate(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
     const kv = (k, v) => c.append(cel("div", { class:"kv" }, [cel("span", {}, k), cel("span", {}, v)]));
     kv("Age (days)", s.age === "" ? "—" : String(s.age));
+    if(s.volume) kv("Volume (L)", String(s.volume));
     if(s.lastChem) kv("Latest chem", "HCl " + fmtNum(s.lastChem.hclPct) + "% · Fe " + fmtNum(s.lastChem.fePpm) + " · " + fmtNum(s.lastChem.temp) + "°C");
-    kv("Load (piece-h)", String(s.loadH));
     kv("Parts processed", String(s.parts));
+    if(s.hclPerPart != null) kv("HCl / part (L)", String(s.hclPerPart));
     if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:10px" }, "⚠ " + s.flags.join(" · ")));
     else if(s.lastChem) c.append(cel("div", { class:"flagok", style:"margin-top:10px;font-size:12px" }, "✓ in band"));
     const acts = cel("div", { style:"margin-top:10px;display:flex;gap:6px", onclick:e => e.stopPropagation() });
@@ -1421,7 +1464,14 @@ function showBath(bath){
   const body = cel("div", {});
   body.append(cel("div", { class:"muted", style:"margin-bottom:6px" },
     s.disposal ? ("Disposed " + fmtDT(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDT(s.lastFill.datetime) : "No fill logged")));
-  if(s.lastFill) body.append(cel("div", { style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
+  if(s.lastFill) body.append(cel("div", { style:"font-size:12.5px;margin-bottom:6px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
+  if(s.lastFill) body.append(cel("div", { class:"muted", style:"font-size:12px;margin-bottom:8px" }, [
+    "Volume ≈ " + s.volume + " L",
+    s.hclPerPart != null ? "  ·  HCl/part " + s.hclPerPart + " L" : "",
+    s.hclPerLoad != null ? "  ·  HCl/load " + s.hclPerLoad + " L" : "",
+    s.acidRatePerDay != null ? "  ·  acid use " + s.acidRatePerDay + " L/day" : "",
+    s.feLoadG != null ? "  ·  iron load ≈ " + s.feLoadG + " g" : ""
+  ].join("")));
   if(s.flags.length) body.append(cel("div", { class:"warn-line warn-red" }, "⚠ " + s.flags.join(" · ")));
 
   if(s.contents.length){
@@ -1444,7 +1494,7 @@ function showBath(bath){
       + (s.feSlope != null ? "  ·  iron trend " + (s.feSlope >= 0 ? "+" : "") + s.feSlope + " ppm/day" + (s.feProjDays != null ? ", projected to reach limit in ~" + s.feProjDays + " days" : "") : "")));
   }
   const stats = cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" });
-  [["In tank", s.capacity ? (s.contents.length + " / " + s.capacity) : String(s.contents.length)], ["Age (d)", s.age === "" ? "—" : s.age], ["Load (piece-h)", s.loadH], ["Parts", s.parts], ["Wax fails", s.wax], ["Chem checks", s.chem.length]]
+  [["In tank", s.capacity ? (s.contents.length + " / " + s.capacity) : String(s.contents.length)], ["Volume (L)", s.volume || "—"], ["Age (d)", s.age === "" ? "—" : s.age], ["Parts", s.parts], ["Load (piece-h)", s.loadH], ["Load (unit·h)", s.loadUnitHours], ["Wax fails", s.wax], ["Chem checks", s.chem.length]]
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
   const act = (label, fn, cls) => cel("button", { class:"btn sm" + (cls ? " " + cls : ""), onclick:() => { closeModal(); fn(); } }, label);
@@ -1462,6 +1512,17 @@ function vQuality(m){
   m.append(cel("h2", { class:"sec" }, "Quality — instant defect database"));
   const all = deriveDefects(EVENTS);
   const jcBySerial = {}; derivePieces(EVENTS, CONFIG, nowLocalDT()).forEach(p => { jcBySerial[p.serial] = p.jc; });
+  const causes = deriveRootCauses(EVENTS);
+  if(causes.length){
+    const total = causes.reduce((a, c) => a + c.count, 0);
+    const card = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
+    card.append(cel("h3", { class:"sub", style:"margin:0 0 8px" }, "Losses by root cause"));
+    causes.forEach(c => card.append(cel("div", { style:"margin-bottom:7px" }, [
+      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, c.cause), cel("span", { class:"muted" }, c.count + " · " + Math.round(c.count / total * 100) + "%")]),
+      cel("div", { class:"bar" }, cel("i", { style:"width:" + Math.round(c.count / total * 100) + "%;background:" + (c.cause === "Unknown" ? "var(--faint)" : "var(--amber)") }))
+    ])));
+    m.append(card);
+  }
   const kinds = ["All", "Wax failure", "Re-mask", "Eng review", "Re-strip"];
   const chips = cel("div", { class:"chips" });
   kinds.forEach(k => chips.append(cel("button", { class:"btn sm" + (qualFilter === k ? " primary" : ""), onclick:() => { qualFilter = k; render(); } }, k)));
@@ -1469,7 +1530,7 @@ function vQuality(m){
   const defs = qualFilter === "All" ? all : all.filter(d => d.kind === qualFilter);
   if(!defs.length){ m.append(cel("div", { class:"empty" }, "No matching defects, re-masking, or engineering reviews logged.")); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["When", "Kind", "J/C", "Serial", "Bath", "Detail", "Op"].forEach(c => hr.append(cel("th", {}, c)));
+  ["When", "Kind", "J/C", "Serial", "Bath", "Detail", "Root cause", "Op"].forEach(c => hr.append(cel("th", {}, c)));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
   defs.forEach(d => {
@@ -1479,7 +1540,7 @@ function vQuality(m){
     tr.append(cel("td", {}, pill(d.kind, TYPE_PILL[e.type] || "p-amber")));
     tr.append(tcell(jc));
     tr.append(cel("td", {}, d.serial ? cel("span", { class:"linkish", onclick:() => showSerial(d.serial) }, d.serial) : ""));
-    tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(e.operator));
+    tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(d.cause || "")); tr.append(tcell(e.operator));
     tb.append(tr);
   });
   t.append(tb); wrap.append(t); m.append(wrap);
@@ -1538,6 +1599,18 @@ function vDash(m){
   }
 
   const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active || b.disposal);
+  if(baths.some(b => b.parts)){
+    m.append(cel("h3", { class:"sub" }, "Chemical consumption & bath life"));
+    const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
+    ["Bath", "Volume (L)", "Parts", "Loads", "HCl added (L)", "HCl/part", "HCl/load", "Acid/day", "Fe load (g)", "Age (d)"].forEach((c, i) => hr.append(cel("th", i >= 1 ? { class:"num" } : {}, c)));
+    t.append(cel("thead", {}, hr));
+    const tb = cel("tbody");
+    baths.filter(b => b.parts || b.hclAdded).forEach(s => { const tr = cel("tr");
+      tr.append(cel("td", {}, cel("span", { class:"linkish", onclick:() => showBath(s.bath) }, s.bath)));
+      [s.volume || "—", s.parts, s.loads, round(s.hclAdded), s.hclPerPart == null ? "—" : s.hclPerPart, s.hclPerLoad == null ? "—" : s.hclPerLoad, s.acidRatePerDay == null ? "—" : s.acidRatePerDay, s.feLoadG == null ? "—" : s.feLoadG, s.age === "" ? "—" : s.age].forEach(v => tr.append(cel("td", { class:"num" }, String(v))));
+      tb.append(tr); });
+    t.append(tb); wrap.append(t); m.append(wrap);
+  }
   if(baths.length){
     m.append(cel("h3", { class:"sub" }, "Bath status"));
     const row = cel("div", { class:"row" });
@@ -1568,6 +1641,8 @@ function vSettings(m){
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), oninput:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Root causes (comma separated)"), cel("input", { type:"text", value:(CONFIG.rootCauses || []).join(", "), oninput:async e => { CONFIG.rootCauses = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Component load units (one per line: Component = units; blank = 1 per part)"), (() => { const ta = cel("textarea", { rows:"3", placeholder:"GT26 R2011 V3 = 1.0\nGT26 R2012 V2 = 0.6" }); ta.value = Object.entries(CONFIG.componentUnits || {}).map(([k, v]) => k + " = " + v).join("\n"); ta.addEventListener("input", async () => { const m = {}; ta.value.split("\n").forEach(line => { const i = line.lastIndexOf("="); if(i > 0){ const k = line.slice(0, i).trim(), v = +line.slice(i + 1).trim(); if(k && Number.isFinite(v)) m[k] = v; } }); CONFIG.componentUnits = m; await saveConfig(); }); return ta; })()]));
   c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
   m.append(c2);
 

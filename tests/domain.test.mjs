@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","deriveIssues","deriveRootCauses",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -430,4 +430,64 @@ test("deriveSuggestions: dispose a spent bath, extract an over-hours part, revie
   const eng = [];
   for(let c = 0; c < 3; c++){ eng.push(load(`2026-03-10T0${c}:00`, "B1", ["P"]), extract(`2026-03-10T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
   assert.ok(D.deriveSuggestions(eng, CONFIG, "2026-03-10T20:00").some(s => s.action.type === "engineering" && s.action.serial === "P"));
+});
+
+/* ===================== bath as a vessel: volume, consumption, load ===================== */
+test("deriveBath tracks current volume from fill + top-ups", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1", hclAddedL:300, waterAddedL:700, h3po4AddedL:100 }),
+    ev({ datetime:"2026-03-02T08:00", type:"Water Top-Up", bath:"B1", waterAddedL:20 }),
+    ev({ datetime:"2026-03-03T08:00", type:"Water Top-Up", bath:"B1", waterAddedL:15 }),
+    ev({ datetime:"2026-03-04T08:00", type:"HCl Top-Up", bath:"B1", hclAddedL:10 })
+  ];
+  const s = D.deriveBath(events, CONFIG, "B1", NOW);
+  assert.equal(s.volume, 1145);             // 1100 fill + 35 water + 10 HCl
+  assert.equal(s.hclAdded, 310);
+});
+test("deriveBath computes consumption KPIs (HCl per part / per load, iron load)", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1", hclAddedL:280, waterAddedL:720 }),
+    ev({ datetime:"2026-03-01T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:50 }),
+    load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
+    extract("2026-03-02T12:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Cleared" }, { serial:"C", result:"Cleared" }, { serial:"D", result:"Cleared" }])
+  ];
+  const s = D.deriveBath(events, CONFIG, "B1", "2026-03-04T08:00");
+  assert.equal(s.parts, 4);
+  assert.equal(s.loads, 1);
+  assert.equal(s.hclPerPart, 70);           // 280 / 4
+  assert.equal(s.hclPerLoad, 280);          // 280 / 1
+  assert.equal(s.feLoadG, 50);              // 50 mg/L * 1000 L / 1000 = 50 g
+});
+test("deriveBath scales load by component units when configured", () => {
+  const cfg = { ...CONFIG, componentUnits: { Blade: 5, Vane: 1 } };
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"], { component:"Blade" }),
+    load("2026-03-02T08:00", "B1", ["B"], { component:"Vane" }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Cleared" }])
+  ];
+  const s = D.deriveBath(events, cfg, "B1", NOW);
+  assert.equal(s.loadUnits, 6);             // 5 (blade) + 1 (vane)
+});
+
+/* ===================== part stop conditions & root cause ===================== */
+test("a part over the cycle/hour limit is held for engineering with a stated reason", () => {
+  const events = [];
+  for(let c = 0; c < 3; c++){ events.push(load(`2026-03-02T0${c}:00`, "B1", ["P"]), extract(`2026-03-02T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
+  const p = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(p.status.s, "→ Engineering");
+  assert.match(p.status.reason, /3 cycles/);
+});
+test("deriveRootCauses builds a Pareto of losses (default Unknown)", () => {
+  const events = [
+    load("2026-03-02T08:00", "B1", ["A", "B", "C"]),
+    extract("2026-03-02T10:00", "B1", [
+      { serial:"A", result:"Re-strip", rootCause:"Iron high" },
+      { serial:"B", result:"Re-strip", rootCause:"Iron high" },
+      { serial:"C", result:"Re-strip" }
+    ])
+  ];
+  const rc = D.deriveRootCauses(events);
+  assert.deepEqual(rc[0], { cause:"Iron high", count:2 });
+  assert.ok(rc.some(x => x.cause === "Unknown" && x.count === 1));
 });

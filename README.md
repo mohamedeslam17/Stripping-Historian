@@ -77,11 +77,18 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
   (with elapsed time), plus per‑bath state for the **current charge** (resets after
   a refill): age, latest chemistry, piece‑hour load, parts processed, and
   **out‑of‑band flags**. Trend charts for Fe / HCl / temp with limit lines and
-  control bands.
+  control bands. The bath is modelled as a **vessel**, not just a log: **current
+  volume** (fill + top‑ups), **consumption** (HCl per part / per load / per day),
+  **iron load (g)**, and **load** in both piece‑hours and configurable
+  **component load‑units** (a tank of 5 blades ≠ 50 vanes).
 - **Quality** — an instant defect database (wax failures, re‑masks, engineering
-  reviews, re‑strips), filterable by kind.
-- **Dashboard** — first‑pass yield, re‑strip rate, engineering load, bath status,
-  and a per‑job‑card rollup.
+  reviews, re‑strips), filterable by kind, with a **root‑cause Pareto** (Bath
+  chemistry / Iron high / Temperature / Masking / Operator / Component / Unknown,
+  configurable).
+- **Dashboard** — first‑pass yield, re‑strip rate, engineering load, a per‑job‑card
+  rollup, bath status, and a **chemical‑consumption & bath‑life** table.
+- **Stop conditions** — a part over the cycle/hour limit is automatically held for
+  engineering, with the breached limit stated as the reason.
 
 **Smart guidance (it knows the state of every bath and piece).** The event stream
 is treated as a **state machine**, so the app relates each action to what is
