@@ -28,8 +28,9 @@ On the floor you rarely know the out‑time when a part goes in, parts go in as 
   stays accurate.
 - **Remove parts** (*Extraction*) — pull **some** of what's currently in that bath.
   The form shows you the **live bath contents** as a checklist; you tick the parts
-  coming out and set each result (Cleared / Re‑strip / Hold). Parts you don't tick
-  **stay in**.
+  coming out and set each reason (**Cleared / Re‑strip / Re‑mask / Hold**). *Re‑mask*
+  pre‑selects the part's masked areas and routes it to **Needs re‑mask**. Parts you
+  don't tick **stay in**.
 - **Move** (*Transfer*) — relocate **all or some** of a bath's contents to another
   bath. The part keeps its current dip (a move is **not** counted as a new strip
   cycle); its immersion time simply carries on in the new tank.
@@ -73,7 +74,7 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 | Parts Received | The waiting area — serials parked, not yet in a bath (created by *Add parts → Waiting area*) |
 | Bath Fill | **Complete fill** — new charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
-| Top‑Up | **Partial addition** — top up acid and/or water between checks |
+| Top‑Up | **Partial addition** — top up HCl, water and/or H₃PO₄ between checks |
 | Engineering Review | Disposition a part (Accepted / Scrap / Return / Hold…) |
 | Bath Disposal | Bath taken out of service (with reason) |
 
@@ -195,8 +196,11 @@ npm test
 
 ## Data & portability
 
+- **Report** → a self‑contained, **color‑coded HTML** report of every dip with a
+  single **Status** column — *Ongoing* (still in a bath), *Completed* (cleared),
+  *Re‑strip*, *Re‑mask*, *Hold*, *Moved* — ready to open or print.
 - **Backup** → `strip_historian_backup_<date>.json` (config + events).
-- **Export CSV** → flat `eventId,datetime,type,…` for spreadsheets/BI.
+- **Export CSV** → flat one‑row‑per‑dip table (same *Status* column) for spreadsheets/BI.
 - **Import** replaces local data from a backup (with confirmation), so you can move
   between machines or restore after a browser reset.
 

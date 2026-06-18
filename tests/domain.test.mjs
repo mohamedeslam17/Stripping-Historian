@@ -23,7 +23,7 @@ const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf(
 
 const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
-  "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
+  "parseSerials","eventsForSerial","deriveImmersions","bathContents","dipStatus","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
   "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts","waitingParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","maskConfigFor","TYPES","F","TYPE_PILL"
@@ -100,6 +100,32 @@ test("extracting a part that was never loaded is flagged as an anomaly", () => {
   const { records } = D.deriveImmersions([extract("2026-03-22T10:00", "B1", [{ serial:"Z", result:"Cleared" }])], NOW);
   assert.equal(records.length, 1);
   assert.match(records[0].anomaly, /not in bath/);
+});
+
+/* ------------------- removal reasons / report status ------------------- */
+test("'Re-mask' is a removal reason that routes a part to Needs re-mask", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"], { jc:"J", maskAreas:["Cooling holes", "Part body"] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-mask", wax:["Cooling holes", "Part body"] }])
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Needs re-mask");
+  // it's logged in Quality as a re-mask, not a wax failure
+  const defs = D.deriveDefects(events);
+  assert.ok(defs.some(d => d.kind === "Re-mask" && d.serial === "A"));
+  assert.ok(!defs.some(d => d.kind === "Wax failure"));
+});
+test("dipStatus: Ongoing while in a bath, Completed when cleared, else the reason", () => {
+  const events = [
+    load("2026-03-02T08:00", "B1", ["A", "B", "C"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Re-strip" }])
+    // C still in the bath
+  ];
+  const { records } = D.deriveImmersions(events, "2026-03-02T12:00");
+  const byS = Object.fromEntries(records.map(r => [r.serial, D.dipStatus(r)]));
+  assert.equal(byS.A, "Completed");
+  assert.equal(byS.B, "Re-strip");
+  assert.equal(byS.C, "Ongoing");
 });
 
 /* ----------------------------- pieces ------------------------------ */

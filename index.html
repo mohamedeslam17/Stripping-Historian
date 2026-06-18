@@ -202,6 +202,7 @@
     <div class="side-sp"></div>
     <button class="side-log" id="logBtn">＋&nbsp; Log event&nbsp; <span class="kbd">N</span></button>
     <div class="side-foot">
+      <button id="exportReport" title="Download a color-coded HTML report">Report</button>
       <button id="exportJson" title="Download a full JSON backup">Backup</button>
       <button id="importBtn" title="Restore from a backup">Import</button>
       <button id="exportCsv" title="Export the dip log as CSV">CSV</button>
@@ -321,7 +322,7 @@ const TYPES = {
   "Transfer":         { desc:"move parts to another bath",   custom:"move",    fields:[F.bath,F.op,F.notes] },
   "Parts Received":   { desc:"add serials to the waiting area (not in a bath)", custom:"received", hidden:true, fields:[F.jc,F.component,F.op,F.notes] },
   "Chemistry Check":  { desc:"titration result",   fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
-  "Top-Up":           { desc:"partial top-up — add acid and/or water", fields:[F.bath,F.hcl,F.water,F.op,F.notes] },
+  "Top-Up":           { desc:"partial top-up — add acid / water / H₃PO₄", fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
   "Bath Fill":        { desc:"complete fill — new charge",   fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
   "HCl Top-Up":       { desc:"add acid",            hidden:true, fields:[F.bath,F.hcl,F.op,F.notes] },
   "Water Top-Up":     { desc:"add water",           hidden:true, fields:[F.bath,F.water,F.op,F.notes] },
@@ -404,6 +405,13 @@ function deriveImmersions(events, nowDT){
 function bathContents(events, nowDT, bath){
   const { open } = deriveImmersions(events, nowDT);
   return [...open.values()].filter(r => !bath || r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
+}
+// Reporting status for one dip record: still in a bath = Ongoing, cleared =
+// Completed, otherwise the removal reason (Re-strip / Re-mask / Hold / Moved).
+function dipStatus(r){
+  if(r.open) return "Ongoing";
+  if(r.result === "Cleared") return "Completed";
+  return r.result || "—";
 }
 
 // A wax failure is recorded by which masked AREA failed (e.g. cooling holes vs
@@ -539,6 +547,7 @@ function deriveBath(events, config, bath, nowDT){
   const wax = recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
   const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
   const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
+  const h3po4Added = evs.filter(within).reduce((a, e) => a + (+e.h3po4AddedL || 0), 0);
   const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
   const active = !!lastFill && !disposal;
 
@@ -554,7 +563,7 @@ function deriveBath(events, config, bath, nowDT){
   if(active && capacity && contents.length > capacity) flags.push("Over capacity " + contents.length + "/" + capacity);
   if(disposal && contents.length) flags.push(contents.length + " part(s) still recorded as inside a disposed bath");
 
-  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags, contents, capacity, free };
+  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, h3po4Added, age, flags, contents, capacity, free };
 }
 // The baths to show/offer: the ones configured in Settings (always shown), plus
 // any extra bath that appears in the event log — so the standard tanks are always
@@ -610,7 +619,8 @@ function deriveDefects(events){
     else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "" }); }
     else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
-      if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
+      // Areas marked on a "Re-mask" removal are intentional re-masking, not a defect.
+      if(waxAreasOf(it).length) out.push({ e, kind: it.result === "Re-mask" ? "Re-mask" : "Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
       if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
     });
     else if(e.type === "Immersion"){
@@ -927,7 +937,7 @@ function eventDetail(e){
   if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
   if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
-  if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); d.push(p.join(" · ") || "top-up"); }
+  if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); if(+e.h3po4AddedL) p.push(`+${e.h3po4AddedL} L H₃PO₄`); d.push(p.join(" · ") || "top-up"); }
   if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""}${e.toBath ? " → " + e.toBath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} → waiting area: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Wax Failure") d.push(e.waxFailure || "");
@@ -1020,7 +1030,7 @@ function renderDrawer(){
       if(formType === "Load In") return !formData.bath ? "Select a bath" : ((formData.serials || []).length ? "" : "Add at least one serial");
       if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
       if(formType === "Parts Received") return (formData.serials || []).length ? "" : "Add at least one serial";
-      if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0) ? "" : "Enter an HCl or water amount";
+      if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0 || num(formData.h3po4AddedL) > 0) ? "" : "Enter an HCl, water or H₃PO₄ amount";
       if(formType === "Transfer") return !formData.bath ? "Select the source bath" : !formData.toBath ? "Select a destination bath" : ((formData.serials || []).length ? "" : "Tick the parts to move");
       return "";
     }
@@ -1386,22 +1396,29 @@ function buildExtractFields(card, refreshWarn){
       cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); rebuild(); });
       const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
       const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
-      const seg = cel("div", { class:"seg" });
-      ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
       if(!Array.isArray(st.wax)) st.wax = [];
-      // Wax: tap a masked area if its mask failed (red = failed). No severity. Only
-      // the areas this part actually has (its wax configuration) are offered.
       const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
+      const seg = cel("div", { class:"seg" });
+      // Reasons for removing. "Re-mask" flags the part for re-masking — it pre-selects
+      // the part's masked areas (refine below), which routes it to "Needs re-mask".
+      ["Cleared", "Re-strip", "Re-mask", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => {
+        st.result = o; st.checked = true;
+        if(o === "Re-mask" && !st.wax.length) st.wax = partAreas.slice();
+        if(o === "Cleared") st.wax = [];
+        sync(); refreshWarn(); rebuild();
+      } }, o)));
+      // Masked areas: tap one if its mask failed / is being re-masked. Only the areas
+      // this part actually has (its wax configuration) are offered.
       const wseg = cel("div", { class:"seg wax wrap" });
       partAreas.forEach(area => {
-        const b = cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:"mask failed on " + area, onclick:() => {
+        const b = cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:(st.result === "Re-mask" ? "re-mask " : "mask failed on ") + area, onclick:() => {
           st.wax = st.wax.includes(area) ? st.wax.filter(a => a !== area) : st.wax.concat(area);
           if(st.wax.length){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; }
           sync(); refreshWarn(); rebuild();
         } }, area);
         wseg.append(b);
       });
-      const waxBox = partAreas.length ? cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "mask failed?"), wseg]) : null;
+      const waxBox = partAreas.length ? cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, st.result === "Re-mask" ? "areas to re-mask" : "mask failed?"), wseg]) : null;
       const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, waxBox]);
       boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
     });
@@ -1421,7 +1438,7 @@ async function saveForm(){
   }
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
   if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
-  if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0)){ alert("Enter an HCl or water amount."); return; } }
+  if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0 || num(rec.h3po4AddedL) > 0)){ alert("Enter an HCl, water or H₃PO₄ amount."); return; } }
   if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select source and destination baths."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } }
   if(editId != null){
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
@@ -1595,7 +1612,7 @@ function showBath(bath){
   const body = cel("div", {});
   body.append(cel("div", { class:"muted", style:"margin-bottom:6px" },
     s.disposal ? ("Disposed " + fmtDT(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDT(s.lastFill.datetime) : "No fill logged")));
-  if(s.lastFill) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
+  if(s.lastFill) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water, +" + s.h3po4Added + " L H₃PO₄"));
   if(s.flags.length) body.append(cel("div", { class:"warn-line warn-red" }, "⚠ " + s.flags.join(" · ")));
 
   if(s.contents.length){
@@ -1792,16 +1809,43 @@ function vSettings(m){
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = cel("a", { href:u, download:name }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
 $("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:2, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
 $("#exportCsv").onclick = () => {
-  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "result", "waxFailure", "open", "anomaly"];
+  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "status", "wax", "anomaly"];
   const { records } = deriveImmersions(EVENTS, nowLocalDT());
   const lines = [cols.join(",")];
   records.forEach(r => {
     const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
-      hours:r.open ? ("in bath " + (r.elapsedH || 0) + "h") : (r.hours == null ? "" : r.hours), result:r.result || "", waxFailure:waxSummary(r), open:r.open ? "yes" : "", anomaly:r.anomaly || "" };
+      hours:r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), status:dipStatus(r), wax:waxSummary(r), anomaly:r.anomaly || "" };
     lines.push(cols.map(c => { let v = row[c] == null ? "" : String(row[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(","));
   });
   download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
 };
+// Color-coded, self-contained HTML report — opens/prints anywhere.
+const STATUS_COLOR = { Completed:["#dcf3e3", "#1b7a3d"], Ongoing:["#dcebf5", "#1f5e84"], "Re-strip":["#fceccb", "#8a5a00"], "Re-mask":["#ece3f5", "#6b3fa0"], Hold:["#eaeef0", "#5b6770"], Moved:["#eaeef0", "#5b6770"] };
+function buildReportHTML(){
+  const { records } = deriveImmersions(EVENTS, nowLocalDT());
+  const rows = records.slice().sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)) || String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
+  const k = deriveKpis(EVENTS, CONFIG, nowLocalDT());
+  const body = rows.map(r => {
+    const s = dipStatus(r), col = STATUS_COLOR[s] || ["#eaeef0", "#5b6770"];
+    const td = (v, extra) => "<td" + (extra ? " style='" + extra + "'" : "") + ">" + esc(v == null ? "" : String(v)) + "</td>";
+    return "<tr>" + td(r.serial) + td(r.jc) + td(r.component) + td(r.bath) + td(r.cycle || "", "text-align:center")
+      + td(fmtDT(r.inDT)) + td(fmtDT(r.outDT)) + td(r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), "text-align:right")
+      + td(waxSummary(r))
+      + "<td><span class='st' style='background:" + col[0] + ";color:" + col[1] + "'>" + esc(s) + "</span></td></tr>";
+  }).join("");
+  return "<!doctype html><html><head><meta charset='utf-8'><title>Stripping report " + todayISODate() + "</title><style>"
+    + "body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16242b;margin:24px;font-size:13px}"
+    + "h1{font-size:18px;margin:0 0 2px} .muted{color:#647078;font-size:12px;margin-bottom:14px}"
+    + "table{border-collapse:collapse;width:100%} th,td{border:1px solid #e4e9ec;padding:6px 9px;text-align:left;vertical-align:top}"
+    + "th{background:#f6f9fa;text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:#647078}"
+    + ".st{display:inline-block;padding:2px 9px;border-radius:10px;font-weight:600;font-size:11.5px;white-space:nowrap}"
+    + "tr:nth-child(even) td{background:#fbfcfd}</style></head><body>"
+    + "<h1>Stripping Historian — report</h1>"
+    + "<div class='muted'>Generated " + esc(fmtDT(nowLocalDT())) + " · " + rows.length + " dip records · " + k.cleared + " completed · " + k.inBath + " ongoing · first-pass yield " + k.fpy + "%</div>"
+    + "<table><thead><tr><th>Serial</th><th>J/C</th><th>Component</th><th>Bath</th><th>Cycle</th><th>Time in</th><th>Time out</th><th>Hours</th><th>Wax</th><th>Status</th></tr></thead><tbody>"
+    + (body || "<tr><td colspan='10' style='text-align:center;color:#647078'>No dip records yet.</td></tr>") + "</tbody></table></body></html>";
+}
+$("#exportReport").onclick = () => download("strip_historian_report_" + todayISODate() + ".html", buildReportHTML(), "text/html");
 $("#importBtn").onclick = () => $("#importFile").click();
 $("#importFile").onchange = e => {
   const f = e.target.files[0]; if(!f) return;
