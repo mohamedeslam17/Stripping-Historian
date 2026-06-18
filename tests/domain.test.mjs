@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts","waitingParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -439,6 +439,29 @@ test("parkedParts lists received serials until they are loaded into a bath", () 
   assert.equal(D.parkedParts(base, CONFIG, NOW).find(p => p.serial === "P1").jc, "J9");   // J/C carried from the received event
   const afterLoad = base.concat(load("2026-03-21T08:00", "B1", ["P1"]));
   assert.deepEqual(D.parkedParts(afterLoad, CONFIG, NOW).map(p => p.serial).sort(), ["P2", "P3"]);   // P1 drops off once loaded
+});
+test("waitingParts = parts out of a bath without re-entry, plus parked serials", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-02T07:00", type:"Parts Received", serials:["W9"], jc:"JX" }),   // parked
+    load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
+    extract("2026-03-02T10:00", "B1", [
+      { serial:"A", result:"Cleared" },                           // done -> not waiting
+      { serial:"B", result:"Re-strip" },                          // out, not back -> waiting
+      { serial:"C", result:"Re-strip", wax:["Cooling holes"] }    // out, needs re-mask -> waiting
+    ])
+    // D is still in the bath -> not waiting
+  ];
+  const w = D.waitingParts(events, CONFIG, "2026-03-02T12:00");
+  const byS = Object.fromEntries(w.map(p => [p.serial, p]));
+  assert.deepEqual(w.map(p => p.serial).sort(), ["B", "C", "W9"]);
+  assert.equal(byS.B.kind, "awaiting re-strip");
+  assert.equal(byS.B.lastBath, "B1");           // remembers where it came from
+  assert.equal(byS.C.kind, "needs re-mask");
+  assert.equal(byS.W9.kind, "received");
+  // once a waiting part goes back into a bath, it leaves the waiting area
+  const back = events.concat(load("2026-03-02T11:00", "B1", ["B"], { remask:[] }));
+  assert.ok(!D.waitingParts(back, CONFIG, "2026-03-02T12:00").some(p => p.serial === "B"));
 });
 
 /* ===================== move parts to another bath (Transfer) ===================== */

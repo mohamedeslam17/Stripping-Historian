@@ -784,6 +784,24 @@ function parkedParts(events, config, nowDT){
   return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
 }
 
+// The waiting area: everything not currently in a bath but still in play —
+// parts that went OUT of a bath without re-entry (awaiting re-strip / needs
+// re-mask), plus serials parked on receipt. One entry per serial, newest first.
+function waitingParts(events, config, nowDT){
+  const out = [], seen = new Set();
+  idleParts(events, config, nowDT).forEach(p => {
+    if(seen.has(p.serial)) return; seen.add(p.serial);
+    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "",
+      kind:p.status.s === "Needs re-mask" ? "needs re-mask" : "awaiting re-strip",
+      lastBath:p.lastBath || "", datetime:(p.recs[p.recs.length - 1] || {}).outDT || "" });
+  });
+  parkedParts(events, config, nowDT).forEach(p => {
+    if(seen.has(p.serial)) return; seen.add(p.serial);
+    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "", kind:"received", lastBath:"", datetime:p.datetime });
+  });
+  return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
+}
+
 /* ============================= DOMAIN END =============================== */
 
 /* ----------------------------- storage -------------------------------- */
@@ -1123,7 +1141,7 @@ function buildLoadFields(card, refreshWarn){
   CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b)));
   if(formData.bath && formData.bath !== WAITING_AREA && !CONFIG.baths.includes(formData.bath)) bsel.append(cel("option", { value:formData.bath }, formData.bath + " (unknown bath)"));
   bsel.value = formData.bath;
-  bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshParked(); refreshWarn(); });
+  bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshWaiting(); refreshWarn(); });
   bathField.append(bsel);
   const two = cel("div", { class:"twocol" });
   two.append(bathField);
@@ -1141,44 +1159,29 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshIdle(); refreshParked(); refreshRemask(); refreshWarn(); });
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshWaiting(); refreshRemask(); refreshWarn(); });
   wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
 
-  // Waiting area — serials parked, not yet in a bath. Pick from the drop-down to
-  // add one (or add all). Hidden when the destination IS the waiting area.
-  const parkedWrap = cel("div", {}); card.append(parkedWrap);
-  function refreshParked(){
-    parkedWrap.innerHTML = "";
+  // Waiting area — parts not in a bath (came out without re-entry, or parked on
+  // receipt). Select one (or add all) to pull it into this bath. Hidden when the
+  // destination IS the waiting area (you'd be adding to it, not pulling from it).
+  const waitingWrap = cel("div", {}); card.append(waitingWrap);
+  function refreshWaiting(){
+    waitingWrap.innerHTML = "";
     if(formData.bath === WAITING_AREA) return;
-    const parked = parkedParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
-    if(!parked.length) return;
-    parkedWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Waiting area (" + parked.length + ") — select to add"));
+    const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
+    if(!waiting.length) return;
+    const hint = p => p.kind === "needs re-mask" ? "  ·  re-mask" : p.kind === "received" ? "  ·  new" : (p.lastBath ? "  ·  out " + p.lastBath : "  ·  awaiting");
+    waitingWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Waiting area (" + waiting.length + ") — select to add"));
     const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add from waiting area…"));
-    parked.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : ""))));
+    waiting.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : "") + hint(p))));
     sel.addEventListener("input", () => { if(sel.value){ chipBox.addOne(sel.value); sel.value = ""; } });
-    const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => parked.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
-    parkedWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
+    const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => waiting.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
+    waitingWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
   }
-  refreshParked();
-
-  // Parts that came out and are waiting to go back in — tap to add them.
-  const idleWrap = cel("div", {}); card.append(idleWrap);
-  function refreshIdle(){
-    idleWrap.innerHTML = "";
-    const idle = idleParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
-    if(!idle.length) return;
-    idleWrap.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:8px 0 5px" }, [
-      cel("label", { class:"f", style:"margin:0;flex:1" }, "Waiting to go back in (" + idle.length + ") — tap to add"),
-      cel("button", { class:"btn sm", type:"button", onclick:() => idle.forEach(p => chipBox.addOne(p.serial)) }, "Add all")
-    ]));
-    const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-    idle.slice(0, 40).forEach(p => chips.append(cel("button", { type:"button", class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.status.s + (p.lastBath ? " · was in " + p.lastBath : ""), onclick:() => chipBox.addOne(p.serial) },
-      [cel("span", {}, "＋ " + p.serial), p.status.s === "Needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask") : null])));
-    idleWrap.append(chips);
-  }
-  refreshIdle();
+  refreshWaiting();
 
   // Re-masking happens here, as part of the re-dip: any entered part that came
   // out with a wax failure must have its failed areas re-masked before loading.
@@ -1612,18 +1615,24 @@ function vQuality(m){
 }
 
 /* --- Dashboard (Floor + Baths + KPIs in one) --- */
-// Waiting area: serials parked, not yet in a bath. Added via the Add-parts form
-// (choose "Waiting area" as the destination) and offered in its drop-down.
+// Waiting area: parts not in a bath but still in play — came out without re-entry
+// (awaiting re-strip / needs re-mask) or parked on receipt. Tap to add to a bath.
 function parkedPanel(){
-  const parked = parkedParts(EVENTS, CONFIG, nowLocalDT());
+  const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT());
   const card = cel("div", { class:"card", style:"margin-bottom:16px" });
   card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
-    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Waiting area — parts not in a bath yet (" + parked.length + ")"),
+    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Waiting area — parts not in a bath yet (" + waiting.length + ")"),
     cel("button", { class:"btn sm", onclick:() => startLoad(WAITING_AREA) }, "＋ Add to waiting area")
   ]));
-  if(!parked.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Add parts and choose “Waiting area” to park serials before they go into a bath.")); return card; }
+  if(!waiting.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Parts that come out of a bath without re-entry — and serials added to the waiting area — show up here.")); return card; }
   const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-  parked.slice(0, 80).forEach(p => chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + "waiting since " + fmtDT(p.datetime) + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component }) }, "＋ " + p.serial)));
+  waiting.slice(0, 80).forEach(p => {
+    const rescue = suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath);
+    const tag = p.kind === "needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask")
+      : p.kind === "received" ? cel("span", { class:"idlechip-tag", style:"background:var(--green-bg);color:var(--green)" }, "new")
+      : (p.lastBath ? cel("span", { class:"idlechip-tag", style:"background:var(--grey-bg);color:#5b6770" }, "out " + p.lastBath) : null);
+    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component, bath:rescue }) }, [cel("span", {}, "＋ " + p.serial), tag]));
+  });
   card.append(chips);
   return card;
 }
