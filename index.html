@@ -427,6 +427,17 @@ function remaskActions(events, serial){
 }
 function waxSummary(obj){ return waxAreasOf(obj).join(", "); }
 
+// A part's wax configuration: which masked areas it actually has (some parts have
+// no cooling holes, etc.). Taken from the most recent Add-parts / waiting entry
+// that specified it; defaults to every configured area for parts not yet set.
+function maskConfigFor(events, config, serial){
+  let cfg = null;
+  events.slice().sort(byDate).forEach(e => {
+    if((e.type === "Load In" || e.type === "Parts Received") && (e.serials || []).includes(serial) && Array.isArray(e.maskAreas)) cfg = e.maskAreas.slice();
+  });
+  return cfg != null ? cfg : (config.maskAreas || []);
+}
+
 // Every wax-failed area observed for a serial (discovered at extraction).
 function waxFailures(events, serial){
   const out = [];
@@ -1168,7 +1179,7 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshWaiting(); refreshRemask(); refreshWarn(); });
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); autofillMask(); refreshWaiting(); refreshRemask(); refreshWarn(); });
   wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
@@ -1191,6 +1202,27 @@ function buildLoadFields(card, refreshWarn){
     waitingWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
   }
   refreshWaiting();
+
+  // Wax configuration — which masked areas these parts actually have. Stored on the
+  // event so wax-failure tracking and re-mask analysis only consider real areas
+  // (e.g. a part with no cooling holes never gets a cooling-holes failure).
+  if(!Array.isArray(formData.maskAreas)) formData.maskAreas = (CONFIG.maskAreas || []).slice();
+  let maskTouched = editId != null;   // when editing, keep the saved config as-is
+  const maskWrap = cel("div", { class:"field" }); card.append(maskWrap);
+  function refreshMaskCfg(){
+    maskWrap.innerHTML = "";
+    if(!(CONFIG.maskAreas || []).length) return;
+    maskWrap.append(cel("label", { class:"f" }, "Masked areas (what these parts have)"));
+    maskWrap.append(areaToggleControl(() => formData.maskAreas, s => { formData.maskAreas = s; maskTouched = true; }, refreshWarn));
+    maskWrap.append(cel("div", { class:"faint", style:"font-size:11px;margin-top:4px" }, "Untick any area a part doesn't have (e.g. no cooling holes) — used for wax-failure and re-mask tracking."));
+  }
+  refreshMaskCfg();
+  function autofillMask(){
+    if(maskTouched || !(formData.serials || []).length) return;
+    formData.maskAreas = maskConfigFor(EVENTS, CONFIG, formData.serials[0]).slice();
+    refreshMaskCfg();
+  }
+  autofillMask();
 
   // Re-masking happens here, as part of the re-dip: any entered part that came
   // out with a wax failure must have its failed areas re-masked before loading.
@@ -1357,9 +1389,11 @@ function buildExtractFields(card, refreshWarn){
       const seg = cel("div", { class:"seg" });
       ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
       if(!Array.isArray(st.wax)) st.wax = [];
-      // Wax: tap a masked area if its mask failed (red = failed). No severity.
+      // Wax: tap a masked area if its mask failed (red = failed). No severity. Only
+      // the areas this part actually has (its wax configuration) are offered.
+      const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
       const wseg = cel("div", { class:"seg wax wrap" });
-      (CONFIG.maskAreas || []).forEach(area => {
+      partAreas.forEach(area => {
         const b = cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:"mask failed on " + area, onclick:() => {
           st.wax = st.wax.includes(area) ? st.wax.filter(a => a !== area) : st.wax.concat(area);
           if(st.wax.length){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; }
@@ -1367,7 +1401,8 @@ function buildExtractFields(card, refreshWarn){
         } }, area);
         wseg.append(b);
       });
-      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "mask failed?"), wseg])]);
+      const waxBox = partAreas.length ? cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "mask failed?"), wseg]) : null;
+      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, waxBox]);
       boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
     });
     cont.append(boxEl); sync();
@@ -1520,6 +1555,8 @@ function showSerial(serial){
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.hours)), cel("div", { class:"l" }, "Cum hours")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
   ]));
+  const cfg = maskConfigFor(EVENTS, CONFIG, serial);
+  if((CONFIG.maskAreas || []).length) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:10px" }, "Masked areas: " + (cfg.length ? cfg.join(", ") : "none")));
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
@@ -1540,6 +1577,8 @@ function printTraveler(p){
   const meta = cel("table", { style:"width:auto;margin-bottom:14px" });
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Job card"), cel("td", { class:"pr-meta" }, p.jc || "—"), cel("td", { class:"pr-meta" }, "Cycles"), cel("td", { class:"pr-meta" }, String(p.cycles))]));
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cum hours"), cel("td", { class:"pr-meta" }, String(p.hours))]));
+  const cfg = maskConfigFor(EVENTS, CONFIG, p.serial);
+  if((CONFIG.maskAreas || []).length) meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Masked areas"), cel("td", { class:"pr-meta", colspan:"3" }, cfg.length ? cfg.join(", ") : "none")]));
   pa.append(meta);
   const t = cel("table"), hr = cel("tr");
   ["Event ID", "When", "Type", "Bath", "Detail", "Operator"].forEach(c => hr.append(cel("th", {}, c)));
@@ -1674,11 +1713,6 @@ function tankCard(s){
 }
 function vDash(m){
   const now = nowLocalDT();
-  m.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" }, [
-    cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Add parts"),
-    cel("button", { class:"btn", onclick:() => startExtraction("") }, "Remove parts"),
-    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check")
-  ]));
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
   [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]

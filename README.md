@@ -21,7 +21,11 @@ On the floor you rarely know the out‑time when a part goes in, parts go in as 
   the time‑in. Serials are entered as a list, with range shorthand like
   `7261-01..06`, **or picked from the waiting area** (see below). The destination
   drop‑down also offers **Waiting area** — choose it to **park** the serials
-  without a bath (stored as *Parts Received*) instead of dipping them.
+  without a bath (stored as *Parts Received*) instead of dipping them. You also set
+  the parts' **wax configuration** here — which masked areas they actually have
+  (untick e.g. *cooling holes* for parts that don't have them). That config follows
+  the serial, so the extraction form only offers real areas and re‑mask analysis
+  stays accurate.
 - **Remove parts** (*Extraction*) — pull **some** of what's currently in that bath.
   The form shows you the **live bath contents** as a checklist; you tick the parts
   coming out and set each result (Cleared / Re‑strip / Hold). Parts you don't tick

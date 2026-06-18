@@ -26,7 +26,7 @@ const EXPORTS = [
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
   "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts","waitingParts",
-  "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
+  "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","maskConfigFor","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -374,6 +374,20 @@ test("wax failure is tracked per masked area; a re-mask resolves only the areas 
   const full = partial.concat(ev({ datetime:"2026-03-02T12:00", type:"Re-Masking", serial:"A", areas:["Part body"] }));
   assert.equal(D.unresolvedWaxAreas(full, "A").length, 0);
   assert.equal(D.derivePieces(full, cfg, NOW)[0].status.s, "Awaiting re-strip");
+});
+test("maskConfigFor = the areas a part has, defaulting to all configured areas", () => {
+  const cfg = { ...CONFIG, maskAreas:["Cooling holes", "Part body"] };
+  // not yet configured -> defaults to every configured area
+  assert.deepEqual(D.maskConfigFor([load("2026-03-02T08:00", "B1", ["A"])], cfg, "A"), ["Cooling holes", "Part body"]);
+  // a part loaded with an explicit wax config keeps just those areas
+  const events = [load("2026-03-02T08:00", "B1", ["A"], { maskAreas:["Part body"] })];
+  assert.deepEqual(D.maskConfigFor(events, cfg, "A"), ["Part body"]);
+  // the most recent specifying event wins
+  const relog = events.concat(load("2026-03-03T08:00", "B1", ["A"], { maskAreas:["Cooling holes", "Part body"] }));
+  assert.deepEqual(D.maskConfigFor(relog, cfg, "A"), ["Cooling holes", "Part body"]);
+  // a waiting-area (Parts Received) entry can carry the config too, including none
+  const parked = [ev({ datetime:"2026-03-01T08:00", type:"Parts Received", serials:["Z"], maskAreas:[] })];
+  assert.deepEqual(D.maskConfigFor(parked, cfg, "Z"), []);
 });
 test("waxAreasOf reads the simple name list, the old {area} shape, and the legacy field", () => {
   assert.deepEqual(D.waxAreasOf({ wax:["Cooling holes", "Part body"] }), ["Cooling holes", "Part body"]);
