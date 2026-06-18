@@ -167,8 +167,8 @@ test("bath state is scoped to the current charge (resets after a refill)", () =>
   assert.equal(s.flags.length, 0);
 });
 
-test("bathList = no defaults; derives baths from config + the event log", () => {
-  // a clean slate (no configured baths, no events) shows no baths
+test("bathList = configured baths + any extra bath seen in the event log", () => {
+  // bathList adds nothing on its own — with nothing configured and no events, none
   assert.deepEqual(D.bathList([], { baths:[] }), []);
   // baths referenced in events appear even when none are configured
   const events = [

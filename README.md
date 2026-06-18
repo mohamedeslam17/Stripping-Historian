@@ -141,9 +141,9 @@ already true:
 iron limit, max cycles & hours per piece, max bath life, bath capacity, bath IDs,
 masked areas, operators.
 
-> **Bath IDs ship empty** — a fresh (or cleared) install shows no baths. Set your
-> own in **Settings → Bath IDs**, or just start logging: any bath that appears in
-> the data is shown automatically. The example dataset brings its own baths.
+> **Baths are always shown** — the configured tanks (Settings → Bath IDs) appear on
+> the floor at all times, even with no events. Any *extra* bath that turns up in the
+> data is added automatically, so nothing with real history is ever hidden.
 
 ---
 
