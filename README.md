@@ -141,6 +141,10 @@ already true:
 iron limit, max cycles & hours per piece, max bath life, bath capacity, bath IDs,
 masked areas, operators.
 
+> **Bath IDs ship empty** — a fresh (or cleared) install shows no baths. Set your
+> own in **Settings → Bath IDs**, or just start logging: any bath that appears in
+> the data is shown automatically. The example dataset brings its own baths.
+
 ---
 
 ## Architecture

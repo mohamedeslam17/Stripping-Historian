@@ -24,7 +24,7 @@ const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf(
 const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
-  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
+  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
   "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts","waitingParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
 ];
@@ -165,6 +165,21 @@ test("bath state is scoped to the current charge (resets after a refill)", () =>
   assert.equal(s.active, true);
   assert.equal(s.lastChem.fePpm, 20);
   assert.equal(s.flags.length, 0);
+});
+
+test("bathList = no defaults; derives baths from config + the event log", () => {
+  // a clean slate (no configured baths, no events) shows no baths
+  assert.deepEqual(D.bathList([], { baths:[] }), []);
+  // baths referenced in events appear even when none are configured
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    ev({ datetime:"2026-03-02T09:00", type:"Transfer", bath:"B1", toBath:"B2", serials:["A"] })
+  ];
+  assert.deepEqual(D.bathList(events, { baths:[] }), ["B1", "B2"]);
+  // configured baths come first, then any extra ones seen in data; no dupes
+  assert.deepEqual(D.bathList(events, { baths:["B2", "B9"] }), ["B2", "B9", "B1"]);
+  assert.equal(D.deriveBaths([], { baths:[] }, NOW).length, 0);
 });
 
 /* ------------------------------ KPIs ------------------------------- */

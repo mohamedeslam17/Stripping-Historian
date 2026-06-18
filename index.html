@@ -246,7 +246,7 @@ const DEFAULT_CONFIG = {
   maxBathAge: 30,
   bathCapacity: 12,
   maskAreas: ["Cooling holes", "Part body"],
-  baths: ["102-103", "106-107", "202-203", "206-207"],
+  baths: [],   // no demo baths by default — set them in Settings, or they appear from your data
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
 };
 
@@ -545,7 +545,15 @@ function deriveBath(events, config, bath, nowDT){
 
   return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags, contents, capacity, free };
 }
-function deriveBaths(events, config, nowDT){ return config.baths.map(b => deriveBath(events, config, b, nowDT)); }
+// The baths to show/offer: the ones configured in Settings, plus any bath that
+// actually appears in the event log — so nothing defaults in, yet no bath with
+// real data is ever hidden. (config.baths is empty until you set it or load data.)
+function bathList(events, config){
+  const out = (config.baths || []).slice(), seen = new Set(out);
+  events.forEach(e => [e.bath, e.toBath].forEach(b => { if(b && b !== WAITING_AREA && !seen.has(b)){ seen.add(b); out.push(b); } }));
+  return out;
+}
+function deriveBaths(events, config, nowDT){ return bathList(events, config).map(b => deriveBath(events, config, b, nowDT)); }
 
 function deriveJobCards(events, config, nowDT){
   const map = new Map();
@@ -1073,7 +1081,7 @@ function appendOpList(card){ const dl = cel("datalist", { id:"opList" }); (CONFI
 function fieldNode(name, label, kind, onin){
   const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
   let inp;
-  if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
+  if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); bathList(EVENTS, CONFIG).forEach(b => inp.append(cel("option", { value:b }, b))); }
   else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
   else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
   else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
@@ -1138,8 +1146,9 @@ function buildLoadFields(card, refreshWarn){
   if(!formData.bath) formData.bath = WAITING_AREA;
   const bathField = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath / destination"));
   const bsel = cel("select", {}, cel("option", { value:WAITING_AREA }, "Waiting area (not in a bath yet)"));
-  CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b)));
-  if(formData.bath && formData.bath !== WAITING_AREA && !CONFIG.baths.includes(formData.bath)) bsel.append(cel("option", { value:formData.bath }, formData.bath + " (unknown bath)"));
+  const knownBaths = bathList(EVENTS, CONFIG);
+  knownBaths.forEach(b => bsel.append(cel("option", { value:b }, b)));
+  if(formData.bath && formData.bath !== WAITING_AREA && !knownBaths.includes(formData.bath)) bsel.append(cel("option", { value:formData.bath }, formData.bath + " (unknown bath)"));
   bsel.value = formData.bath;
   bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshWaiting(); refreshWarn(); });
   bathField.append(bsel);
@@ -1234,7 +1243,7 @@ function buildMoveFields(card, refreshWarn){
   const two = cel("div", { class:"twocol" });
   const srcWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "From bath"));
   const ssel = cel("select", {}, cel("option", { value:"" }, "—"));
-  CONFIG.baths.forEach(b => ssel.append(cel("option", { value:b }, b))); if(formData.bath) ssel.value = formData.bath;
+  bathList(EVENTS, CONFIG).forEach(b => ssel.append(cel("option", { value:b }, b))); if(formData.bath) ssel.value = formData.bath;
   ssel.addEventListener("input", () => { formData.bath = ssel.value; formData.serials = []; rebuildDest(); rebuild(); refreshWarn(); });
   srcWrap.append(ssel);
   const dstWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "To bath"));
@@ -1243,7 +1252,7 @@ function buildMoveFields(card, refreshWarn){
   dstWrap.append(dsel);
   function rebuildDest(){
     dsel.innerHTML = ""; dsel.append(cel("option", { value:"" }, "—"));
-    CONFIG.baths.filter(b => b !== formData.bath).forEach(b => dsel.append(cel("option", { value:b }, b)));
+    bathList(EVENTS, CONFIG).filter(b => b !== formData.bath).forEach(b => dsel.append(cel("option", { value:b }, b)));
     if(formData.toBath && formData.toBath !== formData.bath) dsel.value = formData.toBath; else formData.toBath = "";
   }
   rebuildDest();
@@ -1308,7 +1317,7 @@ function buildExtractFields(card, refreshWarn){
   appendOpList(card);
   const bathWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath"));
   const bsel = cel("select", {}, cel("option", { value:"" }, "—"));
-  CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
+  bathList(EVENTS, CONFIG).forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
   bsel.addEventListener("input", () => { formData.bath = bsel.value; formData._rows = {}; rebuild(); refreshWarn(); });
   bathWrap.append(bsel); card.append(bathWrap);
   const cont = cel("div", {}); card.append(cont);
@@ -1417,7 +1426,7 @@ function vEventLog(m){
   const tSel = cel("select", { style:"width:auto", oninput:e => { logFilter.type = e.target.value; render(); } }, cel("option", { value:"" }, "All types"));
   Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, typeLabel(t)))); tSel.value = logFilter.type;
   const bSel = cel("select", { style:"width:auto", oninput:e => { logFilter.bath = e.target.value; render(); } }, cel("option", { value:"" }, "All baths"));
-  CONFIG.baths.forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
+  bathList(EVENTS, CONFIG).forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
   const txt = cel("input", { style:"width:210px", placeholder:"search J/C, serial, notes…", value:logFilter.text, oninput:e => { logFilter.text = e.target.value; render(); } });
   chips.append(tSel, bSel, txt, cel("button", { class:"btn sm", onclick:() => { logFilter = { type:"", bath:"", text:"" }; render(); } }, "Clear"));
   m.append(chips);
@@ -1680,7 +1689,8 @@ function vDash(m){
   // were saved with no bath) would otherwise be invisible — surface them so they
   // can be recovered. Click one to edit its load and assign a bath.
   if(EVENTS.length){
-    const orphan = bathContents(EVENTS, now, "").filter(r => !CONFIG.baths.includes(r.bath));
+    const known = bathList(EVENTS, CONFIG);
+    const orphan = bathContents(EVENTS, now, "").filter(r => !known.includes(r.bath));
     if(orphan.length){
       const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#e6b3b0" });
       oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
@@ -1691,10 +1701,17 @@ function vDash(m){
     }
   }
   if(EVENTS.length) m.append(parkedPanel());
+  const baths = deriveBaths(EVENTS, CONFIG, now);
+  if(!baths.length){
+    m.append(cel("div", { class:"empty" }, [
+      cel("div", { style:"font-size:15px;margin-bottom:6px" }, EVENTS.length ? "No baths yet" : "Nothing here yet"),
+      cel("div", {}, "Add your bath IDs in Settings, log a Bath Fill, or load the example data — baths appear here automatically from your data.")
+    ]));
+    return;
+  }
   m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
-  if(!EVENTS.length){ m.append(emptyState()); return; }
   const grid = cel("div", { class:"tankgrid" });
-  deriveBaths(EVENTS, CONFIG, now).forEach(s => grid.append(tankCard(s)));
+  baths.forEach(s => grid.append(tankCard(s)));
   m.append(grid);
 
   const jr = deriveJobCards(EVENTS, CONFIG, now);
@@ -1721,7 +1738,7 @@ function vSettings(m){
 
   const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107 — leave blank to start clean", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "Optional — baths also appear automatically from your data. Empty by default.")]));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), oninput:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
   c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
