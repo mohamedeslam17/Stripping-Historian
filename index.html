@@ -519,7 +519,7 @@ function derivePieces(events, config, nowDT){
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
       cycles:recs.filter(r => !r.moved).length, hours:st.hours,
-      wax: recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
+      wax: recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
@@ -551,7 +551,7 @@ function deriveBath(events, config, bath, nowDT){
   const contents = [...open.values()].filter(r => r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
   const loadH = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)), 0));
   const parts = new Set(recs.map(r => r.serial)).size;
-  const wax = recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
+  const wax = recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
   const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
   const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
   const h3po4Added = evs.filter(within).reduce((a, e) => a + (+e.h3po4AddedL || 0), 0);
@@ -612,7 +612,7 @@ function deriveKpis(events, config, nowDT){
     inBath: open.size,
     fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
     dips: realDips, reStrip, reStripRate: realDips ? Math.round(reStrip / realDips * 100) : 0,
-    wax: records.filter(r => r.waxFailure && r.waxFailure !== "None").length + events.filter(e => e.type === "Wax Failure").length,
+    wax: records.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + events.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
     bathsOver: baths.filter(b => b.active && b.flags.length).length,
     activeBaths: baths.filter(b => b.active).length,
     avgCycles: clearedPieces.length ? round(clearedPieces.reduce((a, r) => a + r.cycles, 0) / clearedPieces.length, 2) : 0
@@ -626,8 +626,9 @@ function deriveDefects(events){
     else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "" }); }
     else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
-      // Areas marked on a "Re-mask" removal are intentional re-masking, not a defect.
-      if(waxAreasOf(it).length) out.push({ e, kind: it.result === "Re-mask" ? "Re-mask" : "Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
+      // A "Re-mask" removal is intentional re-masking (logged even with no areas), not a wax defect.
+      if(it.result === "Re-mask") out.push({ e, kind:"Re-mask", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
+      else if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
       if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
     });
     else if(e.type === "Immersion"){
@@ -792,14 +793,6 @@ function deriveSuggestions(events, config, nowDT){
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
 }
 
-// Idle parts: came out of a tank and are not finished — waiting to go back in
-// (awaiting another strip, or blocked needing a re-mask). Newest-out first.
-function idleParts(events, config, nowDT){
-  return derivePieces(events, config, nowDT)
-    .filter(p => p.status.s === "Awaiting re-strip" || p.status.s === "Needs re-mask")
-    .sort((a, b) => String((b.recs[b.recs.length - 1] || {}).outDT || "").localeCompare(String((a.recs[a.recs.length - 1] || {}).outDT || "")));
-}
-
 // Parked parts: serials a tech logged as received in their area (a "Parts
 // Received" event) but has not yet loaded into a bath since — staged, awaiting
 // a first dip. A part drops off this list once it is loaded. Newest first.
@@ -941,7 +934,7 @@ function eventDetail(e){
   const d = [];
   if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
   if(e.type === "Load In"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} in${e.bath ? " → " + e.bath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
-  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => waxAreasOf(i).length).length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
+  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Re-mask","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => i.result !== "Re-mask" && waxAreasOf(i).length).length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
   if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} ${e.result || ""}`);
   if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
@@ -1680,7 +1673,7 @@ function vQuality(m){
     const e = d.e, jc = jcBySerial[d.serial] || "";
     const tr = cel("tr");
     tr.append(tcell(fmtDT(e.datetime)));
-    tr.append(cel("td", {}, pill(d.kind, TYPE_PILL[e.type] || "p-amber")));
+    tr.append(cel("td", {}, pill(d.kind, { "Wax failure":"p-red", "Re-mask":"p-purple", "Re-strip":"p-grey", "Eng review":"p-amber" }[d.kind] || "p-amber")));
     tr.append(tcell(jc));
     tr.append(cel("td", {}, d.serial ? cel("span", { class:"linkish", onclick:() => showSerial(d.serial) }, d.serial) : ""));
     tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(e.operator));

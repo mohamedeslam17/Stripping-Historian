@@ -25,7 +25,7 @@ const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","dipStatus","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts","parkedParts","waitingParts",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","parkedParts","waitingParts",
   "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","maskConfigFor","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
@@ -114,6 +114,33 @@ test("'Re-mask' is a removal reason that routes a part to Needs re-mask", () => 
   const defs = D.deriveDefects(events);
   assert.ok(defs.some(d => d.kind === "Re-mask" && d.serial === "A"));
   assert.ok(!defs.some(d => d.kind === "Wax failure"));
+});
+test("a 'Re-mask' with no areas is still logged in Quality and not a wax failure", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["N"], { maskAreas:[] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"N", result:"Re-mask", wax:[] }])
+  ];
+  const defs = D.deriveDefects(events);
+  assert.ok(defs.some(d => d.kind === "Re-mask" && d.serial === "N"), "re-mask intent is logged even with no areas");
+});
+test("wax counters use area-based failures and exclude intentional Re-mask", () => {
+  const fail = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }])
+  ];
+  assert.equal(D.deriveKpis(fail, CONFIG, NOW).wax, 1);          // an area-based wax failure is counted
+  assert.equal(D.derivePieces(fail, CONFIG, NOW)[0].wax, 1);
+  assert.equal(D.deriveBath(fail, CONFIG, "B1", NOW).wax, 1);
+  const remask = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["Z"], { maskAreas:["Cooling holes", "Part body"] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"Z", result:"Re-mask", wax:["Cooling holes", "Part body"] }])
+  ];
+  assert.equal(D.deriveKpis(remask, CONFIG, NOW).wax, 0);        // an intentional re-mask is NOT a failure
+  assert.equal(D.derivePieces(remask, CONFIG, NOW)[0].wax, 0);
+  assert.equal(D.deriveBath(remask, CONFIG, "B1", NOW).wax, 0);
 });
 test("dipStatus: Ongoing while in a bath, Completed when cleared, else the reason", () => {
   const events = [
@@ -470,21 +497,6 @@ test("a part over the cycle/hour limit is held for engineering with a stated rea
   const p = D.derivePieces(events, CONFIG, NOW)[0];
   assert.equal(p.status.s, "→ Engineering");
   assert.match(p.status.reason, /3 cycles/);
-});
-
-/* ===================== idle parts (waiting to go back in) ===================== */
-test("idleParts lists parts that came out and are not finished (awaiting / needs re-mask)", () => {
-  const events = [
-    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
-    load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
-    extract("2026-03-02T10:00", "B1", [
-      { serial:"A", result:"Cleared" },                          // done -> not idle
-      { serial:"B", result:"Re-strip" },                         // awaiting re-strip -> idle
-      { serial:"C", result:"Re-strip", wax:["Cooling holes"] }   // needs re-mask -> idle
-    ])
-    // D never extracted -> still in bath -> not idle
-  ];
-  assert.deepEqual(D.idleParts(events, CONFIG, "2026-03-02T12:00").map(p => p.serial).sort(), ["B", "C"]);
 });
 
 /* ===================== parked parts (received in the tech's area) ===================== */
