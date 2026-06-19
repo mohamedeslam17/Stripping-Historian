@@ -245,7 +245,7 @@ const DEFAULT_CONFIG = {
   feMax: 100,
   maxCycles: 3, maxHours: 24,
   maxBathAge: 30,
-  bathCapacity: 12,
+  bathCapacity: 0,   // 0 = no part limit
   maskAreas: ["Cooling holes", "Part body"],
   baths: ["102-103", "106-107", "202-203", "206-207"],   // always shown; edit in Settings
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
@@ -380,17 +380,24 @@ function deriveImmersions(events, nowDT){
           hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
       });
     } else if(e.type === "Transfer"){
-      // Moving parts to another bath: close the open record in the source bath
-      // (not a strip outcome) and open a continuation of the SAME cycle in the
-      // destination, flagged `moved` so it is never counted as a new dip.
+      // Move parts to another bath, or OUT to the waiting area (no destination
+      // bath). To a bath: close the source record and open a same-cycle
+      // continuation, flagged `moved` so it isn't counted as a new dip. To the
+      // waiting area: just close the source — the part is now out, awaiting.
       const toBath = e.toBath || "";
       (e.serials || []).forEach(s => {
         const r = open.get(s);
-        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; }
-        const cont = { serial:s, bath:toBath, jc:(r && r.jc) || e.jc || "", component:(r && r.component) || e.component || "",
-          cycle:r ? r.cycle : (cyc.get(s) || 0), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
-          hours:null, elapsedH:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
-        open.set(s, cont); records.push(cont);
+        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(toBath){
+          const cont = { serial:s, bath:toBath, jc:(r && r.jc) || e.jc || "", component:(r && r.component) || e.component || "",
+            cycle:r ? r.cycle : (cyc.get(s) || 0), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
+            hours:null, elapsedH:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
+          open.set(s, cont); records.push(cont);
+        } else if(!r){
+          records.push({ serial:s, bath:"", jc:e.jc || "", component:e.component || "", cycle:(cyc.get(s) || 0),
+            inDT:null, outDT:e.datetime, result:"Moved", waxFailure:null, hours:null, elapsedH:null, open:false,
+            anomaly:"moved out but was not in a bath", loadEvent:null, extractEvent:e });
+        }
       });
     } else if(e.type === "Immersion"){ // legacy self-contained dip
       if(!e.serial) continue;
@@ -696,7 +703,7 @@ function eventWarnings(d, events, config, nowDT){
   if((d.type === "HCl Top-Up" || d.type === "Water Top-Up" || d.type === "Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
   if(d.type === "Transfer"){
     if(d.bath && d.toBath && d.bath === d.toBath) add("red", "Source and destination are the same bath");
-    if(d.toBath){
+    if(d.toBath && d.toBath !== WAITING_AREA){
       const bd = deriveBath(others, config, d.toBath, nowDT);
       if(bd.disposal) add("red", `Bath ${d.toBath} was disposed ${fmtDate(bd.disposal.datetime)} — fill it before moving parts in`);
       else if(!bd.lastFill) add("amber", `Bath ${d.toBath} has no fill logged`);
@@ -938,7 +945,7 @@ function eventDetail(e){
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
   if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
   if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); if(+e.h3po4AddedL) p.push(`+${e.h3po4AddedL} L H₃PO₄`); d.push(p.join(" · ") || "top-up"); }
-  if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""}${e.toBath ? " → " + e.toBath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
+  if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""} → ${e.toBath || "waiting area"}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} → waiting area: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Wax Failure") d.push(e.waxFailure || "");
   if(e.type === "Engineering Review") d.push(e.status || "");
@@ -948,7 +955,7 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
-  if(e.type === "Transfer") return "moved " + (e.bath || "bath") + " → " + (e.toBath || "bath");
+  if(e.type === "Transfer") return "moved " + (e.bath || "bath") + " → " + (e.toBath || "waiting area");
   if(e.type === "Parts Received") return "added to waiting area" + (e.jc ? " · " + e.jc : "");
   if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
   if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
@@ -1288,12 +1295,13 @@ function buildMoveFields(card, refreshWarn){
   bathList(EVENTS, CONFIG).forEach(b => ssel.append(cel("option", { value:b }, b))); if(formData.bath) ssel.value = formData.bath;
   ssel.addEventListener("input", () => { formData.bath = ssel.value; formData.serials = []; rebuildDest(); rebuild(); refreshWarn(); });
   srcWrap.append(ssel);
-  const dstWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "To bath"));
+  const dstWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Move to"));
   const dsel = cel("select", {}, cel("option", { value:"" }, "—"));
   dsel.addEventListener("input", () => { formData.toBath = dsel.value; refreshWarn(); });
   dstWrap.append(dsel);
   function rebuildDest(){
     dsel.innerHTML = ""; dsel.append(cel("option", { value:"" }, "—"));
+    dsel.append(cel("option", { value:WAITING_AREA }, "Waiting area (out of bath)"));
     bathList(EVENTS, CONFIG).filter(b => b !== formData.bath).forEach(b => dsel.append(cel("option", { value:b }, b)));
     if(formData.toBath && formData.toBath !== formData.bath) dsel.value = formData.toBath; else formData.toBath = "";
   }
@@ -1439,7 +1447,7 @@ async function saveForm(){
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
   if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
   if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0 || num(rec.h3po4AddedL) > 0)){ alert("Enter an HCl, water or H₃PO₄ amount."); return; } }
-  if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select source and destination baths."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } }
+  if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select a source and a destination."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } if(rec.toBath === WAITING_AREA) rec.toBath = ""; }   // waiting area = no destination bath
   if(editId != null){
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
     rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS);
@@ -1782,7 +1790,7 @@ function vSettings(m){
   m.append(cel("h2", { class:"sec" }, "Settings"));
   const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
-  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts)"]];
+  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"]];
   const lg = cel("div", { class:"twocol" });
   lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key], oninput:async e => { CONFIG[key] = +e.target.value; await saveConfig(); renderNav(); } })])));
   c1.append(lg); m.append(c1);

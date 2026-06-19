@@ -539,6 +539,16 @@ test("a Transfer moves parts to another bath, continuing the same cycle (not a n
   assert.equal(pc.cycles, 1);
   assert.equal(pc.firstPass, true);           // moved then cleared, never re-stripped
 });
+test("moving parts out to the waiting area pulls them from the bath into Waiting", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A", "B"], { jc:"J" }),
+    ev({ datetime:"2026-03-02T10:00", type:"Transfer", bath:"B1", toBath:"", serials:["A"] })   // toBath "" = waiting area
+  ];
+  assert.deepEqual(D.bathContents(events, "2026-03-02T12:00", "B1").map(r => r.serial), ["B"]); // A left the bath
+  assert.equal(D.derivePieces(events, CONFIG, "2026-03-02T12:00").find(p => p.serial === "A").inBath, false);
+  assert.ok(D.waitingParts(events, CONFIG, "2026-03-02T12:00").some(p => p.serial === "A")); // A is now waiting
+});
 test("eventWarnings: moving to the same bath, or a part not in the source, is flagged", () => {
   const events = [
     ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B1" }),

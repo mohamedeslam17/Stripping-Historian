@@ -32,8 +32,10 @@ On the floor you rarely know the out‑time when a part goes in, parts go in as 
   pre‑selects the part's masked areas and routes it to **Needs re‑mask**. Parts you
   don't tick **stay in**.
 - **Move** (*Transfer*) — relocate **all or some** of a bath's contents to another
-  bath. The part keeps its current dip (a move is **not** counted as a new strip
-  cycle); its immersion time simply carries on in the new tank.
+  bath, **or out to the waiting area**. To another bath the part keeps its current
+  dip (a move is **not** counted as a new strip cycle) and its immersion time
+  carries on; to the waiting area it simply leaves the bath and sits there until
+  it goes back in.
 
 The system pairs loads → extractions per serial, counts cycles automatically,
 computes each dip's hours from the two timestamps, and always knows **what's still
@@ -70,7 +72,7 @@ Serials are entered as **chips** (type/paste, Enter to add; ranges like
 |---|---|
 | **Add parts** (*Load In*) | *N* parts INTO a **bath**, or into the **Waiting area** (parked, no bath). Serials as a list / range / from the waiting area. Also where failed mask areas are **re‑masked** before the re‑dip |
 | **Remove parts** (*Extraction*) | Pull some parts OUT (time out, per‑part result + **per‑area wax failure**) |
-| **Move** (*Transfer*) | Move all or some of a bath's parts to another bath (same dip continues) |
+| **Move** (*Transfer*) | Move all or some of a bath's parts to another bath (same dip), or out to the waiting area |
 | Parts Received | The waiting area — serials parked, not yet in a bath (created by *Add parts → Waiting area*) |
 | Bath Fill | **Complete fill** — new charge (HCl / water / H₃PO₄ volumes) |
 | Chemistry Check | Titration: free HCl %, iron Fe ppm, temperature |
@@ -136,9 +138,9 @@ already true:
   as a **drop‑down** in the **Add parts** form for any bath — pick one (or *Add
   all*), on top of typing brand‑new serials. A part leaves the waiting area the
   moment it's loaded into a bath, so nothing on the bench gets lost.
-- **Capacity** — tanks have a configurable capacity; loads that would overfill are
-  flagged, the fill level shows on each tank, and a full bath is never offered as a
-  rescue.
+- **Capacity** — **off by default** (no part limit). Set a per‑bath capacity in
+  Settings (0 = no limit) and loads that would overfill are flagged, the fill level
+  shows on each tank, and a full bath is never offered as a rescue.
 - **Undo** — the last add / edit / delete can be reverted from the toast or with
   Ctrl/Cmd‑Z.
 
