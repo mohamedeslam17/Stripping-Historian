@@ -518,6 +518,16 @@ test("waitingParts = parts out of a bath without re-entry, plus parked serials",
   const back = events.concat(load("2026-03-02T11:00", "B1", ["B"], { remask:[] }));
   assert.ok(!D.waitingParts(back, CONFIG, "2026-03-02T12:00").some(p => p.serial === "B"));
 });
+test("waitingParts includes parts routed to engineering by a stop condition", () => {
+  // P hits the cycle limit, so removing it routes it to engineering — it must
+  // still be visible on the bench (waiting area), not silently disappear.
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" })];
+  for(let c = 0; c < 3; c++){ events.push(load(`2026-03-02T0${c}:00`, "B1", ["P"]), extract(`2026-03-02T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
+  assert.equal(D.derivePieces(events, CONFIG, NOW).find(p => p.serial === "P").status.s, "→ Engineering");
+  const w = D.waitingParts(events, CONFIG, NOW).find(p => p.serial === "P");
+  assert.ok(w, "an over-limit part removed from the tank still shows in the waiting area");
+  assert.equal(w.kind, "review");
+});
 
 /* ===================== move parts to another bath (Transfer) ===================== */
 test("a Transfer moves parts to another bath, continuing the same cycle (not a new dip)", () => {

@@ -131,13 +131,14 @@ already true:
   more — without blocking the entry.
 - **Autofill** — typing/scanning a known serial fills in its J/C and component;
   the extraction list pre‑ticks parts already over the max immersion time.
-- **Waiting area** — every part that's **not in a bath but still in play** lands
-  here: parts that came **out of a tank without re‑entry** (awaiting another strip,
-  or blocked needing a re‑mask), plus serials **parked** with *Add parts → Waiting
-  area*. It shows as a panel on the Dashboard (tap a part to send it to a bath) and
-  as a **drop‑down** in the **Add parts** form for any bath — pick one (or *Add
-  all*), on top of typing brand‑new serials. A part leaves the waiting area the
-  moment it's loaded into a bath, so nothing on the bench gets lost.
+- **Waiting area** — **every part physically out of a tank but not finished** lands
+  here, so nothing on the bench is ever lost: parts that came **out of a tank**
+  (awaiting another strip, blocked needing a re‑mask, **or flagged for engineering**
+  after hitting a cycle/hour limit), plus serials **parked** with *Add parts →
+  Waiting area*. It shows as a panel on the Dashboard (tap a part to send it to a
+  bath, or — for a *review* part — to its engineering review) and as a **drop‑down**
+  in the **Add parts** form. A part leaves the waiting area the moment it goes back
+  into a bath. (Only finished parts — Cleared / Accepted / Scrap / Returned — drop off.)
 - **Capacity** — **off by default** (no part limit). Set a per‑bath capacity in
   Settings (0 = no limit) and loads that would overfill are flagged, the fill level
   shows on each tank, and a full bath is never offered as a rescue.

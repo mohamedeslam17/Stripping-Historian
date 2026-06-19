@@ -820,16 +820,18 @@ function parkedParts(events, config, nowDT){
   return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
 }
 
-// The waiting area: everything not currently in a bath but still in play —
-// parts that went OUT of a bath without re-entry (awaiting re-strip / needs
-// re-mask), plus serials parked on receipt. One entry per serial, newest first.
+// The waiting area: everything physically out of a tank but not finished — parts
+// that came out without re-entry (awaiting re-strip, needs re-mask, or flagged for
+// engineering review), plus serials parked on receipt. One per serial, newest first.
 function waitingParts(events, config, nowDT){
   const out = [], seen = new Set();
-  idleParts(events, config, nowDT).forEach(p => {
-    if(seen.has(p.serial)) return; seen.add(p.serial);
-    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "",
-      kind:p.status.s === "Needs re-mask" ? "needs re-mask" : "awaiting re-strip",
-      lastBath:p.lastBath || "", datetime:(p.recs[p.recs.length - 1] || {}).outDT || "" });
+  const WAIT = { "Awaiting re-strip":"awaiting re-strip", "Needs re-mask":"needs re-mask", "→ Engineering":"review" };
+  derivePieces(events, config, nowDT).forEach(p => {
+    if(p.inBath || seen.has(p.serial)) return;
+    const kind = WAIT[p.status.s];
+    if(!kind) return;   // terminal (Cleared / Accepted / Scrap / Returned) — not on the bench
+    seen.add(p.serial);
+    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "", kind, lastBath:p.lastBath || "", datetime:(p.recs[p.recs.length - 1] || {}).outDT || "" });
   });
   parkedParts(events, config, nowDT).forEach(p => {
     if(seen.has(p.serial)) return; seen.add(p.serial);
@@ -1210,7 +1212,7 @@ function buildLoadFields(card, refreshWarn){
     if(formData.bath === WAITING_AREA) return;
     const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
     if(!waiting.length) return;
-    const hint = p => p.kind === "needs re-mask" ? "  ·  re-mask" : p.kind === "received" ? "  ·  new" : (p.lastBath ? "  ·  out " + p.lastBath : "  ·  awaiting");
+    const hint = p => p.kind === "needs re-mask" ? "  ·  re-mask" : p.kind === "review" ? "  ·  review" : p.kind === "received" ? "  ·  new" : (p.lastBath ? "  ·  out " + p.lastBath : "  ·  awaiting");
     waitingWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Waiting area (" + waiting.length + ") — select to add"));
     const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add from waiting area…"));
     waiting.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : "") + hint(p))));
@@ -1700,11 +1702,15 @@ function parkedPanel(){
   if(!waiting.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Parts that come out of a bath without re-entry — and serials added to the waiting area — show up here.")); return card; }
   const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
   waiting.slice(0, 80).forEach(p => {
-    const rescue = suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath);
+    const review = p.kind === "review";
     const tag = p.kind === "needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask")
+      : review ? cel("span", { class:"idlechip-tag", style:"background:var(--red-bg);color:var(--red)" }, "review")
       : p.kind === "received" ? cel("span", { class:"idlechip-tag", style:"background:var(--green-bg);color:var(--green)" }, "new")
       : (p.lastBath ? cel("span", { class:"idlechip-tag", style:"background:var(--grey-bg);color:#5b6770" }, "out " + p.lastBath) : null);
-    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + " — tap to add to a bath", onclick:() => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component, bath:rescue }) }, [cel("span", {}, "＋ " + p.serial), tag]));
+    const onclick = review
+      ? () => startAction({ type:"engineering", serial:p.serial, jc:p.jc })
+      : () => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component, bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath) });
+    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + (review ? " — tap to review" : " — tap to add to a bath"), onclick }, [cel("span", {}, "＋ " + p.serial), tag]));
   });
   card.append(chips);
   return card;
