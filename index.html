@@ -152,7 +152,7 @@
 
   .scrim{position:fixed;inset:0;background:rgba(8,20,26,.42);z-index:60;opacity:0;animation:fade .15s forwards}
   @keyframes fade{to{opacity:1}}
-  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(480px,96vw);background:var(--panel);z-index:61;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .18s forwards}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(540px,96vw);background:var(--panel);z-index:61;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .18s forwards}
   @keyframes slide{to{transform:translateX(0)}}
   .drawer-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
   .drawer-h h3{margin:0;font-size:15px;flex:1;font-weight:650}
@@ -1395,35 +1395,36 @@ function buildExtractFields(card, refreshWarn){
     const boxEl = cel("div", { class:"contents" });
     rows.forEach(r => {
       const st = formData._rows[r.serial];
+      if(!Array.isArray(st.wax)) st.wax = [];
+      const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
       const cb = cel("input", { type:"checkbox" }); cb.checked = !!st.checked;
       cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); rebuild(); });
       const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
-      const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
-      if(!Array.isArray(st.wax)) st.wax = [];
-      const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
+      const head = cel("div", { style:"display:flex;align-items:baseline;gap:8px;flex-wrap:wrap" }, [
+        cel("span", { class:"s" }, r.serial),
+        cel("span", { class:"muted", style:"font-size:11px" }, meta)
+      ]);
+      // Reasons for removing. "Re-mask" pre-selects the part's masked areas (refine
+      // below) and routes it to "Needs re-mask".
       const seg = cel("div", { class:"seg" });
-      // Reasons for removing. "Re-mask" flags the part for re-masking — it pre-selects
-      // the part's masked areas (refine below), which routes it to "Needs re-mask".
       ["Cleared", "Re-strip", "Re-mask", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => {
         st.result = o; st.checked = true;
         if(o === "Re-mask" && !st.wax.length) st.wax = partAreas.slice();
-        if(o === "Cleared") st.wax = [];
+        if(o === "Cleared" || o === "Hold") st.wax = [];
         sync(); refreshWarn(); rebuild();
       } }, o)));
-      // Masked areas: tap one if its mask failed / is being re-masked. Only the areas
-      // this part actually has (its wax configuration) are offered.
-      const wseg = cel("div", { class:"seg wax wrap" });
-      partAreas.forEach(area => {
-        const b = cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:(st.result === "Re-mask" ? "re-mask " : "mask failed on ") + area, onclick:() => {
+      const lines = [seg];
+      // Masked areas only matter when re-stripping or re-masking — show them then.
+      if(partAreas.length && (st.result === "Re-strip" || st.result === "Re-mask")){
+        const wseg = cel("div", { class:"seg wax wrap" });
+        partAreas.forEach(area => wseg.append(cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:(st.result === "Re-mask" ? "re-mask " : "mask failed on ") + area, onclick:() => {
           st.wax = st.wax.includes(area) ? st.wax.filter(a => a !== area) : st.wax.concat(area);
-          if(st.wax.length){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; }
-          sync(); refreshWarn(); rebuild();
-        } }, area);
-        wseg.append(b);
-      });
-      const waxBox = partAreas.length ? cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, st.result === "Re-mask" ? "areas to re-mask" : "mask failed?"), wseg]) : null;
-      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, waxBox]);
-      boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
+          st.checked = true; sync(); refreshWarn(); rebuild();
+        } }, area)));
+        lines.push(cel("div", { style:"display:flex;align-items:center;gap:7px;flex-wrap:wrap" }, [cel("span", { class:"faint", style:"font-size:10.5px" }, st.result === "Re-mask" ? "areas to re-mask:" : "mask failed?"), wseg]));
+      }
+      const cell = cel("div", {}, [head, cel("div", { style:"display:flex;flex-direction:column;gap:6px;margin-top:7px" }, lines)]);
+      boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : ""), style:"grid-template-columns:24px 1fr;align-items:start" }, [cb, cell]));
     });
     cont.append(boxEl); sync();
   }
