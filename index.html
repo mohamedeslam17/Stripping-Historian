@@ -59,8 +59,8 @@
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:46px 10px} .flagok{color:var(--green)}
 
-  .btn{background:#ffffff;border:1px solid #e0e0e0;color:var(--ink);padding:8px 13px;border-radius:var(--r-s);cursor:pointer;font-size:13px;font-weight:550;box-shadow:var(--sh-sm)}
-  .btn:hover{background:#f5f5f5}
+  .btn{background:#ffffff;border:1px solid #e0e0e0;color:var(--ink);padding:8px 13px;border-radius:var(--r-s);cursor:pointer;font-size:13px;font-weight:550}
+  .btn:hover{background:#f5f5f5;border-color:#d2d2d2}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
   .btn.primary:hover{background:#34b87d}
   .btn.sm{padding:5px 10px;font-size:12px}
@@ -98,7 +98,7 @@
   .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:20px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh-sm)}
   .kpi .v{font-size:27px;font-weight:700;letter-spacing:-.7px;line-height:1.1} .kpi .l{font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500}
-  .kpi.warn{border-color:#f3c4c0} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
+  .kpi.warn{box-shadow:inset 3px 0 0 var(--red),var(--sh-sm)} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
 
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
   .bathcard{cursor:pointer;transition:box-shadow .12s,transform .12s}
@@ -111,9 +111,9 @@
   .partline{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:13px}
   .partline:last-child{border-bottom:none} .partline .s{font-weight:600} .partline .t{margin-left:auto;color:var(--muted);font-size:12px}
   .tankgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-  .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s,border-color .12s}
+  .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s,border-color .12s;display:flex;flex-direction:column}
   .tankcard:hover{box-shadow:var(--sh);border-color:#d6d6d6}
-  .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+  .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:auto;padding-top:12px}
   .tank-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .tank{position:relative;border:1px solid #cdeadd;border-top:none;border-radius:0 0 12px 12px;min-height:92px;background:linear-gradient(180deg,#eafaf3,#d3f1e4);padding:10px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
   .tank.spent{background:linear-gradient(180deg,#fdecec,#f8d6d6);border-color:#f0c4c0}
@@ -149,6 +149,9 @@
   .waxchk.on{background:var(--red-bg);border-color:#f0c4c0;color:var(--red);font-weight:600}
   .waxchk.on-rm{background:#f3e8ff;border-color:#dcc6f5;color:#7c3aed;font-weight:600}
   .waxchk.on-rm input{accent-color:#7c3aed}
+  .chk{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
+  .chk input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
+  .chk.on{background:var(--accent-weak);border-color:#bfe8d6;color:var(--accent-ink);font-weight:600}
 
   svg.chart{display:block;max-width:100%}
   .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
@@ -1133,12 +1136,17 @@ function buildGenericFields(card, refreshWarn){
 
 // Multi-select area toggles (which masked areas — re-masked, or failed).
 function areaToggleControl(getSel, setSel, onChange, areasList){
-  const wrap = cel("div", { class:"seg wrap" });
+  const wrap = cel("div", { style:"display:flex;flex-wrap:wrap;gap:7px" });
   (areasList || CONFIG.maskAreas || []).forEach(area => {
-    const b = cel("button", { type:"button", class:(getSel() || []).includes(area) ? "on" : "", onclick:() => {
-      let s = (getSel() || []).slice(); s.includes(area) ? s = s.filter(x => x !== area) : s.push(area); setSel(s); b.className = s.includes(area) ? "on" : ""; onChange();
-    } }, area);
-    wrap.append(b);
+    const on = () => (getSel() || []).includes(area);
+    const box = cel("input", { type:"checkbox" }); box.checked = on();
+    const chip = cel("label", { class:"chk" + (on() ? " on" : "") }, [box, cel("span", {}, area)]);
+    box.addEventListener("change", () => {
+      let s = (getSel() || []).slice();
+      if(box.checked){ if(!s.includes(area)) s.push(area); } else s = s.filter(x => x !== area);
+      setSel(s); chip.className = "chk" + (box.checked ? " on" : ""); onChange();
+    });
+    wrap.append(chip);
   });
   return wrap;
 }
