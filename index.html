@@ -141,6 +141,11 @@
   .seg.wax button.on{background:var(--amber);color:#fff}
   .seg.wax button.on.partial{background:var(--amber);color:#fff}
   .seg.wax button.on.full{background:var(--red);color:#fff}
+  .waxchk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
+  .waxchk input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--red)}
+  .waxchk.on{background:var(--red-bg);border-color:#e3a9a9;color:var(--red);font-weight:600}
+  .waxchk.on-rm{background:#ece3f5;border-color:#cdb6e6;color:#6b3fa0;font-weight:600}
+  .waxchk.on-rm input{accent-color:#6b3fa0}
 
   svg.chart{display:block;max-width:100%}
   .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
@@ -1414,14 +1419,21 @@ function buildExtractFields(card, refreshWarn){
         sync(); refreshWarn(); rebuild();
       } }, o)));
       const lines = [seg];
-      // Masked areas only matter when re-stripping or re-masking — show them then.
+      // Masked areas only matter when re-stripping or re-masking — clear checkboxes.
       if(partAreas.length && (st.result === "Re-strip" || st.result === "Re-mask")){
-        const wseg = cel("div", { class:"seg wax wrap" });
-        partAreas.forEach(area => wseg.append(cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:(st.result === "Re-mask" ? "re-mask " : "mask failed on ") + area, onclick:() => {
-          st.wax = st.wax.includes(area) ? st.wax.filter(a => a !== area) : st.wax.concat(area);
-          st.checked = true; sync(); refreshWarn(); rebuild();
-        } }, area)));
-        lines.push(cel("div", { style:"display:flex;align-items:center;gap:7px;flex-wrap:wrap" }, [cel("span", { class:"faint", style:"font-size:10.5px" }, st.result === "Re-mask" ? "areas to re-mask:" : "mask failed?"), wseg]));
+        const remask = st.result === "Re-mask";
+        const grp = cel("div", { style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap" }, [cel("span", { class:"faint", style:"font-size:11px" }, remask ? "Re-masking:" : "Mask failed on:")]);
+        partAreas.forEach(area => {
+          const on = st.wax.includes(area);
+          const box = cel("input", { type:"checkbox" }); box.checked = on;
+          const chip = cel("label", { class:"waxchk" + (on ? (remask ? " on-rm" : " on") : "") }, [box, cel("span", {}, area)]);
+          box.addEventListener("change", () => {
+            st.wax = box.checked ? st.wax.concat(area) : st.wax.filter(a => a !== area);
+            st.checked = true; sync(); refreshWarn(); rebuild();
+          });
+          grp.append(chip);
+        });
+        lines.push(grp);
       }
       const cell = cel("div", {}, [head, cel("div", { style:"display:flex;flex-direction:column;gap:6px;margin-top:7px" }, lines)]);
       boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : ""), style:"grid-template-columns:24px 1fr;align-items:start" }, [cb, cell]));
