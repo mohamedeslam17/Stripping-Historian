@@ -1862,7 +1862,12 @@ $("#exportCsv").onclick = () => {
   records.forEach(r => {
     const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
       hours:r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), status:dipStatus(r), wax:waxSummary(r), anomaly:r.anomaly || "" };
-    lines.push(cols.map(c => { let v = row[c] == null ? "" : String(row[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(","));
+    lines.push(cols.map(c => {
+      let v = row[c] == null ? "" : String(row[c]);
+      if(/^[=+\-@\t\r]/.test(v)) v = "'" + v;                          // neutralize spreadsheet formula injection (=,+,-,@ lead)
+      if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';      // RFC-4180 quoting
+      return v;
+    }).join(","));
   });
   download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
 };
