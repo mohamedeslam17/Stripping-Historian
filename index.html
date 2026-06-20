@@ -564,9 +564,12 @@ function deriveBath(events, config, bath, nowDT){
   const loadH = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)), 0));
   const parts = new Set(recs.map(r => r.serial)).size;
   const wax = recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
-  const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
-  const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
-  const h3po4Added = evs.filter(within).reduce((a, e) => a + (+e.h3po4AddedL || 0), 0);
+  // Volumes added *since* the charge — top-ups only, so the charge fill itself
+  // isn't double-counted (it's shown separately as the charge).
+  const sinceCharge = e => within(e) && e !== lastFill;
+  const hclAdded = evs.filter(sinceCharge).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
+  const waterAdded = evs.filter(sinceCharge).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
+  const h3po4Added = evs.filter(sinceCharge).reduce((a, e) => a + (+e.h3po4AddedL || 0), 0);
   const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
   const active = !!lastFill && !disposal;
 
@@ -1640,7 +1643,11 @@ function showBath(bath){
   const body = cel("div", {});
   body.append(cel("div", { class:"muted", style:"margin-bottom:6px" },
     s.disposal ? ("Disposed " + fmtDT(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDT(s.lastFill.datetime) : "No fill logged")));
-  if(s.lastFill) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water, +" + s.h3po4Added + " L H₃PO₄"));
+  if(s.lastFill){
+    let chargeTxt = "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L";
+    if(s.hclAdded || s.waterAdded || s.h3po4Added) chargeTxt += " · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water, +" + s.h3po4Added + " L H₃PO₄";
+    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, chargeTxt));
+  }
   if(s.flags.length) body.append(cel("div", { class:"warn-line warn-red" }, "⚠ " + s.flags.join(" · ")));
 
   if(s.contents.length){
@@ -1760,7 +1767,7 @@ function vDash(m){
   const now = nowLocalDT();
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
-  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]
+  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.total ? k.fpy + "%" : "—", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
   if(EVENTS.length) m.append(suggestionsPanel());
