@@ -51,7 +51,7 @@
   .attn b{font-weight:700} .attn .sp{flex:1}
 
   h2.sec{font-size:15px;margin:0 0 16px;font-weight:650;letter-spacing:-.1px}
-  h3.sub{font-size:11px;margin:26px 0 12px;color:var(--faint);font-weight:600;text-transform:uppercase;letter-spacing:.7px}
+  h3.sub{font-size:11px;margin:26px 0 12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px}
   .muted{color:var(--muted)} .faint{color:var(--faint)}
   .row{display:flex;gap:14px;flex-wrap:wrap}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh-sm)}
@@ -95,7 +95,7 @@
   .tag{display:inline-flex;align-items:center;gap:6px;background:#f3f3f3;border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12px;margin:2px 4px 0 0}
   .tag.flagbad{background:var(--red-bg);border-color:#f3c4c0;color:var(--red)}
 
-  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:20px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:20px}
   .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh-sm)}
   .kpi .v{font-size:27px;font-weight:700;letter-spacing:-.7px;line-height:1.1} .kpi .l{font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500}
   .kpi.warn{box-shadow:inset 3px 0 0 var(--red),var(--sh-sm)} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
@@ -198,11 +198,40 @@
   .pr-meta td{border:none;padding:2px 14px 2px 0;font-size:12px}
   @media print{ body *{visibility:hidden} #printArea,#printArea *{visibility:visible} #printArea{display:block!important;position:absolute;inset:0;padding:0} thead th{position:static} }
 
+  /* a11y: a clear, consistent keyboard-focus ring on every custom control (WCAG 2.4.7) */
+  .btn:focus-visible,.navlink:focus-visible,.side-log:focus-visible,.side-foot button:focus-visible,
+  .x:focus-visible,.chip i:focus-visible,.typetab:focus-visible,.tankcard:focus-visible,.seg button:focus-visible,
+  .chk:focus-visible,.waxchk:focus-visible,.idlechip:focus-visible,.linkish:focus-visible,.tag:focus-visible{
+    outline:2px solid var(--accent-ink);outline-offset:2px;border-radius:var(--r-xs)}
+
+  /* generous touch targets on finger/stylus devices — the floor uses gloves (WCAG 2.5.5) */
+  @media(pointer:coarse){
+    .btn,.navlink,.side-log,.seg button,.side-foot button,.chk,.waxchk,.typetab{min-height:44px}
+    .btn.sm{padding:9px 13px;min-height:40px}
+    .chip i{width:24px;height:24px} .x{min-width:44px;min-height:44px}
+    .linkish{display:inline-block;padding:6px 2px}
+    input,select,textarea{font-size:16px}            /* ≥16px stops iOS Safari from zooming on focus */
+  }
+
+  /* dense tables degrade gracefully on phones: drop the lowest-priority column and
+     tighten cells so Status / Where stay on screen instead of behind a sideways scroll */
+  @media(max-width:640px){
+    th,td{padding:8px 9px} table{font-size:12.5px}
+    .col-comp{display:none}
+    .tbl-wrap{max-height:none}            /* page-scroll beats a nested scroll trap on mobile */
+    .kpi .v{font-size:23px}
+  }
+
   @media(max-width:900px){
     #app{grid-template-columns:1fr}
-    #sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:8px}
-    .brand{padding:4px 8px} .side-sp{flex:0} #nav{flex-direction:row;flex-wrap:wrap} .navlink{width:auto}
-    .side-log{margin:0 0 0 auto} .side-foot{order:5} .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:24px 1fr;row-gap:8px}
+    #sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 12px}
+    .brand{padding:2px 4px;flex:1 1 auto} .side-sp{display:none}
+    .side-log{order:2;margin:0;padding:10px 16px;flex:0 0 auto}
+    #nav{order:3;flex:1 1 100%;flex-direction:row;flex-wrap:wrap;gap:5px}
+    .navlink{width:auto}
+    .side-foot{order:4;flex:1 1 100%;gap:7px} .side-foot button{padding:9px 4px;font-size:12px}
+    #main{padding:18px 14px}
+    .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:24px 1fr;row-gap:8px}
   }
 </style>
 </head>
@@ -224,7 +253,7 @@
   <div id="content">
     <header id="topbar">
       <h1 id="pageTitle">Floor</h1>
-      <div class="search"><input id="globalSearch" placeholder="Search serial, J/C, notes…   ( / )"></div>
+      <div class="search"><input id="globalSearch" type="search" aria-label="Search serials, job cards and notes" placeholder="Search serial, J/C, notes…   ( / )"></div>
     </header>
     <main id="main"></main>
   </div>
@@ -901,6 +930,8 @@ function cel(tag, attrs = {}, kids = []){
 }
 const pill = (text, cls) => cel("span", { class:"pill " + (cls || "p-grey") }, text);
 const tcell = (v, cls) => cel("td", cls ? { class:cls } : {}, v == null ? "" : String(v));
+// inline text "link" that is also reachable + operable by keyboard (Enter/Space)
+const linkish = (text, fn) => cel("span", { class:"linkish", role:"button", tabindex:"0", onclick:fn, onkeydown:e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); fn(); } } }, text);
 function flash(msg, action){
   const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c1c1c;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:var(--sh)" }, msg);
   if(action) b.append(cel("button", { style:"background:none;border:none;color:#7fd0ea;font-weight:700;cursor:pointer;font-size:13px", onclick:() => { b.remove(); action.fn(); } }, action.label));
@@ -916,7 +947,7 @@ function modal(title, bodyNode, footerNodes){
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
   const box = cel("div", { class:"modal" });
   box.append(
-    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", onclick:closeModal }, "✕") ]),
+    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeModal }, "✕") ]),
     cel("div", { class:"modal-b" }, bodyNode),
     footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
   );
@@ -1033,7 +1064,7 @@ function renderDrawer(){
   panel.append(cel("div", { class:"drawer-h" }, [
     cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
-    cel("button", { class:"x", title:"Close", onclick:closeDrawer }, "✕")
+    cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "✕")
   ]));
   const body = cel("div", { class:"drawer-b" });
   const foot = cel("div", { class:"drawer-f" });
@@ -1571,12 +1602,12 @@ function vPieces(m){
   const rows = all.filter(filt[pieceFilter] || (() => true));
   if(!rows.length){ m.append(all.length ? cel("div", { class:"empty" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["J/C", "Serial", "Component", "Cyc", "Cum h", "Wax", "Status", "Where", ""].forEach((c, i) => hr.append(cel("th", (i === 3 || i === 4 || i === 5) ? { class:"num" } : {}, c)));
+  ["J/C", "Serial", "Component", "Cyc", "Cum h", "Wax", "Status", "Where", ""].forEach((c, i) => { const cls = [(i === 3 || i === 4 || i === 5) ? "num" : "", i === 2 ? "col-comp" : ""].filter(Boolean).join(" "); hr.append(cel("th", cls ? { class:cls } : {}, c)); });
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
   rows.forEach(r => {
     const tr = cel("tr");
-    tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component));
+    tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
@@ -1585,7 +1616,7 @@ function vPieces(m){
     const act = cel("div", { class:"btnrow" });
     if(r.status.s === "Awaiting re-strip" || r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, r.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
-    act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
+    act.append(linkish("history", () => showSerial(r.serial)));
     tr.append(cel("td", {}, act));
     tb.append(tr);
   });
@@ -1716,7 +1747,7 @@ function vQuality(m){
     tr.append(tcell(fmtDT(e.datetime)));
     tr.append(cel("td", {}, pill(d.kind, { "Wax failure":"p-red", "Re-mask":"p-purple", "Re-strip":"p-grey", "Eng review":"p-amber" }[d.kind] || "p-amber")));
     tr.append(tcell(jc));
-    tr.append(cel("td", {}, d.serial ? cel("span", { class:"linkish", onclick:() => showSerial(d.serial) }, d.serial) : ""));
+    tr.append(cel("td", {}, d.serial ? linkish(d.serial, () => showSerial(d.serial)) : ""));
     tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(e.operator));
     tb.append(tr);
   });
@@ -1751,7 +1782,9 @@ function parkedPanel(){
 }
 // One tank: the parts inside (visual), its chemistry summary, status and actions.
 function tankCard(s){
-  const c = cel("div", { class:"tankcard", onclick:() => showBath(s.bath) });
+  const c = cel("div", { class:"tankcard", role:"button", tabindex:"0", "aria-label":"Bath " + s.bath + " — open details",
+    onclick:() => showBath(s.bath),
+    onkeydown:e => { if(e.target === c && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); showBath(s.bath); } } });
   const dotCls = !s.active ? "x" : (s.flags.length ? "r" : "g");
   c.append(cel("div", { class:"tank-h" }, [
     cel("span", { class:"dot " + dotCls }), cel("b", {}, s.bath), cel("span", { style:"flex:1" }),
