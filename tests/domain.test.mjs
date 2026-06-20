@@ -248,7 +248,10 @@ test("KPIs: FPY, re-strip rate, and parts-in-bath count", () => {
   assert.equal(k.total, 3);
   assert.equal(k.cleared, 2);
   assert.equal(k.fp, 1);                 // only A cleared on its first pull
-  assert.equal(k.fpy, 33);
+  // yield is over *decided* pieces (extracted at least once): A + B = 2; C is
+  // still on its first, never-pulled dip so it doesn't count yet → 1/2 = 50%.
+  assert.equal(k.fpyBase, 2);
+  assert.equal(k.fpy, 50);
   assert.equal(k.inBath, 1);             // C
   assert.equal(k.dips, 4);               // A, B×2, C
   assert.equal(k.reStrip, 1);

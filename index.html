@@ -536,6 +536,7 @@ function derivePieces(events, config, nowDT){
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
       firstPass: recs.some(r => r.result === "Cleared") && !recs.some(r => r.result === "Re-strip"),
+      decided: recs.some(r => !r.open && !r.moved),   // has at least one real extraction result — counts toward first-pass yield (a part still on its first, never-pulled dip does not)
       needsRemask: unresolvedWax.length > 0,
       waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area).join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
       status:st, recs, events:evs
@@ -601,14 +602,14 @@ function deriveJobCards(events, config, nowDT){
   const map = new Map();
   derivePieces(events, config, nowDT).forEach(r => {
     const k = r.jc || "(none)";
-    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, cleared:0, fp:0, eng:0, inBath:0, reStrips:0, wax:0 };
-    o.pieces++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
+    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, decided:0, cleared:0, fp:0, eng:0, inBath:0, reStrips:0, wax:0 };
+    o.pieces++; if(r.decided) o.decided++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
     if(r.status.s === "→ Engineering") o.eng++; if(r.inBath) o.inBath++;
     o.reStrips += r.reStrips; o.wax += r.wax;
     if(!o.component && r.component) o.component = r.component;
     map.set(k, o);
   });
-  return [...map.values()].map(o => ({ ...o, fpy: o.pieces ? Math.round(o.fp / o.pieces * 100) : 0 }))
+  return [...map.values()].map(o => ({ ...o, fpy: o.decided ? Math.round(o.fp / o.decided * 100) : 0 }))
     .sort((a, b) => String(a.jc).localeCompare(String(b.jc)));
 }
 
@@ -619,13 +620,15 @@ function deriveKpis(events, config, nowDT){
   const reStrip = records.filter(r => r.result === "Re-strip").length;
   const baths = deriveBaths(events, config, nowDT);
   const clearedPieces = pr.filter(r => r.status.s === "Cleared");
+  const decidedPieces = pr.filter(r => r.decided);   // exclude parts still on their first, never-extracted dip from yield
   return {
     total: pr.length, cleared: clearedPieces.length,
     fp: pr.filter(r => r.firstPass).length,
     eng: pr.filter(r => r.status.s === "→ Engineering").length,
     awaiting: pr.filter(r => r.status.s === "Awaiting re-strip").length,
     inBath: open.size,
-    fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
+    fpyBase: decidedPieces.length,
+    fpy: decidedPieces.length ? Math.round(decidedPieces.filter(r => r.firstPass).length / decidedPieces.length * 100) : 0,
     dips: realDips, reStrip, reStripRate: realDips ? Math.round(reStrip / realDips * 100) : 0,
     wax: records.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + events.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
     bathsOver: baths.filter(b => b.active && b.flags.length).length,
@@ -656,7 +659,7 @@ function deriveDefects(events){
 
 // Relationship-aware checks: does this draft contradict the current state of
 // its bath or its pieces? Soft (non-blocking) — guidance, not gates.
-function eventWarnings(d, events, config, nowDT){
+function eventWarnings(d, events, config, nowDT, isEdit){
   const w = [], add = (level, msg) => w.push({ level, msg });
   const others = events.filter(e => e.id == null || e.id !== d.id);
   let _pi = null;
@@ -680,7 +683,10 @@ function eventWarnings(d, events, config, nowDT){
         if(bs.contents.length + adding > bs.capacity) add("red", `Bath ${d.bath} would hold ${bs.contents.length + adding} parts (capacity ${bs.capacity})`);
       }
     }
-    (d.serials || []).forEach(s => {
+    // Per-serial checks assume you're loading these parts *now* (re-load sequencing,
+    // wax gate, back-dating). When editing an existing load in place they would
+    // fire against the load's own downstream history, so skip them on edit.
+    if(!isEdit) (d.serials || []).forEach(s => {
       const p = pieceOf(s);
       if(p){
         if(p.inBath) add("amber", `${s} is already in bath ${p.currentBath}`);
@@ -1055,7 +1061,7 @@ function renderDrawer(){
       warnBox.innerHTML = "";
       // Adding to the waiting area is a "park", not a bath dip — check it as such.
       const draft = (formType === "Load In" && formData.bath === WAITING_AREA) ? Object.assign({}, formData, { type:"Parts Received", bath:"" }) : formData;
-      eventWarnings(draft, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
+      eventWarnings(draft, EVENTS, CONFIG, nowLocalDT(), editId != null).forEach(wn =>
         warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
       const inc = formIncomplete(); saveBtn.disabled = !!inc; hint.textContent = inc;
     }
@@ -1266,11 +1272,18 @@ function buildLoadFields(card, refreshWarn){
     if(!needing.length) return;
     remaskWrap.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed;margin-top:4px" }, [cel("span", {}, "▦"), cel("span", {}, "Wax failure on these parts — tick the areas you re-masked before re-dipping:")]));
     needing.forEach(x => {
-      let entry = formData.remask.find(r => r.serial === x.serial);
-      if(!entry){ entry = { serial:x.serial, areas:x.areas.slice() }; formData.remask.push(entry); } // default: re-masked all failed areas
+      // No pre-ticked entry: an empty `areas` would read as a whole-part re-mask
+      // (resolves everything). Instead we keep NO entry until the operator ticks an
+      // area, so a wax-failed part stays red-blocked until its areas are re-masked.
+      const getAreas = () => { const e = (formData.remask || []).find(r => r.serial === x.serial); return e ? e.areas : []; };
+      const setAreas = s => {
+        formData.remask = formData.remask || [];
+        if(s.length){ let e = formData.remask.find(r => r.serial === x.serial); if(!e){ e = { serial:x.serial, areas:[] }; formData.remask.push(e); } e.areas = s; }
+        else formData.remask = formData.remask.filter(r => r.serial !== x.serial);   // unticked everything → drop the entry → stays blocked
+      };
       remaskWrap.append(cel("div", { class:"field", style:"margin-bottom:8px" }, [
         cel("label", { class:"f" }, x.serial + " — re-masked"),
-        areaToggleControl(() => entry.areas, s => { entry.areas = s; }, refreshWarn, x.areas)
+        areaToggleControl(getAreas, setAreas, refreshWarn, x.areas)
       ]));
     });
   }
@@ -1767,7 +1780,7 @@ function vDash(m){
   const now = nowLocalDT();
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
-  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.total ? k.fpy + "%" : "—", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]
+  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpyBase ? k.fpy + "%" : "—", k.fpyBase && k.fpy < 70 ? "warn" : (k.fpyBase ? "good" : "")], ["Cleared", k.cleared, ""]]
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
   if(EVENTS.length) m.append(suggestionsPanel());
@@ -1805,8 +1818,8 @@ function vDash(m){
     m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
     const bars = cel("div", { class:"card", style:"max-width:560px" });
     jr.forEach(r => bars.append(cel("div", { style:"margin-bottom:8px" }, [
-      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.fp + "/" + r.pieces + " · " + r.fpy + "%")]),
-      cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
+      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.decided ? (r.fp + "/" + r.decided + " · " + r.fpy + "%") : (r.pieces + " in process"))]),
+      cel("div", { class:"bar" }, cel("i", { style:"width:" + (r.decided ? r.fpy : 0) + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
     ])));
     m.append(bars);
   }
