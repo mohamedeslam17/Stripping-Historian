@@ -45,6 +45,8 @@
   .search{margin-left:auto}
   .search input{width:240px;padding:7px 12px;border:1px solid var(--line);border-radius:20px;background:var(--elev);font-size:13px}
   .kbd{display:inline-block;border:1px solid #d0d0d0;border-radius:5px;padding:0 5px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .iconbtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--elev);color:var(--muted);cursor:pointer;font-size:14px;font-weight:700;flex:none;line-height:1}
+  .iconbtn:hover{background:#ececec;color:var(--ink)} .iconbtn:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
   #main{padding:24px 28px;flex:1;min-width:0;max-width:1280px;width:100%}
 
   .attn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-bg);color:var(--red);border:1px solid #f3c4c0;border-radius:var(--r);padding:9px 14px;margin-bottom:16px;font-size:13px}
@@ -82,7 +84,9 @@
   th,td{padding:9px 12px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line-2)}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   thead th{background:#f8f8f8;font-weight:600;color:var(--muted);position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);white-space:nowrap}
-  thead th.sortable{cursor:pointer} thead th.sortable:hover{color:var(--ink)}
+  thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--ink);background:#f1f1f1}
+  thead th.sortable.sorted{color:var(--ink)} .sort-ind{font-size:9px;color:var(--accent-ink);letter-spacing:0}
+  thead th.sortable:focus-visible{outline:2px solid var(--accent-ink);outline-offset:-2px}
   tbody tr:hover{background:#f7f7f7} tbody tr:last-child td{border-bottom:none}
 
   .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
@@ -254,6 +258,7 @@
     <header id="topbar">
       <h1 id="pageTitle">Floor</h1>
       <div class="search"><input id="globalSearch" type="search" aria-label="Search serials, job cards and notes" placeholder="Search serial, J/C, notes…   ( / )"></div>
+      <button id="helpBtn" class="iconbtn" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">?</button>
     </header>
     <main id="main"></main>
   </div>
@@ -932,6 +937,27 @@ const pill = (text, cls) => cel("span", { class:"pill " + (cls || "p-grey") }, t
 const tcell = (v, cls) => cel("td", cls ? { class:cls } : {}, v == null ? "" : String(v));
 // inline text "link" that is also reachable + operable by keyboard (Enter/Space)
 const linkish = (text, fn) => cel("span", { class:"linkish", role:"button", tabindex:"0", onclick:fn, onkeydown:e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); fn(); } } }, text);
+
+/* --- click-to-sort for data tables --- */
+const tableSort = { pieces:{ key:null, dir:1 }, events:{ key:null, dir:1 } };
+function toggleSort(table, key){ const st = tableSort[table]; if(st.key === key) st.dir = -st.dir; else { st.key = key; st.dir = 1; } render(); }
+function sortableTH(table, key, label, extraCls, titleText){
+  const st = tableSort[table], active = st.key === key;
+  return cel("th", { class:"sortable" + (extraCls ? " " + extraCls : "") + (active ? " sorted" : ""), role:"button", tabindex:"0",
+    title:titleText || ("Sort by " + label), "aria-sort":active ? (st.dir > 0 ? "ascending" : "descending") : "none",
+    onclick:() => toggleSort(table, key),
+    onkeydown:e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleSort(table, key); } }
+  }, [label, cel("span", { class:"sort-ind" }, active ? (st.dir > 0 ? " ▲" : " ▼") : "")]);
+}
+function applySort(table, rows, acc){
+  const st = tableSort[table]; if(!st.key || !acc[st.key]) return rows;   // no key → keep the view's natural order
+  const f = acc[st.key];
+  return rows.slice().sort((a, b) => {
+    const va = f(a), vb = f(b);
+    if(typeof va === "number" && typeof vb === "number") return (va - vb) * st.dir;
+    return String(va == null ? "" : va).localeCompare(String(vb == null ? "" : vb), undefined, { numeric:true, sensitivity:"base" }) * st.dir;
+  });
+}
 function flash(msg, action){
   const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c1c1c;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:var(--sh)" }, msg);
   if(action) b.append(cel("button", { style:"background:none;border:none;color:#7fd0ea;font-weight:700;cursor:pointer;font-size:13px", onclick:() => { b.remove(); action.fn(); } }, action.label));
@@ -1529,7 +1555,15 @@ async function saveForm(){
   render();
 }
 
-function emptyState(){ return cel("div", { class:"empty" }, [cel("div", { style:"font-size:15px;margin-bottom:6px" }, "No events yet"), cel("div", {}, "Press “Log event”, or load the example from Settings → Data.")]); }
+function emptyState(){ return cel("div", { class:"empty" }, [
+  cel("div", { style:"font-size:34px;margin-bottom:6px;opacity:.5" }, "▦"),
+  cel("div", { style:"font-size:15px;margin-bottom:4px;color:var(--ink);font-weight:600" }, "No events yet"),
+  cel("div", { style:"margin-bottom:16px" }, "Log your first strip event, or load the sample data to explore the app."),
+  cel("div", { class:"btnrow", style:"justify-content:center" }, [
+    cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "＋ Log first event"),
+    cel("button", { class:"btn", onclick:loadExample }, "Load example data")
+  ])
+]); }
 
 /* --- Floor (live tanks) --- */
 function suggestionsPanel(){
@@ -1565,10 +1599,13 @@ function vEventLog(m){
   if(!rows.length){ m.append(emptyState()); return; }
 
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["Event ID", "When", "Type", "Bath", "J/C", "Parts", "Detail", "Op", ""].forEach(c => hr.append(cel("th", {}, c)));
+  [ ["Event ID", "eventId"], ["When", "when"], ["Type", "type"], ["Bath", "bath"], ["J/C", "jc"] ].forEach(c => hr.append(sortableTH("events", c[1], c[0])));
+  ["Parts", "Detail"].forEach(c => hr.append(cel("th", {}, c)));
+  hr.append(sortableTH("events", "op", "Op"));
+  hr.append(cel("th", {}, ""));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  rows.forEach(e => {
+  applySort("events", rows, { eventId:e => e.eventId, when:e => e.datetime, type:e => typeLabel(e.type), bath:e => e.bath, jc:e => e.jc, op:e => e.operator }).forEach(e => {
     const partsCell = (e.type === "Load In" || e.type === "Transfer" || e.type === "Parts Received") ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
     const tr = cel("tr");
     tr.append(cel("td", { class:"mono" }, e.eventId || ""));
@@ -1602,10 +1639,14 @@ function vPieces(m){
   const rows = all.filter(filt[pieceFilter] || (() => true));
   if(!rows.length){ m.append(all.length ? cel("div", { class:"empty" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["J/C", "Serial", "Component", "Cyc", "Cum h", "Wax", "Status", "Where", ""].forEach((c, i) => { const cls = [(i === 3 || i === 4 || i === 5) ? "num" : "", i === 2 ? "col-comp" : ""].filter(Boolean).join(" "); hr.append(cel("th", cls ? { class:cls } : {}, c)); });
+  [ ["J/C", "jc", ""], ["Serial", "serial", ""], ["Component", "component", "col-comp"],
+    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum h", "hours", "num", "Cumulative immersion hours"],
+    ["Wax", "wax", "num", "Open (unresolved) wax-failure areas"], ["Status", "status", ""], ["Where", "where", ""] ]
+    .forEach(c => hr.append(sortableTH("pieces", c[1], c[0], c[2], c[3])));
+  hr.append(cel("th", {}, ""));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  rows.forEach(r => {
+  applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.hours, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
     const tr = cel("tr");
     tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
@@ -1951,6 +1992,7 @@ $("#importFile").onchange = e => {
 
 /* --- chrome: log button, global search, keyboard shortcuts --- */
 $("#logBtn").onclick = () => { formType = null; editId = null; formData = {}; openDrawer(); };
+$("#helpBtn").onclick = showShortcuts;
 $("#globalSearch").addEventListener("keydown", e => {
   if(e.key !== "Enter") return;
   const q = e.target.value.trim(); if(!q) return;
@@ -1966,7 +2008,27 @@ document.addEventListener("keydown", e => {
   else if(e.key === "l" || e.key === "L") startLoad("");
   else if(e.key === "e" || e.key === "E") startExtraction("");
   else if(e.key === "n" || e.key === "N"){ formType = null; editId = null; formData = {}; openDrawer(); }
+  else if(e.key === "?"){ e.preventDefault(); showShortcuts(); }
 });
+function showShortcuts(){
+  const items = [
+    ["N", "New event — open the type picker"],
+    ["L", "Load in — add parts to a bath"],
+    ["E", "Extraction — remove parts from a bath"],
+    ["/", "Jump to search"],
+    ["⌘ / Ctrl + Enter", "Save the open form"],
+    ["⌘ / Ctrl + Z", "Undo the last add, edit or delete"],
+    ["Esc", "Close the open dialog"],
+    ["?", "Show this help"]
+  ];
+  const body = cel("div", {});
+  items.forEach(([k, d], i) => body.append(cel("div", { style:"display:flex;align-items:center;gap:14px;padding:8px 0" + (i < items.length - 1 ? ";border-bottom:1px solid var(--line-2)" : "") }, [
+    cel("span", { class:"kbd", style:"min-width:118px;text-align:center;flex:none;padding:3px 6px" }, k),
+    cel("span", {}, d)
+  ])));
+  body.append(cel("div", { class:"muted", style:"margin-top:14px;font-size:12px" }, "Tip: click any underlined column header to sort a table — click again to reverse."));
+  modal("Keyboard shortcuts", body, [cel("button", { class:"btn primary", onclick:closeModal }, "Got it")]);
+}
 document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && lastUndo){ e.preventDefault(); doUndo(); }
 });
