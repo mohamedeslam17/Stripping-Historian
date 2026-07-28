@@ -142,12 +142,16 @@ already true:
 - **Capacity** — **off by default** (no part limit). Set a per‑bath capacity in
   Settings (0 = no limit) and loads that would overfill are flagged, the fill level
   shows on each tank, and a full bath is never offered as a rescue.
-- **Undo** — the last add / edit / delete can be reverted from the toast or with
-  Ctrl/Cmd‑Z.
+- **Undo** — recent adds / edits / deletes (up to 20) can be reverted from the
+  toast or with Ctrl/Cmd‑Z (text fields keep their native undo). Closing a
+  half‑filled form asks before discarding it.
 
 **Configurable limits** (Settings): temperature setpoint/tolerance, free‑HCl band,
-iron limit, max cycles & hours per piece, max bath life, bath capacity, bath IDs,
-masked areas, operators.
+iron limit, max cycles & hours per piece, max bath life, bath capacity, titration
+cadence (days between chemistry checks; 0 disables the reminder), bath IDs,
+masked areas, operators. List fields (bath IDs, operators, masked areas) commit
+when you leave the field, and a cleared number box keeps its previous value
+rather than persisting as 0.
 
 > **Baths are always shown** — the configured tanks (Settings → Bath IDs) appear on
 > the floor at all times, even with no events. Any *extra* bath that turns up in the
@@ -203,9 +207,13 @@ npm test
   single **Status** column — *Ongoing* (still in a bath), *Completed* (cleared),
   *Re‑strip*, *Re‑mask*, *Hold*, *Moved* — ready to open or print.
 - **Backup** → `strip_historian_backup_<date>.json` (config + events).
-- **Export CSV** → flat one‑row‑per‑dip table (same *Status* column) for spreadsheets/BI.
-- **Import** replaces local data from a backup (with confirmation), so you can move
-  between machines or restore after a browser reset.
+- **Export CSV** → flat one‑row‑per‑dip table (same *Status* column) for
+  spreadsheets/BI, with a numeric hours column and `eventIdIn` / `eventIdOut`
+  tracing each row back to the ledger entries it came from.
+- **Import** replaces local data from a backup (with confirmation). Malformed
+  entries are skipped and config is validated against known keys, so a bad file
+  can't corrupt the store. Use it to move between machines or restore after a
+  browser reset.
 
 ## License
 

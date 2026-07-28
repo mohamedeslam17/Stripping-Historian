@@ -292,6 +292,7 @@ const DEFAULT_CONFIG = {
   maxCycles: 3, maxHours: 24,
   maxBathAge: 30,
   bathCapacity: 0,   // 0 = no part limit
+  chemEveryDays: 2,  // titration cadence; 0 = never prompt
   maskAreas: ["Cooling holes", "Part body"],
   baths: ["102-103", "106-107", "202-203", "206-207"],   // always shown; edit in Settings
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
@@ -325,8 +326,9 @@ function fmtDT(dt){ if(!dt) return ""; return fmtDate(dt) + (dt.length > 10 ? " 
 
 function nextEventId(dateStr, events){
   const ymd = (dateStr || "").slice(0,10).replace(/-/g, "");
-  let n = 0; events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0) n++; });
-  return ymd + "-" + String(n + 1).padStart(4, "0");
+  let mx = 0; // max suffix + 1, not count + 1: a same-day delete must never free an id for reuse
+  events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0){ const n = parseInt(e.eventId.slice(ymd.length + 1), 10); if(Number.isFinite(n) && n > mx) mx = n; } });
+  return ymd + "-" + String(mx + 1).padStart(4, "0");
 }
 
 // "7261-01..06" / "7261-01..7261-06" expands to a list; commas/spaces/newlines split.
@@ -339,7 +341,10 @@ function parseSerials(text){
       const lm = parts[0].match(/^(.*?)(\d+)$/);
       if(lm){
         const prefix = lm[1], width = lm[2].length;
-        const hi = /^\d+$/.test(parts[1]) ? parts[1] : (parts[1].match(/(\d+)$/) || [])[1];
+        // right side must be bare digits or carry the SAME prefix — otherwise
+        // "7261-01..7300-06" would silently fabricate 7261-xx serials
+        const rm = parts[1].match(/^(.*?)(\d+)$/);
+        const hi = rm && (rm[1] === "" || rm[1] === prefix) ? rm[2] : null;
         if(hi != null){
           const a = parseInt(lm[2], 10), b = parseInt(hi, 10);
           if(b >= a && b - a < 10000){ for(let n = a; n <= b; n++) add(prefix + String(n).padStart(width, "0")); return; }
@@ -402,7 +407,13 @@ function eventsForSerial(events, serial){
 
 /* ---- the backbone: pair Load In + Extraction (and legacy Immersion) into
         per-part "dip" records, and report what is still in each bath ---- */
+const _immersionsMemo = new WeakMap(); // events array -> { now, val }
 function deriveImmersions(events, nowDT){
+  // Every derive* helper walks the ledger through here, so a single render can
+  // rebuild it dozens of times. Keyed on the events array identity: any write
+  // replaces the array, so a stale entry is never reachable.
+  const memoHit = _immersionsMemo.get(events);
+  if(memoHit && memoHit.now === nowDT) return memoHit.val;
   const seq = events.slice().sort(byDate);
   const records = [];
   const open = new Map();   // serial -> currently-open record
@@ -453,7 +464,9 @@ function deriveImmersions(events, nowDT){
     }
   }
   open.forEach(r => { r.elapsedH = round(hoursBetweenDT(r.inDT, nowDT), 2); });
-  return { records, open };
+  const val = { records, open };
+  _immersionsMemo.set(events, { now:nowDT, val });
+  return val;
 }
 function bathContents(events, nowDT, bath){
   const { open } = deriveImmersions(events, nowDT);
@@ -481,8 +494,8 @@ function remaskAreasOf(e){ return (Array.isArray(e.areas) && e.areas.length) ? e
 function remaskActions(events, serial){
   const out = [];
   events.forEach(e => {
-    if(e.type === "Re-Masking" && e.serial === serial) out.push({ datetime:e.datetime, areas:remaskAreasOf(e) });
-    else if(e.type === "Load In" && Array.isArray(e.remask)){ const r = e.remask.find(x => x.serial === serial); if(r) out.push({ datetime:e.datetime, areas:(Array.isArray(r.areas) && r.areas.length) ? r.areas : null }); }
+    if(e.type === "Re-Masking" && e.serial === serial) out.push({ datetime:e.datetime, areas:remaskAreasOf(e), event:e });
+    else if(e.type === "Load In" && Array.isArray(e.remask)){ const r = e.remask.find(x => x.serial === serial); if(r) out.push({ datetime:e.datetime, areas:(Array.isArray(r.areas) && r.areas.length) ? r.areas : null, event:e }); }
   });
   return out;
 }
@@ -517,8 +530,11 @@ function unresolvedWaxAreas(events, serial){
   const latest = new Map();
   fails.forEach(f => { const c = latest.get(f.area); if(!c || f.datetime > c.datetime) latest.set(f.area, f); });
   const remasks = remaskActions(events, serial);
+  // a re-mask resolves a failure only if it is not BEFORE it in event order —
+  // compare (datetime, eventId) so same-minute sequences still resolve correctly
+  const notBefore = (r, f) => byDate(f.event || { datetime:f.datetime }, r.event || { datetime:r.datetime }) <= 0;
   const out = [];
-  latest.forEach((f, area) => { if(!remasks.some(r => r.datetime >= f.datetime && (r.areas == null || r.areas.includes(area)))) out.push(f); });
+  latest.forEach((f, area) => { if(!remasks.some(r => notBefore(r, f) && (r.areas == null || r.areas.includes(area)))) out.push(f); });
   return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
 }
 // Back-compat single-value accessor: the most recent unresolved area failure.
@@ -526,16 +542,23 @@ function lastUnresolvedWax(events, serial){ const u = unresolvedWaxAreas(events,
 
 function pieceStatusFor(recs, engEvents, config, needsRemask){
   const open = recs.some(r => r.open);
-  const cleared = recs.some(r => r.result === "Cleared");
-  const cycles = recs.filter(r => !r.moved).length;   // a bath-to-bath move is not a new dip
+  // real dips have a load (inDT); orphan "extracted but was not in bath"
+  // records must not inflate the cycle count or drive the status
+  const real = recs.filter(r => r.inDT != null);
+  const lastRec = (real.length ? real : recs)[(real.length ? real : recs).length - 1];
+  // "Cleared" is the piece's CURRENT state, not history: only the latest dip
+  // counts — a cleared part that is re-loaded is "In bath" again, not Cleared
+  const cleared = !!lastRec && !lastRec.open && lastRec.result === "Cleared";
+  const cycles = real.filter(r => !r.moved).length;   // a bath-to-bath move is not a new dip
   const closedH = round(recs.filter(r => !r.open).reduce((a, r) => a + (r.hours || 0), 0));
   const totalH = round(closedH + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedH || 0), 0));
   const engDisp = engEvents.length ? engEvents[engEvents.length - 1].status : "";
   const base = { cycles, hours:closedH, totalH, open };
-  if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
-  if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
+  // a disposition recorded after the fact overrides an earlier clear
   if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
+  if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
+  if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
   if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
   if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
   if(cycles >= config.maxCycles || totalH >= config.maxHours){
@@ -564,13 +587,13 @@ function derivePieces(events, config, nowDT){
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
-      cycles:recs.filter(r => !r.moved).length, hours:st.hours,
+      cycles:st.cycles, hours:st.hours,
       wax: recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
       firstPass: recs.some(r => r.result === "Cleared") && !recs.some(r => r.result === "Re-strip"),
-      decided: recs.some(r => !r.open && !r.moved),   // has at least one real extraction result — counts toward first-pass yield (a part still on its first, never-pulled dip does not)
+      decided: recs.some(r => !r.open && !r.moved && r.inDT != null),   // has at least one real extraction result — counts toward first-pass yield (a part still on its first, never-pulled dip does not; nor does an orphan extraction)
       needsRemask: unresolvedWax.length > 0,
       waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area).join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
       status:st, recs, events:evs
@@ -650,8 +673,10 @@ function deriveJobCards(events, config, nowDT){
 function deriveKpis(events, config, nowDT){
   const pr = derivePieces(events, config, nowDT);
   const { records, open } = deriveImmersions(events, nowDT);
-  const realDips = records.filter(r => !r.moved).length;   // exclude bath-to-bath move continuations
-  const reStrip = records.filter(r => r.result === "Re-strip").length;
+  // exclude bath-to-bath move continuations and orphan "extracted but was not
+  // in bath" records — neither is a dip that actually happened
+  const realDips = records.filter(r => !r.moved && r.inDT != null).length;
+  const reStrip = records.filter(r => r.result === "Re-strip" && r.inDT != null).length;
   const baths = deriveBaths(events, config, nowDT);
   const clearedPieces = pr.filter(r => r.status.s === "Cleared");
   const decidedPieces = pr.filter(r => r.decided);   // exclude parts still on their first, never-extracted dip from yield
@@ -797,13 +822,17 @@ function eventWarnings(d, events, config, nowDT, isEdit){
 // Autofill: a serial's last-known job card / component from history.
 function lookupSerial(events, serial){
   let jc = "", component = "";
-  events.forEach(e => { if(e.serial === serial || (e.serials || []).includes(serial)){ if(e.jc) jc = e.jc; if(e.component) component = e.component; } });
+  // date order, not storage order — a backfilled older event must not override
+  events.slice().sort(byDate).forEach(e => { if(e.serial === serial || (e.serials || []).includes(serial)){ if(e.jc) jc = e.jc; if(e.component) component = e.component; } });
   return { jc, component };
 }
 // Active, in-band baths ranked by lowest iron — candidates to receive a re-strip.
+// A bath with no titration on record ranks LAST: unverified chemistry is not
+// a reason to prefer it over a bath measured at low iron.
 function healthyBaths(events, config, nowDT){
+  const fe = b => { const v = num((b.lastChem || {}).fePpm); return v == null ? Infinity : v; };
   return deriveBaths(events, config, nowDT).filter(b => b.active && !b.flags.length)
-    .sort((a, b) => (+((a.lastChem || {}).fePpm) || 0) - (+((b.lastChem || {}).fePpm) || 0));
+    .sort((a, b) => fe(a) - fe(b));
 }
 function suggestRescueBath(events, config, nowDT, exclude){
   const h = healthyBaths(events, config, nowDT).filter(b => b.bath !== exclude && (b.free === null || b.free > 0));
@@ -816,7 +845,6 @@ function deriveSuggestions(events, config, nowDT){
   const out = [];
   const pieces = derivePieces(events, config, nowDT);
   const baths = deriveBaths(events, config, nowDT);
-  const rescue = exclude => suggestRescueBath(events, config, nowDT, exclude);
 
   baths.forEach(b => {
     if(!b.active){ if(b.contents.length) out.push({ level:"red", icon:"⚠", title:`Bath ${b.bath}: ${b.contents.length} part(s) recorded inside a disposed bath`, detail:b.contents.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:b.contents.map(r => r.serial) } }); return; }
@@ -828,14 +856,25 @@ function deriveSuggestions(events, config, nowDT){
     if(b.age !== "" && b.age >= config.maxBathAge) out.push({ level:"amber", icon:"⌛", title:`Bath ${b.bath}: ${b.age} days old (≥ ${config.maxBathAge})`, detail:"Scheduled change due.", action:{ type:"dispose", bath:b.bath } });
     const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime;
     const dd = daysBetween(lastChemDT, nowDT);
-    if(dd !== "" && dd >= 2) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
+    const chemDue = config.chemEveryDays == null ? 2 : config.chemEveryDays;
+    if(chemDue > 0 && dd !== "" && dd >= chemDue) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
   });
 
+  // Assign rescue baths capacity-aware: each part consumes a free slot, so a
+  // group is never suggested into a bath that cannot actually hold it.
+  const healthy = healthyBaths(events, config, nowDT);
+  const freeLeft = new Map(healthy.map(b => [b.bath, b.free === null ? Infinity : b.free]));
+  const takeRescue = exclude => {
+    const h = healthy.find(b => b.bath !== exclude && freeLeft.get(b.bath) > 0);
+    if(!h) return "";
+    freeLeft.set(h.bath, freeLeft.get(h.bath) - 1);
+    return h.bath;
+  };
   const groups = new Map();
   pieces.forEach(p => {
     if(p.status.s !== "Awaiting re-strip" && p.status.s !== "Needs re-mask") return;
     const last = p.recs[p.recs.length - 1];
-    const rb = rescue(last ? last.bath : "");
+    const rb = takeRescue(last ? last.bath : "");
     const key = (p.jc || "") + "|" + rb;
     const g = groups.get(key) || { jc:p.jc, component:p.component, bath:rb, serials:[], remask:0 };
     g.serials.push(p.serial); if(p.status.s === "Needs re-mask") g.remask++;
@@ -908,7 +947,19 @@ function clearStore(store){ return new Promise((res, rej) => { const r = tx(stor
 async function loadAll(){
   EVENTS = (await getAll("events")).sort(byDate);
   CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  (await getAll("config")).forEach(o => CONFIG[o.k] = o.v);
+  (await getAll("config")).forEach(o => { if(Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, o.k)) CONFIG[o.k] = o.v; });
+}
+// Accept only known keys, coerced to the type the default declares — an imported
+// backup must not introduce junk settings or reach the prototype chain.
+function sanitizeConfig(raw){
+  const out = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  if(!raw || typeof raw !== "object") return out;
+  Object.keys(DEFAULT_CONFIG).forEach(k => {
+    const v = raw[k];
+    if(Array.isArray(DEFAULT_CONFIG[k])){ if(Array.isArray(v)) out[k] = v.map(x => String(x)).filter(Boolean); }
+    else { const n = num(v); if(n != null) out[k] = n; }
+  });
+  return out;
 }
 async function saveConfig(){ for(const k of Object.keys(CONFIG)) await putRec("config", { k, v:CONFIG[k] }); }
 
@@ -964,23 +1015,26 @@ function flash(msg, action){
   document.body.append(b); setTimeout(() => b.remove(), action ? 5000 : 1600);
 }
 /* one-step undo for the last add / edit / delete */
-let lastUndo = null;
-function setUndo(label, fn){ lastUndo = { label, fn }; }
-async function doUndo(){ if(!lastUndo) return; const u = lastUndo; lastUndo = null; try { await u.fn(); flash("Undone — " + u.label); render(); } catch(err){ alert("Could not undo: " + err.message); } }
+/* undo stack for the last adds / edits / deletes (Ctrl+Z pops newest first) */
+const undoStack = [];
+function setUndo(label, fn){ undoStack.push({ label, fn }); if(undoStack.length > 20) undoStack.shift(); }
+async function doUndo(){ const u = undoStack.pop(); if(!u) return; try { await u.fn(); flash("Undone — " + u.label); render(); } catch(err){ alert("Could not undo: " + err.message); } }
 
 function modal(title, bodyNode, footerNodes){
   const root = $("#modalRoot"); root.innerHTML = "";
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
-  const box = cel("div", { class:"modal" });
+  const box = cel("div", { class:"modal", role:"dialog", "aria-modal":"true", "aria-label":typeof title === "string" ? title : "Dialog", tabindex:"-1" });
   box.append(
     cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeModal }, "✕") ]),
     cel("div", { class:"modal-b" }, bodyNode),
     footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
   );
   overlay.append(box); root.append(overlay);
+  setTimeout(() => { if(box.focus) box.focus(); }, 0);
 }
 function closeModal(){ $("#modalRoot").innerHTML = ""; }
-document.addEventListener("keydown", e => { if(e.key === "Escape") closeModal(); });
+// Escape is handled once, in the global shortcut handler below, so a modal
+// stacked over the drawer closes the modal first rather than both at once.
 
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
@@ -1041,6 +1095,7 @@ let activeTab = "Dashboard";
 let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null, drawerOpen = false;
+let lastOperator = "";   // one shift is usually one person — prefill new forms
 
 function attentionItems(){
   const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active && b.flags.length);
@@ -1081,12 +1136,21 @@ function render(){
 }
 
 /* ------------------------------ log drawer ---------------------------- */
-function openDrawer(){ drawerOpen = true; renderDrawer(); }
-function closeDrawer(){ drawerOpen = false; formType = null; editId = null; formData = {}; renderDrawer(); }
+function openDrawer(){
+  drawerOpen = true; renderDrawer();
+  setTimeout(() => { const root = $("#drawerRoot"); const f = root && root.querySelector && root.querySelector("input, select, textarea, button.typetab"); if(f && f.focus) f.focus(); }, 0);
+}
+function draftRec(){ const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; }); return rec; }
+// Dirty = the form differs from how it was opened (prefills are the baseline).
+function formDirty(){ return !!(drawerOpen && formType && formData._orig != null && JSON.stringify(draftRec()) !== formData._orig); }
+function closeDrawer(){
+  if(formDirty() && !confirm("Discard this unsaved " + typeLabel(formType) + " entry?")) return;
+  drawerOpen = false; formType = null; editId = null; formData = {}; renderDrawer();
+}
 function renderDrawer(){
   const root = $("#drawerRoot"); root.innerHTML = "";
   if(!drawerOpen) return;
-  const panel = cel("div", { class:"drawer" });
+  const panel = cel("div", { class:"drawer", role:"dialog", "aria-modal":"true", "aria-label":editId != null ? "Edit event" : "Log event" });
   panel.append(cel("div", { class:"drawer-h" }, [
     cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
@@ -1134,6 +1198,7 @@ function renderDrawer(){
     body.append(warnBox);
     foot.append(saveBtn, cel("button", { class:"btn", onclick:closeDrawer }, "Cancel"), hint);
     refreshWarn();
+    if(formData._orig == null) formData._orig = JSON.stringify(draftRec());   // baseline for the discard guard
     panel.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
   }
   panel.append(body, foot);
@@ -1141,10 +1206,12 @@ function renderDrawer(){
 }
 
 /* --- Log event (drawer) --- */
-function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t }; if(t === "Extraction") formData._rows = {}; openDrawer(); }
-function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); if(e.type === "Load In") formData._serialText = (e.serials || []).join(", "); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
-function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "" }; openDrawer(); }
-function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", _rows:{} }; openDrawer(); }
+function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t, operator:lastOperator }; if(t === "Extraction") formData._rows = {}; openDrawer(); }
+// Deep copy: a cancelled edit must not leave mutated arrays (serials, items,
+// remask) behind on the stored event.
+function startEdit(e){ formType = e.type; editId = e.id; formData = JSON.parse(JSON.stringify(e)); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
+function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "", operator:lastOperator }; openDrawer(); }
+function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", operator:lastOperator, _rows:{} }; openDrawer(); }
 function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[] }; openDrawer(); }
 // "Complete fill" = a fresh full charge; prefill the volumes from the last fill.
 function startCompleteFill(bath){
@@ -1165,15 +1232,15 @@ function startTopUp(bath){
 // Open the drawer prefilled for a suggested next action.
 function startAction(a){
   editId = null; const t = a.type;
-  if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
-  else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
-  else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
-  else if(t === "topup" || t === "topup-hcl" || t === "topup-water") formData = { type:"Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Top-Up";
+  if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice(), operator:lastOperator }, formType = "Load In";
+  else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", operator:lastOperator }, formType = "Engineering Review";
+  else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Bath Disposal";
+  else if(t === "topup" || t === "topup-hcl" || t === "topup-water") formData = { type:"Top-Up", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Top-Up";
   else if(t === "move"){ startMove(a.bath); return; }
-  else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Chemistry Check";
+  else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Chemistry Check";
   else if(t === "viewbath"){ showBath(a.bath); return; }
   else if(t === "viewpiece"){ showSerial(a.serial); return; }
-  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", wax:[], checked:true }); }
+  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator, _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", wax:[], checked:true }); }
   else return;
   openDrawer();
 }
@@ -1532,7 +1599,9 @@ async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
   if(rec.type === "Load In"){
     if(!rec.bath){ alert("Select a bath or the waiting area."); return; }
-    rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", "));
+    // the chip list is the single source of truth — a cached text copy would
+    // silently discard chips added or removed after the drawer opened
+    rec.serials = parseSerials((rec.serials || []).join(", "));
     if(!rec.serials.length){ alert("Enter at least one serial."); return; }
     // Waiting area = park the serials (not a bath dip): store as Parts Received.
     if(rec.bath === WAITING_AREA){ rec.type = "Parts Received"; delete rec.bath; delete rec.remask; }
@@ -1542,12 +1611,14 @@ async function saveForm(){
   if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0 || num(rec.h3po4AddedL) > 0)){ alert("Enter an HCl, water or H₃PO₄ amount."); return; } }
   if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select a source and a destination."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } if(rec.toBath === WAITING_AREA) rec.toBath = ""; }   // waiting area = no destination bath
   if(editId != null){
+    if(rec.operator) lastOperator = rec.operator;
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
     rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS);
     await updateEvent(rec); setUndo("edit " + rec.eventId, async () => { await updateEvent(prior); });
     flash("Updated " + rec.eventId, { label:"Undo", fn:doUndo });
     drawerOpen = false; formType = null; editId = null; formData = {};
   } else {
+    if(rec.operator) lastOperator = rec.operator;
     await addEvent(rec); const newId = rec.id; setUndo("add " + rec.eventId, async () => { await removeEvent(newId); });
     flash("Saved " + rec.eventId, { label:"Undo", fn:doUndo });
     drawerOpen = false; formType = null; formData = {};
@@ -1903,17 +1974,22 @@ function vDash(m){
 function vSettings(m){
   const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
-  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"]];
+  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"], ["chemEveryDays", "Titration due every (days, 0 = never)"]];
   const lg = cel("div", { class:"twocol" });
-  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key], oninput:async e => { CONFIG[key] = +e.target.value; await saveConfig(); renderNav(); } })])));
+  // never persist a half-typed / cleared field: "" would become 0 and silently
+  // flip every limit check (maxCycles 0 routes ALL pieces to engineering)
+  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key],
+    oninput:async e => { const v = num(e.target.value); if(e.target.classList) e.target.classList.toggle("bad", v == null); if(v == null) return; CONFIG[key] = v; await saveConfig(); renderNav(); },
+    onblur:e => { if(num(e.target.value) == null){ e.target.value = CONFIG[key]; if(e.target.classList) e.target.classList.remove("bad"); } } })])));
   c1.append(lg); m.append(c1);
 
   const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "These tanks are always shown on the floor. Any extra bath that appears in your data is added automatically.")]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), oninput:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
+  // onchange, not oninput: a half-typed list must never be persisted
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107", value:CONFIG.baths.join(", "), onchange:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "These tanks are always shown on the floor. Any extra bath that appears in your data is added automatically.")]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), onchange:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), onchange:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "List changes apply when you leave the field."));
   m.append(c2);
 
   const c3 = cel("div", { class:"card", style:"max-width:560px" });
@@ -1930,15 +2006,19 @@ function vSettings(m){
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = cel("a", { href:u, download:name }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
 $("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:2, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
 $("#exportCsv").onclick = () => {
-  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "status", "wax", "anomaly"];
+  // eventIdIn / eventIdOut make every row traceable back to the ledger entries it came from
+  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "status", "wax", "anomaly", "eventIdIn", "eventIdOut"];
   const { records } = deriveImmersions(EVENTS, nowLocalDT());
   const lines = [cols.join(",")];
   records.forEach(r => {
     const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
-      hours:r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), status:dipStatus(r), wax:waxSummary(r), anomaly:r.anomaly || "" };
+      hours:r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), status:dipStatus(r), wax:waxSummary(r), anomaly:r.anomaly || "",
+      eventIdIn:(r.loadEvent && r.loadEvent.eventId) || "", eventIdOut:(r.extractEvent && r.extractEvent.eventId) || "" };
     lines.push(cols.map(c => {
       let v = row[c] == null ? "" : String(row[c]);
-      if(/^[=+\-@\t\r]/.test(v)) v = "'" + v;                          // neutralize spreadsheet formula injection (=,+,-,@ lead)
+      // neutralize spreadsheet formula injection (=,+,-,@ lead) — but a plain
+      // number must stay numeric so hours/cycle still aggregate in a pivot
+      if(/^[=+\-@\t\r]/.test(v) && !/^-?\d+(\.\d+)?$/.test(v)) v = "'" + v;
       if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';      // RFC-4180 quoting
       return v;
     }).join(","));
@@ -1980,11 +2060,13 @@ $("#importFile").onchange = e => {
     try {
       const d = JSON.parse(r.result);
       if(!Array.isArray(d.events)) throw new Error("no events array in file");
-      if(!confirm("Import will REPLACE current data with the backup (" + d.events.length + " events). Continue?")) return;
+      const good = d.events.filter(ev => ev && typeof ev === "object" && !Array.isArray(ev) && typeof ev.type === "string" && typeof ev.datetime === "string");
+      const skipped = d.events.length - good.length;
+      if(!confirm("Import will REPLACE current data with the backup (" + good.length + " events" + (skipped ? "; " + skipped + " malformed entries will be skipped" : "") + "). Continue?")) return;
       await clearStore("events");
-      for(const ev of d.events){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
-      if(d.config){ CONFIG = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config); await saveConfig(); }
-      await loadAll(); flash("Imported " + d.events.length + " events"); render();
+      for(const ev of good){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
+      if(d.config){ CONFIG = sanitizeConfig(d.config); await saveConfig(); }
+      await loadAll(); flash("Imported " + good.length + " events"); render();
     } catch(err){ alert("Could not read file: " + err.message); }
   };
   r.readAsText(f); e.target.value = "";
@@ -2001,9 +2083,11 @@ $("#globalSearch").addEventListener("keydown", e => {
   else { logFilter = { type:"", bath:"", text:q }; activeTab = "Events"; render(); }
 });
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape"){ if(drawerOpen) closeDrawer(); return; }
+  const modalOpen = !!($("#modalRoot") && $("#modalRoot").firstChild);
+  if(e.key === "Escape"){ if(modalOpen) closeModal(); else if(drawerOpen) closeDrawer(); return; }
   const tag = (e.target && e.target.tagName) || "";
   if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if(drawerOpen || modalOpen) return;   // never hijack plain letter keys while a dialog is up
   if(e.key === "/"){ e.preventDefault(); const gs = $("#globalSearch"); if(gs) gs.focus(); }
   else if(e.key === "l" || e.key === "L") startLoad("");
   else if(e.key === "e" || e.key === "E") startExtraction("");
@@ -2030,7 +2114,11 @@ function showShortcuts(){
   modal("Keyboard shortcuts", body, [cel("button", { class:"btn primary", onclick:closeModal }, "Got it")]);
 }
 document.addEventListener("keydown", e => {
-  if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && lastUndo){ e.preventDefault(); doUndo(); }
+  if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && undoStack.length){
+    const tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;   // text fields keep their native undo
+    e.preventDefault(); doUndo();
+  }
 });
 
 /* --- example data --- */

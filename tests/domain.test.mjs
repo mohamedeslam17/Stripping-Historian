@@ -583,3 +583,147 @@ test("eventWarnings: moving to the same bath, or a part not in the source, is fl
   assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /same bath/.test(x.msg)));
   assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B2", serials:["Z"] }, events, CONFIG, NOW).some(x => /not currently in bath/.test(x.msg)));
 });
+
+/* ===================================================================
+   Regression tests for the audited domain fixes (ported from the
+   tool-audit round). Each one pins a bug that was empirically
+   reproducible before the fix.
+   =================================================================== */
+
+test("nextEventId never reuses an id after a same-day delete (max+1, not count+1)", () => {
+  const events = [{ eventId:"20260313-0001" }, { eventId:"20260313-0003" }]; // -0002 was deleted
+  assert.equal(D.nextEventId("2026-03-13T14:00", events), "20260313-0004");
+  assert.equal(D.nextEventId("2026-03-13T14:00", [{ eventId:"20260313-0001" }, { eventId:"20260313-0002" }]), "20260313-0003");
+});
+
+test("parseSerials: mismatched-prefix, reversed and oversized ranges stay literal", () => {
+  assert.deepEqual(D.parseSerials("7261-01..7300-06"), ["7261-01..7300-06"]); // never fabricate 7261-xx
+  assert.deepEqual(D.parseSerials("7261-06..01"), ["7261-06..01"]);
+  assert.deepEqual(D.parseSerials("7261-0001..99999"), ["7261-0001..99999"]); // >= 10000 span guard
+  assert.deepEqual(D.parseSerials("a..b"), ["a..b"]);
+  assert.deepEqual(D.parseSerials("7261-05..05"), ["7261-05"]);
+  assert.deepEqual(D.parseSerials("01..03"), ["01", "02", "03"]);
+});
+
+test("a re-loaded cleared part is In bath again — Cleared is a state, not history", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }]),
+    load("2026-03-22T12:00", "B1", ["A"])
+  ];
+  const row = D.derivePieces(events, CONFIG, "2026-03-22T14:00")[0];
+  assert.equal(row.status.s, "In bath");
+  assert.equal(row.inBath, true);
+  assert.equal(row.cycles, 2);
+  const k = D.deriveKpis(events, CONFIG, "2026-03-22T14:00");
+  assert.equal(k.cleared, 0);      // no longer double-counted as cleared AND in bath
+  assert.equal(k.inBath, 1);
+});
+
+test("a Scrap / Return disposition after clearing wins over Cleared", () => {
+  const base = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }])
+  ];
+  const scrapped = base.concat(ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"A", status:"Scrap" }));
+  assert.equal(D.derivePieces(scrapped, CONFIG, NOW)[0].status.s, "Scrap");
+  const returned = base.concat(ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"A", status:"Return to vendor" }));
+  assert.equal(D.derivePieces(returned, CONFIG, NOW)[0].status.s, "Returned");
+});
+
+test("orphan (never-loaded) extractions do not inflate cycles or the dip KPIs", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Re-strip" }]),
+    extract("2026-03-22T10:05", "B1", [{ serial:"A", result:"Re-strip" }]), // double-tap
+    extract("2026-03-22T10:10", "B1", [{ serial:"A", result:"Re-strip" }])
+  ];
+  const row = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(row.cycles, 1, "one real dip, not three");
+  assert.equal(row.status.s, "Awaiting re-strip", "must not be routed to engineering by duplicates");
+  const k = D.deriveKpis(events, CONFIG, NOW);
+  assert.equal(k.dips, 1);
+  assert.equal(k.reStrip, 1);
+});
+
+test("healthyBaths ranks a never-titrated bath last, not first", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), // no chemistry on record
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }),
+    ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 })
+  ];
+  assert.deepEqual(D.healthyBaths(events, CONFIG, "2026-03-10T12:00").map(b => b.bath), ["B2", "B1"]);
+  assert.equal(D.suggestRescueBath(events, CONFIG, "2026-03-10T12:00", ""), "B2");
+});
+
+test("a same-minute re-failure AFTER a re-mask stays unresolved (event order, not datetime)", () => {
+  const mk = (n, o) => ({ id:n, eventId:"20260302-" + String(n).padStart(4, "0"), ...o });
+  const events = [
+    mk(1, { datetime:"2026-03-02T08:00", type:"Load In", bath:"B1", serials:["A"] }),
+    mk(2, { datetime:"2026-03-02T10:00", type:"Extraction", bath:"B1", items:[{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }] }),
+    mk(3, { datetime:"2026-03-02T11:00", type:"Load In", bath:"B1", serials:["A"], remask:[{ serial:"A", areas:["Cooling holes"] }] }),
+    mk(4, { datetime:"2026-03-02T11:00", type:"Extraction", bath:"B1", items:[{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }] }) // same minute, later event
+  ];
+  assert.deepEqual(D.unresolvedWaxAreas(events, "A").map(u => u.area), ["Cooling holes"]);
+  // ...while a same-minute re-mask AFTER the failure still resolves it
+  const resolved = events.concat(mk(5, { datetime:"2026-03-02T11:00", type:"Re-Masking", serial:"A", areas:["Cooling holes"] }));
+  assert.equal(D.unresolvedWaxAreas(resolved, "A").length, 0);
+});
+
+test("lookupSerial reads history in DATE order — a backfilled older event cannot override", () => {
+  const backfilled = [ // insertion order: newer first, older entered later
+    load("2026-03-20T08:00", "B1", ["A"], { jc:"J-NEW" }),
+    load("2026-03-01T08:00", "B1", ["A"], { jc:"J-OLD", component:"C-OLD" })
+  ];
+  assert.deepEqual(D.lookupSerial(backfilled, "A"), { jc:"J-NEW", component:"C-OLD" });
+});
+
+test("re-load suggestions are capacity-aware: a group never exceeds the rescue bath's free slots", () => {
+  const cfg = { ...CONFIG, bathCapacity:2 };
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:20 }),
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 }),
+    load("2026-03-10T09:00", "B2", ["X"]),                                    // B2 has 1 of 2 slots taken
+    load("2026-03-10T09:00", "B1", ["A", "B", "C"], { jc:"J" }),
+    extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip" }, { serial:"B", result:"Re-strip" }, { serial:"C", result:"Re-strip" }])
+  ];
+  const reloads = D.deriveSuggestions(events, cfg, "2026-03-10T12:00").filter(s => s.action.type === "reload");
+  const toB2 = reloads.find(s => s.action.bath === "B2");
+  const unplaced = reloads.find(s => !s.action.bath);
+  assert.ok(toB2 && toB2.action.serials.length === 1, "only one part fits in B2");
+  assert.ok(unplaced && unplaced.action.serials.length === 2, "the remainder is not crammed into a full bath");
+});
+
+test("chemEveryDays config drives the titration-overdue suggestion (default 2, 0 disables)", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:10 })
+  ];
+  const chemSug = cfg => D.deriveSuggestions(events, cfg, "2026-03-13T09:00").some(s => s.action.type === "chem");
+  assert.equal(chemSug(CONFIG), true, "3 days silent >= default 2");
+  assert.equal(chemSug({ ...CONFIG, chemEveryDays:5 }), false);
+  assert.equal(chemSug({ ...CONFIG, chemEveryDays:0 }), false, "0 disables the nag");
+});
+
+test("deriveImmersions is memoized on (events identity, now) and stays pure", () => {
+  const events = [load("2026-03-22T08:00", "B1", ["A"])];
+  assert.equal(D.deriveImmersions(events, NOW), D.deriveImmersions(events, NOW), "same inputs: cached object");
+  assert.notEqual(D.deriveImmersions(events, NOW), D.deriveImmersions(events, "2026-05-01T00:00"), "different now: recomputed");
+  const more = events.concat(extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }]));
+  assert.equal(D.deriveImmersions(more, NOW).records.length, 1);
+  assert.equal(D.deriveImmersions(more, NOW).open.size, 0, "new array identity sees the new event");
+});
+
+test("KPI wax counts failed areas across both the wax:[] and legacy shapes", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A", "B"]),
+    extract("2026-03-22T10:00", "B1", [
+      { serial:"A", result:"Re-strip", wax:["Cooling holes", "Part body"] },
+      { serial:"B", result:"Re-strip", waxFailure:"Complete mask loss" }
+    ])
+  ];
+  assert.equal(D.deriveKpis(events, CONFIG, NOW).wax, 3);
+  const rows = Object.fromEntries(D.derivePieces(events, CONFIG, NOW).map(r => [r.serial, r]));
+  assert.equal(rows.A.wax, 2);
+  assert.equal(rows.B.wax, 1);
+});
