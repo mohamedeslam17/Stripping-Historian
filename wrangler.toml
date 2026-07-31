@@ -1,0 +1,18 @@
+name = "stripping-historian"
+type = "javascript"
+account_id = ""
+workers_dev = true
+route = ""
+zone_id = ""
+
+# Cloudflare Pages configuration
+[env.production]
+vars = {}
+
+[build]
+command = "npm test"
+cwd = "."
+watch_paths = []
+
+[build.upload]
+format = "service-worker"
