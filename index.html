@@ -7,71 +7,75 @@
 <style>
   *{box-sizing:border-box}
   :root{
-    --ink:#16242b; --muted:#647078; --faint:#8c98a0; --line:#e4e9ec; --line-2:#eef2f4;
-    --bg:#eef2f4; --panel:#ffffff;
-    --brand:#15323d; --brand-2:#1d4a5a; --brand-ink:#eaf2f5;
-    --accent:#2e7d96; --accent-2:#2a6f86; --accent-weak:#e3eef2;
-    --green:#1b7a3d; --green-bg:#dcf3e3; --amber:#8a5a00; --amber-bg:#fceccb;
-    --red:#b3261e; --red-bg:#fbdcda; --blue:#1f5e84; --blue-bg:#dcebf5; --grey-bg:#eaeef0;
-    --r:12px; --r-s:8px; --r-xs:6px;
-    --sh-sm:0 1px 2px rgba(13,30,38,.06); --sh:0 6px 18px rgba(13,30,38,.10); --sh-lg:0 18px 50px rgba(8,20,26,.30);
+    --ink:#1c1c1c; --muted:#6b7280; --faint:#9aa0a6; --line:#e6e6e6; --line-2:#f0f0f0;
+    --bg:#fcfcfc; --panel:#ffffff; --elev:#f6f6f6;
+    --brand:#fbfbfb; --brand-2:#fbfbfb; --brand-ink:#1c1c1c;
+    --accent:#3ecf8e; --accent-2:#34b87d; --accent-weak:#e6f9f0; --accent-ink:#1a7f51; --on-accent:#06291a;
+    --green:#1a7f51; --green-bg:#e6f9f0; --amber:#b45309; --amber-bg:#fef3c7;
+    --red:#dc2626; --red-bg:#fde8e8; --blue:#2563eb; --blue-bg:#dbeafe; --grey-bg:#f1f1f1;
+    --r:10px; --r-s:7px; --r-xs:5px;
+    --sh-sm:0 1px 2px rgba(0,0,0,.05); --sh:0 4px 16px rgba(0,0,0,.08); --sh-lg:0 20px 50px rgba(0,0,0,.18);
   }
   html,body{height:100%}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:13.5px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;color-scheme:light}
 
   #app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-  #sidebar{background:linear-gradient(180deg,var(--brand),var(--brand-2));color:var(--brand-ink);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:14px 12px;gap:3px}
+  #sidebar{background:var(--brand);color:var(--brand-ink);border-right:1px solid var(--line);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:14px 12px;gap:3px}
   .brand{display:flex;align-items:center;gap:10px;padding:6px 8px 14px}
-  .brand .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;font-size:15px;flex:none}
+  .brand .logo{width:30px;height:30px;border-radius:8px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--on-accent);font-size:15px;flex:none}
   .brand b{font-size:14.5px;font-weight:700;letter-spacing:.2px;display:block;line-height:1.1}
-  .brand small{color:#9fc0cc;font-size:10.5px}
+  .brand small{color:var(--faint);font-size:10.5px}
   #nav{display:flex;flex-direction:column;gap:2px}
-  .navlink{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-s);color:#cfe0e6;cursor:pointer;font-size:13.5px;font-weight:500;border:none;background:none;text-align:left;width:100%}
+  .navlink{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:var(--r-s);color:#4b5563;cursor:pointer;font-size:13.5px;font-weight:500;border:none;background:none;text-align:left;width:100%}
   .navlink .ic{width:18px;text-align:center;opacity:.92;font-size:14px}
-  .navlink:hover{background:rgba(255,255,255,.08);color:#fff}
-  .navlink.on{background:rgba(255,255,255,.15);color:#fff}
+  .navlink:hover{background:#f0f0f0;color:#1c1c1c}
+  .navlink.on{background:#eef6f2;color:#1c1c1c;box-shadow:inset 2px 0 0 var(--accent)}
   .navlink .badge{margin-left:auto;min-width:18px;text-align:center;padding:1px 6px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700}
-  .navlink .badge.info{background:var(--accent)}
+  .navlink .badge.info{background:var(--accent);color:var(--on-accent)}
   .side-sp{flex:1}
-  .side-log{margin:6px 2px 12px;padding:11px;border-radius:var(--r-s);background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px}
-  .side-log:hover{background:#3690ab}
+  .side-log{margin:6px 2px 12px;padding:11px;border-radius:var(--r-s);background:var(--accent);color:var(--on-accent);border:none;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px}
+  .side-log:hover{background:#34b87d}
   .side-foot{display:flex;gap:6px;padding:2px}
-  .side-foot button{flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);color:#dce8ec;border-radius:var(--r-xs);padding:6px 4px;font-size:11px;cursor:pointer}
-  .side-foot button:hover{background:rgba(255,255,255,.14)}
+  .side-foot button{flex:1;background:#fff;border:1px solid var(--line);color:#4b5563;border-radius:var(--r-xs);padding:6px 4px;font-size:11px;cursor:pointer}
+  .side-foot button:hover{background:#f2f2f2}
 
   #content{display:flex;flex-direction:column;min-width:0}
   #topbar{position:sticky;top:0;z-index:20;min-height:54px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 18px}
   #topbar h1{font-size:16px;margin:0;font-weight:650}
   .search{margin-left:auto}
-  .search input{width:240px;padding:7px 12px;border:1px solid var(--line);border-radius:20px;background:#f5f8f9;font-size:13px}
-  .kbd{display:inline-block;border:1px solid rgba(255,255,255,.3);border-radius:5px;padding:0 5px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
-  #main{padding:18px 20px;flex:1;min-width:0;max-width:1320px;width:100%}
+  .search input{width:240px;padding:7px 12px;border:1px solid var(--line);border-radius:20px;background:var(--elev);font-size:13px}
+  .kbd{display:inline-block;border:1px solid #d0d0d0;border-radius:5px;padding:0 5px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .iconbtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--elev);color:var(--muted);cursor:pointer;font-size:14px;font-weight:700;flex:none;line-height:1}
+  .iconbtn:hover{background:#ececec;color:var(--ink)} .iconbtn:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
+  #main{padding:24px 28px;flex:1;min-width:0;max-width:1280px;width:100%}
 
-  .attn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-bg);color:var(--red);border:1px solid #f1c7c4;border-radius:var(--r);padding:9px 14px;margin-bottom:16px;font-size:13px}
+  .attn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-bg);color:var(--red);border:1px solid #f3c4c0;border-radius:var(--r);padding:9px 14px;margin-bottom:16px;font-size:13px}
   .attn b{font-weight:700} .attn .sp{flex:1}
 
-  h2.sec{font-size:15px;margin:0 0 14px;font-weight:650}
-  h3.sub{font-size:11.5px;margin:22px 0 10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+  h2.sec{font-size:15px;margin:0 0 16px;font-weight:650;letter-spacing:-.1px}
+  h3.sub{font-size:11px;margin:26px 0 12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.7px}
   .muted{color:var(--muted)} .faint{color:var(--faint)}
   .row{display:flex;gap:14px;flex-wrap:wrap}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh-sm)}
-  .linkish{color:var(--accent);cursor:pointer;font-weight:500} .linkish:hover{text-decoration:underline}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh-sm)}
+  .linkish{color:var(--accent-ink);cursor:pointer;font-weight:500} .linkish:hover{text-decoration:underline}
   .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:46px 10px} .flagok{color:var(--green)}
 
-  .btn{background:var(--panel);border:1px solid var(--line);color:var(--ink);padding:8px 13px;border-radius:var(--r-s);cursor:pointer;font-size:13px;font-weight:550;box-shadow:var(--sh-sm)}
-  .btn:hover{background:#f4f7f8}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-  .btn.primary:hover{background:#3690ab}
+  .btn{background:#ffffff;border:1px solid #e0e0e0;color:var(--ink);padding:8px 13px;border-radius:var(--r-s);cursor:pointer;font-size:13px;font-weight:550}
+  .btn:hover{background:#f5f5f5;border-color:#d2d2d2}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+  .btn.primary:hover{background:#34b87d}
   .btn.sm{padding:5px 10px;font-size:12px}
-  .btn.danger{color:var(--red);border-color:#e6b3b0}
+  .btn.danger{color:var(--red);border-color:#f0c4c0;background:#fff}
+  .btn.danger:hover{background:#fef2f2}
   .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
   .btnrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
   label.f{display:block;font-size:12px;color:var(--muted);margin:0 0 5px;font-weight:550}
-  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);font-size:13.5px;font-family:inherit;background:#fff;color:var(--ink)}
+  input,select,textarea{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r-s);font-size:13.5px;font-family:inherit;background:#ffffff;color:var(--ink)}
   textarea{resize:vertical}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(62,207,142,.2)}
+  ::placeholder{color:var(--faint)}
   .field{margin-bottom:13px}
   .twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
@@ -79,24 +83,26 @@
   table{width:100%;border-collapse:collapse;font-size:13px}
   th,td{padding:9px 12px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line-2)}
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  thead th{background:#f6f9fa;font-weight:600;color:var(--muted);position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);white-space:nowrap}
-  thead th.sortable{cursor:pointer} thead th.sortable:hover{color:var(--ink)}
-  tbody tr:hover{background:#f7fafb} tbody tr:last-child td{border-bottom:none}
+  thead th{background:#f8f8f8;font-weight:600;color:var(--muted);position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line);white-space:nowrap}
+  thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--ink);background:#f1f1f1}
+  thead th.sortable.sorted{color:var(--ink)} .sort-ind{font-size:9px;color:var(--accent-ink);letter-spacing:0}
+  thead th.sortable:focus-visible{outline:2px solid var(--accent-ink);outline-offset:-2px}
+  tbody tr:hover{background:#f7f7f7} tbody tr:last-child td{border-bottom:none}
 
   .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
   .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
   .pill.nodot::before{display:none}
   .p-green{background:var(--green-bg);color:var(--green)} .p-amber{background:var(--amber-bg);color:var(--amber)}
-  .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:var(--grey-bg);color:#5b6770}
+  .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:var(--grey-bg);color:#5b6470}
   .p-blue{background:var(--blue-bg);color:var(--blue)}
-  .p-purple{background:#ece3f5;color:#6b3fa0}
-  .tag{display:inline-flex;align-items:center;gap:6px;background:#eef2f4;border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12px;margin:2px 4px 0 0}
-  .tag.flagbad{background:var(--red-bg);border-color:#eebfbc;color:var(--red)}
+  .p-purple{background:#f3e8ff;color:#7c3aed}
+  .tag{display:inline-flex;align-items:center;gap:6px;background:#f3f3f3;border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12px;margin:2px 4px 0 0}
+  .tag.flagbad{background:var(--red-bg);border-color:#f3c4c0;color:var(--red)}
 
-  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:18px}
-  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:15px;box-shadow:var(--sh-sm)}
-  .kpi .v{font-size:25px;font-weight:750;letter-spacing:-.5px} .kpi .l{font-size:12px;color:var(--muted);margin-top:3px}
-  .kpi.warn{border-color:#e6b3b0} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh-sm)}
+  .kpi .v{font-size:27px;font-weight:700;letter-spacing:-.7px;line-height:1.1} .kpi .l{font-size:11.5px;color:var(--muted);margin-top:5px;font-weight:500}
+  .kpi.warn{box-shadow:inset 3px 0 0 var(--red),var(--sh-sm)} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
 
   .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
   .bathcard{cursor:pointer;transition:box-shadow .12s,transform .12s}
@@ -105,29 +111,30 @@
   .kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line-2);font-size:12.5px}
   .kv span:first-child{color:var(--muted)}
   .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
-  .dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)} .dot.x{background:#b6c2c8}
+  .dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)} .dot.x{background:#c0c0c0}
   .partline{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:13px}
   .partline:last-child{border-bottom:none} .partline .s{font-weight:600} .partline .t{margin-left:auto;color:var(--muted);font-size:12px}
   .tankgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
-  .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s}
-  .tankcard:hover{box-shadow:var(--sh)}
+  .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s,border-color .12s;display:flex;flex-direction:column}
+  .tankcard:hover{box-shadow:var(--sh);border-color:#d6d6d6}
+  .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:auto;padding-top:12px}
   .tank-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-  .tank{position:relative;border:2px solid #aebfc6;border-top:none;border-radius:0 0 14px 14px;min-height:118px;background:linear-gradient(180deg,#e9f6fb,#cfe7f2);padding:9px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
-  .tank.spent{background:linear-gradient(180deg,#fbe9e7,#f3cfca);border-color:#dcaaa5}
-  .tank.off{background:repeating-linear-gradient(45deg,#f1f4f5,#f1f4f5 8px,#e9eef0 8px,#e9eef0 16px);border-color:var(--line)}
-  .tank-part{background:#fff;border:1px solid #cdd9de;border-radius:6px;padding:3px 7px;font-size:11.5px;font-weight:600;box-shadow:var(--sh-sm);height:fit-content}
-  .tank-part.hot{background:var(--red-bg);border-color:#e3a9a9;color:var(--red)}
+  .tank{position:relative;border:1px solid #cdeadd;border-top:none;border-radius:0 0 12px 12px;min-height:92px;background:linear-gradient(180deg,#eafaf3,#d3f1e4);padding:10px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+  .tank.spent{background:linear-gradient(180deg,#fdecec,#f8d6d6);border-color:#f0c4c0}
+  .tank.off{background:repeating-linear-gradient(45deg,#f6f6f6,#f6f6f6 8px,#eeeeee 8px,#eeeeee 16px);border-color:var(--line)}
+  .tank-part{background:#fff;border:1px solid #cfe0d8;border-radius:6px;padding:3px 7px;font-size:11.5px;font-weight:600;color:#1c1c1c;box-shadow:var(--sh-sm);height:fit-content}
+  .tank-part.hot{background:var(--red-bg);border-color:#f0c4c0;color:var(--red)}
   .tank-empty{color:var(--faint);font-size:12px;margin:auto}
 
-  .chipbox{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;min-height:44px;align-content:flex-start}
-  .chipbox.focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-weak)}
-  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-2);border-radius:7px;padding:3px 4px 3px 9px;font-size:12.5px;font-weight:600}
+  .chipbox{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-s);background:#ffffff;min-height:44px;align-content:flex-start}
+  .chipbox.focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(62,207,142,.2)}
+  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-ink);border-radius:7px;padding:3px 4px 3px 9px;font-size:12.5px;font-weight:600}
   .chip i{cursor:pointer;font-style:normal;width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center}
   .chip i:hover{background:rgba(0,0,0,.10)}
-  .chipbox input{border:none;outline:none;box-shadow:none!important;flex:1;min-width:120px;padding:4px;background:transparent}
-  .idlechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-2);border:1px solid var(--accent);border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:600;cursor:pointer}
-  .idlechip:hover{background:#d6e8ef}
-  .idlechip-tag{background:#ece3f5;color:#6b3fa0;border-radius:5px;padding:0 5px;font-size:10px}
+  .chipbox input{border:none;outline:none;box-shadow:none!important;flex:1;min-width:120px;padding:4px;background:transparent;color:var(--ink)}
+  .idlechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-ink);border:1px solid #bfe8d6;border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:600;cursor:pointer}
+  .idlechip:hover{background:#d6f3e6}
+  .idlechip-tag{background:#f3e8ff;color:#7c3aed;border-radius:5px;padding:0 5px;font-size:10px}
 
   .contents{border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;margin-top:4px}
   .crow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line-2)}
@@ -136,11 +143,19 @@
   .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
   .seg button{border:none;background:#fff;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line)}
   .seg button:last-child{border-right:none}
-  .seg button.on{background:var(--accent);color:#fff}
+  .seg button.on{background:var(--accent);color:var(--on-accent);font-weight:600}
   .seg.wrap{flex-wrap:wrap}
   .seg.wax button.on{background:var(--amber);color:#fff}
   .seg.wax button.on.partial{background:var(--amber);color:#fff}
   .seg.wax button.on.full{background:var(--red);color:#fff}
+  .waxchk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
+  .waxchk input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--red)}
+  .waxchk.on{background:var(--red-bg);border-color:#f0c4c0;color:var(--red);font-weight:600}
+  .waxchk.on-rm{background:#f3e8ff;border-color:#dcc6f5;color:#7c3aed;font-weight:600}
+  .waxchk.on-rm input{accent-color:#7c3aed}
+  .chk{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
+  .chk input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
+  .chk.on{background:var(--accent-weak);border-color:#bfe8d6;color:var(--accent-ink);font-weight:600}
 
   svg.chart{display:block;max-width:100%}
   .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
@@ -150,24 +165,25 @@
   .bar > i{display:block;height:100%;background:var(--accent);border-radius:6px}
   .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
 
-  .scrim{position:fixed;inset:0;background:rgba(8,20,26,.42);z-index:60;opacity:0;animation:fade .15s forwards}
+  .scrim{position:fixed;inset:0;background:rgba(20,28,33,.35);z-index:60;opacity:0;animation:fade .15s forwards}
   @keyframes fade{to{opacity:1}}
-  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(480px,96vw);background:var(--panel);z-index:61;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .18s forwards}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(540px,96vw);background:var(--panel);z-index:61;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .18s forwards}
   @keyframes slide{to{transform:translateX(0)}}
   .drawer-h{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
   .drawer-h h3{margin:0;font-size:15px;flex:1;font-weight:650}
   .drawer-b{padding:16px;overflow:auto;flex:1}
   .drawer-f{padding:12px 16px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
   .typetabs{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
-  .typetab{padding:10px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;cursor:pointer;font-weight:600;font-size:13px;text-align:left}
+  .typetab{padding:10px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;cursor:pointer;font-weight:600;font-size:13px;text-align:left;color:var(--ink)}
+  .typetab:hover{border-color:#d8d8d8;background:#fafafa}
   .typetab small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px}
-  .typetab.on{background:var(--brand);color:#fff;border-color:var(--brand)} .typetab.on small{color:#bcd2da}
+  .typetab.on{background:var(--accent-weak);color:var(--ink);border-color:var(--accent)} .typetab.on small{color:#3f7a63}
   .warn-line{display:flex;gap:7px;align-items:flex-start;padding:7px 11px;border-radius:var(--r-s);font-size:12.5px;margin-bottom:6px}
   .warn-red{background:var(--red-bg);color:var(--red)} .warn-amber{background:var(--amber-bg);color:var(--amber)}
 
-  .overlay{position:fixed;inset:0;background:rgba(8,20,26,.45);display:flex;align-items:flex-start;justify-content:center;padding:34px 14px;z-index:62;overflow:auto}
-  .modal{background:#fff;border-radius:var(--r);max-width:760px;width:100%;box-shadow:var(--sh-lg)}
-  .modal-h{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;border-radius:var(--r) var(--r) 0 0}
+  .overlay{position:fixed;inset:0;background:rgba(20,28,33,.4);display:flex;align-items:flex-start;justify-content:center;padding:34px 14px;z-index:62;overflow:auto}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);max-width:760px;width:100%;box-shadow:var(--sh-lg)}
+  .modal-h{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);border-radius:var(--r) var(--r) 0 0}
   .modal-h h3{margin:0;font-size:15px;flex:1;font-weight:650}
   .modal-b{padding:18px}
   .modal-f{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
@@ -176,7 +192,7 @@
   .tl{list-style:none;margin:0;padding:0}
   .tl li{position:relative;padding:0 0 15px 22px;border-left:2px solid var(--line)}
   .tl li:last-child{border-left-color:transparent}
-  .tl li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}
+  .tl li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
   .tl .tl-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .tl .tl-when{font-size:12px;color:var(--muted)} .tl .tl-d{font-size:12.5px;color:#41525a;margin-top:2px}
 
@@ -186,11 +202,40 @@
   .pr-meta td{border:none;padding:2px 14px 2px 0;font-size:12px}
   @media print{ body *{visibility:hidden} #printArea,#printArea *{visibility:visible} #printArea{display:block!important;position:absolute;inset:0;padding:0} thead th{position:static} }
 
+  /* a11y: a clear, consistent keyboard-focus ring on every custom control (WCAG 2.4.7) */
+  .btn:focus-visible,.navlink:focus-visible,.side-log:focus-visible,.side-foot button:focus-visible,
+  .x:focus-visible,.chip i:focus-visible,.typetab:focus-visible,.tankcard:focus-visible,.seg button:focus-visible,
+  .chk:focus-visible,.waxchk:focus-visible,.idlechip:focus-visible,.linkish:focus-visible,.tag:focus-visible{
+    outline:2px solid var(--accent-ink);outline-offset:2px;border-radius:var(--r-xs)}
+
+  /* generous touch targets on finger/stylus devices — the floor uses gloves (WCAG 2.5.5) */
+  @media(pointer:coarse){
+    .btn,.navlink,.side-log,.seg button,.side-foot button,.chk,.waxchk,.typetab{min-height:44px}
+    .btn.sm{padding:9px 13px;min-height:40px}
+    .chip i{width:24px;height:24px} .x{min-width:44px;min-height:44px}
+    .linkish{display:inline-block;padding:6px 2px}
+    input,select,textarea{font-size:16px}            /* ≥16px stops iOS Safari from zooming on focus */
+  }
+
+  /* dense tables degrade gracefully on phones: drop the lowest-priority column and
+     tighten cells so Status / Where stay on screen instead of behind a sideways scroll */
+  @media(max-width:640px){
+    th,td{padding:8px 9px} table{font-size:12.5px}
+    .col-comp{display:none}
+    .tbl-wrap{max-height:none}            /* page-scroll beats a nested scroll trap on mobile */
+    .kpi .v{font-size:23px}
+  }
+
   @media(max-width:900px){
     #app{grid-template-columns:1fr}
-    #sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:4px;padding:8px}
-    .brand{padding:4px 8px} .side-sp{flex:0} #nav{flex-direction:row;flex-wrap:wrap} .navlink{width:auto}
-    .side-log{margin:0 0 0 auto} .side-foot{order:5} .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:24px 1fr;row-gap:8px}
+    #sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:9px 12px}
+    .brand{padding:2px 4px;flex:1 1 auto} .side-sp{display:none}
+    .side-log{order:2;margin:0;padding:10px 16px;flex:0 0 auto}
+    #nav{order:3;flex:1 1 100%;flex-direction:row;flex-wrap:wrap;gap:5px}
+    .navlink{width:auto}
+    .side-foot{order:4;flex:1 1 100%;gap:7px} .side-foot button{padding:9px 4px;font-size:12px}
+    #main{padding:18px 14px}
+    .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:24px 1fr;row-gap:8px}
   }
 </style>
 </head>
@@ -202,6 +247,7 @@
     <div class="side-sp"></div>
     <button class="side-log" id="logBtn">＋&nbsp; Log event&nbsp; <span class="kbd">N</span></button>
     <div class="side-foot">
+      <button id="exportReport" title="Download a color-coded HTML report">Report</button>
       <button id="exportJson" title="Download a full JSON backup">Backup</button>
       <button id="importBtn" title="Restore from a backup">Import</button>
       <button id="exportCsv" title="Export the dip log as CSV">CSV</button>
@@ -211,7 +257,8 @@
   <div id="content">
     <header id="topbar">
       <h1 id="pageTitle">Floor</h1>
-      <div class="search"><input id="globalSearch" placeholder="Search serial, J/C, notes…   ( / )"></div>
+      <div class="search"><input id="globalSearch" type="search" aria-label="Search serials, job cards and notes" placeholder="Search serial, J/C, notes…   ( / )"></div>
+      <button id="helpBtn" class="iconbtn" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">?</button>
     </header>
     <main id="main"></main>
   </div>
@@ -244,9 +291,10 @@ const DEFAULT_CONFIG = {
   feMax: 100,
   maxCycles: 3, maxHours: 24,
   maxBathAge: 30,
-  bathCapacity: 12,
+  bathCapacity: 0,   // 0 = no part limit
+  chemEveryDays: 2,  // titration cadence; 0 = never prompt
   maskAreas: ["Cooling holes", "Part body"],
-  baths: ["102-103", "106-107", "202-203", "206-207"],
+  baths: ["102-103", "106-107", "202-203", "206-207"],   // always shown; edit in Settings
   operators: ["Diang", "JM", "Bernabe", "Maint", "QA"]
 };
 
@@ -278,8 +326,9 @@ function fmtDT(dt){ if(!dt) return ""; return fmtDate(dt) + (dt.length > 10 ? " 
 
 function nextEventId(dateStr, events){
   const ymd = (dateStr || "").slice(0,10).replace(/-/g, "");
-  let n = 0; events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0) n++; });
-  return ymd + "-" + String(n + 1).padStart(4, "0");
+  let mx = 0; // max suffix + 1, not count + 1: a same-day delete must never free an id for reuse
+  events.forEach(e => { if(e.eventId && e.eventId.indexOf(ymd) === 0){ const n = parseInt(e.eventId.slice(ymd.length + 1), 10); if(Number.isFinite(n) && n > mx) mx = n; } });
+  return ymd + "-" + String(mx + 1).padStart(4, "0");
 }
 
 // "7261-01..06" / "7261-01..7261-06" expands to a list; commas/spaces/newlines split.
@@ -292,7 +341,10 @@ function parseSerials(text){
       const lm = parts[0].match(/^(.*?)(\d+)$/);
       if(lm){
         const prefix = lm[1], width = lm[2].length;
-        const hi = /^\d+$/.test(parts[1]) ? parts[1] : (parts[1].match(/(\d+)$/) || [])[1];
+        // right side must be bare digits or carry the SAME prefix — otherwise
+        // "7261-01..7300-06" would silently fabricate 7261-xx serials
+        const rm = parts[1].match(/^(.*?)(\d+)$/);
+        const hi = rm && (rm[1] === "" || rm[1] === prefix) ? rm[2] : null;
         if(hi != null){
           const a = parseInt(lm[2], 10), b = parseInt(hi, 10);
           if(b >= a && b - a < 10000){ for(let n = a; n <= b; n++) add(prefix + String(n).padStart(width, "0")); return; }
@@ -318,33 +370,50 @@ const F = { // key -> [storedName, label, kind]
 const TYPES = {
   "Load In":          { desc:"parts INTO a bath (time in)",  custom:"load",    fields:[F.bath,F.jc,F.component,F.op,F.notes] },
   "Extraction":       { desc:"parts OUT of a bath (time out)",custom:"extract", fields:[F.bath,F.op,F.notes] },
+  "Transfer":         { desc:"move parts to another bath",   custom:"move",    fields:[F.bath,F.op,F.notes] },
+  "Parts Received":   { desc:"add serials to the waiting area (not in a bath)", custom:"received", hidden:true, fields:[F.jc,F.component,F.op,F.notes] },
   "Chemistry Check":  { desc:"titration result",   fields:[F.bath,F.temp,F.hclPct,F.fePpm,F.op,F.notes] },
-  "HCl Top-Up":       { desc:"add acid",            fields:[F.bath,F.hcl,F.op,F.notes] },
-  "Water Top-Up":     { desc:"add water",           fields:[F.bath,F.water,F.op,F.notes] },
-  "Bath Fill":        { desc:"new charge",          fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "Top-Up":           { desc:"partial top-up — add acid / water / H₃PO₄", fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "Bath Fill":        { desc:"complete fill — new charge",   fields:[F.bath,F.hcl,F.water,F.h3po4,F.op,F.notes] },
+  "HCl Top-Up":       { desc:"add acid",            hidden:true, fields:[F.bath,F.hcl,F.op,F.notes] },
+  "Water Top-Up":     { desc:"add water",           hidden:true, fields:[F.bath,F.water,F.op,F.notes] },
   "Wax Failure":      { desc:"masking defect (per area)", custom:"waxfail", hidden:true, fields:[F.bath,F.jc,F.serial,F.op,F.notes] },
   "Re-Masking":       { desc:"re-wax failed areas",  custom:"remask",  hidden:true, fields:[F.jc,F.serial,F.op,F.notes] },
   "Engineering Review":{ desc:"disposition a part", fields:[F.jc,F.serial,F.disp,F.op,F.notes] },
   "Bath Disposal":    { desc:"bath taken out",      fields:[F.bath,F.reason,F.op,F.notes] }
 };
+// Friendly UI labels for the operator-facing actions. The stored event `type`
+// stays "Load In" / "Extraction" (the formal ledger); only the display changes.
+const TYPE_LABEL = { "Load In":"Add parts", "Extraction":"Remove parts", "Parts Received":"Waiting area" };
+const typeLabel = t => TYPE_LABEL[t] || t;
+// Sentinel chosen in the Add-parts bath drop-down to park serials in the waiting
+// area instead of a bath. Never stored: a save with it becomes a Parts Received.
+const WAITING_AREA = "__waiting__";
 const TYPE_PILL = {
   "Load In":"p-blue","Extraction":"p-grey","Immersion":"p-grey","Chemistry Check":"p-grey",
   "Bath Fill":"p-green","Bath Disposal":"p-red","Wax Failure":"p-red","Re-Masking":"p-amber",
-  "Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey"
+  "Engineering Review":"p-amber","HCl Top-Up":"p-grey","Water Top-Up":"p-grey",
+  "Top-Up":"p-grey","Transfer":"p-blue","Parts Received":"p-purple"
 };
 
 // Events that mention a serial (it now lives inside arrays on load/extract events).
 function eventsForSerial(events, serial){
   return events.filter(e =>
     e.serial === serial ||
-    (e.type === "Load In" && (e.serials || []).includes(serial)) ||
+    ((e.type === "Load In" || e.type === "Transfer" || e.type === "Parts Received") && (e.serials || []).includes(serial)) ||
     (e.type === "Extraction" && (e.items || []).some(i => i.serial === serial))
   ).slice().sort(byDate);
 }
 
 /* ---- the backbone: pair Load In + Extraction (and legacy Immersion) into
         per-part "dip" records, and report what is still in each bath ---- */
+const _immersionsMemo = new WeakMap(); // events array -> { now, val }
 function deriveImmersions(events, nowDT){
+  // Every derive* helper walks the ledger through here, so a single render can
+  // rebuild it dozens of times. Keyed on the events array identity: any write
+  // replaces the array, so a stale entry is never reachable.
+  const memoHit = _immersionsMemo.get(events);
+  if(memoHit && memoHit.now === nowDT) return memoHit.val;
   const seq = events.slice().sort(byDate);
   const records = [];
   const open = new Map();   // serial -> currently-open record
@@ -367,6 +436,26 @@ function deriveImmersions(events, nowDT){
           inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null,
           hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
       });
+    } else if(e.type === "Transfer"){
+      // Move parts to another bath, or OUT to the waiting area (no destination
+      // bath). To a bath: close the source record and open a same-cycle
+      // continuation, flagged `moved` so it isn't counted as a new dip. To the
+      // waiting area: just close the source — the part is now out, awaiting.
+      const toBath = e.toBath || "";
+      (e.serials || []).forEach(s => {
+        const r = open.get(s);
+        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(toBath){
+          const cont = { serial:s, bath:toBath, jc:(r && r.jc) || e.jc || "", component:(r && r.component) || e.component || "",
+            cycle:r ? r.cycle : (cyc.get(s) || 0), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
+            hours:null, elapsedH:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
+          open.set(s, cont); records.push(cont);
+        } else if(!r){
+          records.push({ serial:s, bath:"", jc:e.jc || "", component:e.component || "", cycle:(cyc.get(s) || 0),
+            inDT:null, outDT:e.datetime, result:"Moved", waxFailure:null, hours:null, elapsedH:null, open:false,
+            anomaly:"moved out but was not in a bath", loadEvent:null, extractEvent:e });
+        }
+      });
     } else if(e.type === "Immersion"){ // legacy self-contained dip
       if(!e.serial) continue;
       records.push({ serial:e.serial, bath:e.bath || "", jc:e.jc || "", component:e.component || "",
@@ -375,11 +464,20 @@ function deriveImmersions(events, nowDT){
     }
   }
   open.forEach(r => { r.elapsedH = round(hoursBetweenDT(r.inDT, nowDT), 2); });
-  return { records, open };
+  const val = { records, open };
+  _immersionsMemo.set(events, { now:nowDT, val });
+  return val;
 }
 function bathContents(events, nowDT, bath){
   const { open } = deriveImmersions(events, nowDT);
   return [...open.values()].filter(r => !bath || r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
+}
+// Reporting status for one dip record: still in a bath = Ongoing, cleared =
+// Completed, otherwise the removal reason (Re-strip / Re-mask / Hold / Moved).
+function dipStatus(r){
+  if(r.open) return "Ongoing";
+  if(r.result === "Cleared") return "Completed";
+  return r.result || "—";
 }
 
 // A wax failure is recorded by which masked AREA failed (e.g. cooling holes vs
@@ -396,12 +494,23 @@ function remaskAreasOf(e){ return (Array.isArray(e.areas) && e.areas.length) ? e
 function remaskActions(events, serial){
   const out = [];
   events.forEach(e => {
-    if(e.type === "Re-Masking" && e.serial === serial) out.push({ datetime:e.datetime, areas:remaskAreasOf(e) });
-    else if(e.type === "Load In" && Array.isArray(e.remask)){ const r = e.remask.find(x => x.serial === serial); if(r) out.push({ datetime:e.datetime, areas:(Array.isArray(r.areas) && r.areas.length) ? r.areas : null }); }
+    if(e.type === "Re-Masking" && e.serial === serial) out.push({ datetime:e.datetime, areas:remaskAreasOf(e), event:e });
+    else if(e.type === "Load In" && Array.isArray(e.remask)){ const r = e.remask.find(x => x.serial === serial); if(r) out.push({ datetime:e.datetime, areas:(Array.isArray(r.areas) && r.areas.length) ? r.areas : null, event:e }); }
   });
   return out;
 }
 function waxSummary(obj){ return waxAreasOf(obj).join(", "); }
+
+// A part's wax configuration: which masked areas it actually has (some parts have
+// no cooling holes, etc.). Taken from the most recent Add-parts / waiting entry
+// that specified it; defaults to every configured area for parts not yet set.
+function maskConfigFor(events, config, serial){
+  let cfg = null;
+  events.slice().sort(byDate).forEach(e => {
+    if((e.type === "Load In" || e.type === "Parts Received") && (e.serials || []).includes(serial) && Array.isArray(e.maskAreas)) cfg = e.maskAreas.slice();
+  });
+  return cfg != null ? cfg : (config.maskAreas || []);
+}
 
 // Every wax-failed area observed for a serial (discovered at extraction).
 function waxFailures(events, serial){
@@ -421,8 +530,11 @@ function unresolvedWaxAreas(events, serial){
   const latest = new Map();
   fails.forEach(f => { const c = latest.get(f.area); if(!c || f.datetime > c.datetime) latest.set(f.area, f); });
   const remasks = remaskActions(events, serial);
+  // a re-mask resolves a failure only if it is not BEFORE it in event order —
+  // compare (datetime, eventId) so same-minute sequences still resolve correctly
+  const notBefore = (r, f) => byDate(f.event || { datetime:f.datetime }, r.event || { datetime:r.datetime }) <= 0;
   const out = [];
-  latest.forEach((f, area) => { if(!remasks.some(r => r.datetime >= f.datetime && (r.areas == null || r.areas.includes(area)))) out.push(f); });
+  latest.forEach((f, area) => { if(!remasks.some(r => notBefore(r, f) && (r.areas == null || r.areas.includes(area)))) out.push(f); });
   return out.sort((a, b) => String(a.datetime).localeCompare(String(b.datetime)));
 }
 // Back-compat single-value accessor: the most recent unresolved area failure.
@@ -430,16 +542,23 @@ function lastUnresolvedWax(events, serial){ const u = unresolvedWaxAreas(events,
 
 function pieceStatusFor(recs, engEvents, config, needsRemask){
   const open = recs.some(r => r.open);
-  const cleared = recs.some(r => r.result === "Cleared");
-  const cycles = recs.length;
+  // real dips have a load (inDT); orphan "extracted but was not in bath"
+  // records must not inflate the cycle count or drive the status
+  const real = recs.filter(r => r.inDT != null);
+  const lastRec = (real.length ? real : recs)[(real.length ? real : recs).length - 1];
+  // "Cleared" is the piece's CURRENT state, not history: only the latest dip
+  // counts — a cleared part that is re-loaded is "In bath" again, not Cleared
+  const cleared = !!lastRec && !lastRec.open && lastRec.result === "Cleared";
+  const cycles = real.filter(r => !r.moved).length;   // a bath-to-bath move is not a new dip
   const closedH = round(recs.filter(r => !r.open).reduce((a, r) => a + (r.hours || 0), 0));
   const totalH = round(closedH + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedH || 0), 0));
   const engDisp = engEvents.length ? engEvents[engEvents.length - 1].status : "";
   const base = { cycles, hours:closedH, totalH, open };
-  if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
-  if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
+  // a disposition recorded after the fact overrides an earlier clear
   if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
+  if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
+  if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
   if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
   if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
   if(cycles >= config.maxCycles || totalH >= config.maxHours){
@@ -468,12 +587,13 @@ function derivePieces(events, config, nowDT){
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
-      cycles:recs.length, hours:st.hours,
-      wax: recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
+      cycles:st.cycles, hours:st.hours,
+      wax: recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
-      firstPass: recs.length > 0 && recs[0].result === "Cleared",
+      firstPass: recs.some(r => r.result === "Cleared") && !recs.some(r => r.result === "Re-strip"),
+      decided: recs.some(r => !r.open && !r.moved && r.inDT != null),   // has at least one real extraction result — counts toward first-pass yield (a part still on its first, never-pulled dip does not; nor does an orphan extraction)
       needsRemask: unresolvedWax.length > 0,
       waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area).join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
       status:st, recs, events:evs
@@ -501,9 +621,13 @@ function deriveBath(events, config, bath, nowDT){
   const contents = [...open.values()].filter(r => r.bath === bath).sort((a, b) => String(a.inDT).localeCompare(String(b.inDT)));
   const loadH = round(recs.reduce((a, r) => a + (r.open ? (r.elapsedH || 0) : (r.hours || 0)), 0));
   const parts = new Set(recs.map(r => r.serial)).size;
-  const wax = recs.reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
-  const hclAdded = evs.filter(within).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
-  const waterAdded = evs.filter(within).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
+  const wax = recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => within(e) && e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0);
+  // Volumes added *since* the charge — top-ups only, so the charge fill itself
+  // isn't double-counted (it's shown separately as the charge).
+  const sinceCharge = e => within(e) && e !== lastFill;
+  const hclAdded = evs.filter(sinceCharge).reduce((a, e) => a + (+e.hclAddedL || 0), 0);
+  const waterAdded = evs.filter(sinceCharge).reduce((a, e) => a + (+e.waterAddedL || 0), 0);
+  const h3po4Added = evs.filter(sinceCharge).reduce((a, e) => a + (+e.h3po4AddedL || 0), 0);
   const age = lastFill ? daysBetween(lastFill.datetime, end) : "";
   const active = !!lastFill && !disposal;
 
@@ -519,40 +643,53 @@ function deriveBath(events, config, bath, nowDT){
   if(active && capacity && contents.length > capacity) flags.push("Over capacity " + contents.length + "/" + capacity);
   if(disposal && contents.length) flags.push(contents.length + " part(s) still recorded as inside a disposed bath");
 
-  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, age, flags, contents, capacity, free };
+  return { bath, lastFill, disposal, active, chem, lastChem, loadH, parts, wax, hclAdded, waterAdded, h3po4Added, age, flags, contents, capacity, free };
 }
-function deriveBaths(events, config, nowDT){ return config.baths.map(b => deriveBath(events, config, b, nowDT)); }
+// The baths to show/offer: the ones configured in Settings (always shown), plus
+// any extra bath that appears in the event log — so the standard tanks are always
+// present, and no bath with real data is ever hidden.
+function bathList(events, config){
+  const out = (config.baths || []).slice(), seen = new Set(out);
+  events.forEach(e => [e.bath, e.toBath].forEach(b => { if(b && b !== WAITING_AREA && !seen.has(b)){ seen.add(b); out.push(b); } }));
+  return out;
+}
+function deriveBaths(events, config, nowDT){ return bathList(events, config).map(b => deriveBath(events, config, b, nowDT)); }
 
 function deriveJobCards(events, config, nowDT){
   const map = new Map();
   derivePieces(events, config, nowDT).forEach(r => {
     const k = r.jc || "(none)";
-    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, cleared:0, fp:0, eng:0, inBath:0, reStrips:0, wax:0 };
-    o.pieces++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
+    const o = map.get(k) || { jc:r.jc || "(none)", component:r.component, pieces:0, decided:0, cleared:0, fp:0, eng:0, inBath:0, reStrips:0, wax:0 };
+    o.pieces++; if(r.decided) o.decided++; if(r.status.s === "Cleared") o.cleared++; if(r.firstPass) o.fp++;
     if(r.status.s === "→ Engineering") o.eng++; if(r.inBath) o.inBath++;
     o.reStrips += r.reStrips; o.wax += r.wax;
     if(!o.component && r.component) o.component = r.component;
     map.set(k, o);
   });
-  return [...map.values()].map(o => ({ ...o, fpy: o.pieces ? Math.round(o.fp / o.pieces * 100) : 0 }))
+  return [...map.values()].map(o => ({ ...o, fpy: o.decided ? Math.round(o.fp / o.decided * 100) : 0 }))
     .sort((a, b) => String(a.jc).localeCompare(String(b.jc)));
 }
 
 function deriveKpis(events, config, nowDT){
   const pr = derivePieces(events, config, nowDT);
   const { records, open } = deriveImmersions(events, nowDT);
-  const reStrip = records.filter(r => r.result === "Re-strip").length;
+  // exclude bath-to-bath move continuations and orphan "extracted but was not
+  // in bath" records — neither is a dip that actually happened
+  const realDips = records.filter(r => !r.moved && r.inDT != null).length;
+  const reStrip = records.filter(r => r.result === "Re-strip" && r.inDT != null).length;
   const baths = deriveBaths(events, config, nowDT);
   const clearedPieces = pr.filter(r => r.status.s === "Cleared");
+  const decidedPieces = pr.filter(r => r.decided);   // exclude parts still on their first, never-extracted dip from yield
   return {
     total: pr.length, cleared: clearedPieces.length,
     fp: pr.filter(r => r.firstPass).length,
     eng: pr.filter(r => r.status.s === "→ Engineering").length,
     awaiting: pr.filter(r => r.status.s === "Awaiting re-strip").length,
     inBath: open.size,
-    fpy: pr.length ? Math.round(pr.filter(r => r.firstPass).length / pr.length * 100) : 0,
-    dips: records.length, reStrip, reStripRate: records.length ? Math.round(reStrip / records.length * 100) : 0,
-    wax: records.filter(r => r.waxFailure && r.waxFailure !== "None").length + events.filter(e => e.type === "Wax Failure").length,
+    fpyBase: decidedPieces.length,
+    fpy: decidedPieces.length ? Math.round(decidedPieces.filter(r => r.firstPass).length / decidedPieces.length * 100) : 0,
+    dips: realDips, reStrip, reStripRate: realDips ? Math.round(reStrip / realDips * 100) : 0,
+    wax: records.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + events.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
     bathsOver: baths.filter(b => b.active && b.flags.length).length,
     activeBaths: baths.filter(b => b.active).length,
     avgCycles: clearedPieces.length ? round(clearedPieces.reduce((a, r) => a + r.cycles, 0) / clearedPieces.length, 2) : 0
@@ -566,7 +703,9 @@ function deriveDefects(events){
     else if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); out.push({ e, kind:"Re-mask", detail:"resolves " + (ar ? ar.join(", ") : (e.waxFailure || "wax failure")) + (e.notes ? " · " + e.notes : ""), serial:e.serial || "", bath:e.bath || "" }); }
     else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
-      if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
+      // A "Re-mask" removal is intentional re-masking (logged even with no areas), not a wax defect.
+      if(it.result === "Re-mask") out.push({ e, kind:"Re-mask", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
+      else if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
       if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
     });
     else if(e.type === "Immersion"){
@@ -579,7 +718,7 @@ function deriveDefects(events){
 
 // Relationship-aware checks: does this draft contradict the current state of
 // its bath or its pieces? Soft (non-blocking) — guidance, not gates.
-function eventWarnings(d, events, config, nowDT){
+function eventWarnings(d, events, config, nowDT, isEdit){
   const w = [], add = (level, msg) => w.push({ level, msg });
   const others = events.filter(e => e.id == null || e.id !== d.id);
   let _pi = null;
@@ -603,7 +742,10 @@ function eventWarnings(d, events, config, nowDT){
         if(bs.contents.length + adding > bs.capacity) add("red", `Bath ${d.bath} would hold ${bs.contents.length + adding} parts (capacity ${bs.capacity})`);
       }
     }
-    (d.serials || []).forEach(s => {
+    // Per-serial checks assume you're loading these parts *now* (re-load sequencing,
+    // wax gate, back-dating). When editing an existing load in place they would
+    // fire against the load's own downstream history, so skip them on edit.
+    if(!isEdit) (d.serials || []).forEach(s => {
       const p = pieceOf(s);
       if(p){
         if(p.inBath) add("amber", `${s} is already in bath ${p.currentBath}`);
@@ -639,7 +781,27 @@ function eventWarnings(d, events, config, nowDT){
     if(bs.contents.length) add("red", `Bath ${d.bath} still holds ${bs.contents.length} part(s): ${bs.contents.map(r => r.serial).join(", ")} — extract them first`);
   }
   if(d.type === "Bath Fill" && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.active) add("amber", `Bath ${d.bath} is already active (filled ${fmtDate(bs.lastFill.datetime)}); dispose before re-filling`); }
-  if((d.type === "HCl Top-Up" || d.type === "Water Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
+  if((d.type === "HCl Top-Up" || d.type === "Water Top-Up" || d.type === "Top-Up") && d.bath){ const bs = deriveBath(others, config, d.bath, nowDT); if(bs.disposal) add("red", `Bath ${d.bath} is disposed`); else if(!bs.lastFill) add("amber", `Bath ${d.bath} has no fill logged`); }
+  if(d.type === "Transfer"){
+    if(d.bath && d.toBath && d.bath === d.toBath) add("red", "Source and destination are the same bath");
+    if(d.toBath && d.toBath !== WAITING_AREA){
+      const bd = deriveBath(others, config, d.toBath, nowDT);
+      if(bd.disposal) add("red", `Bath ${d.toBath} was disposed ${fmtDate(bd.disposal.datetime)} — fill it before moving parts in`);
+      else if(!bd.lastFill) add("amber", `Bath ${d.toBath} has no fill logged`);
+      else if(bd.flags.length) add("amber", `Bath ${d.toBath}: ${bd.flags.join("; ")}`);
+      if(bd.capacity){
+        const adding = (d.serials || []).filter(s => !bd.contents.some(r => r.serial === s)).length;
+        if(bd.contents.length + adding > bd.capacity) add("red", `Bath ${d.toBath} would hold ${bd.contents.length + adding} parts (capacity ${bd.capacity})`);
+      }
+    }
+    if(d.bath){
+      const idx = new Map(bathContents(others, nowDT, d.bath).map(r => [r.serial, r]));
+      (d.serials || []).forEach(s => { if(!idx.has(s)) add("amber", `${s} is not currently in bath ${d.bath}`); });
+    }
+  }
+  if(d.type === "Parts Received"){
+    (d.serials || []).forEach(s => { const p = pieceOf(s); if(p && p.inBath) add("amber", `${s} is currently in bath ${p.currentBath} — it can't also be waiting`); });
+  }
   if(d.type === "Re-Masking" && d.serial){
     const p = pieceOf(d.serial);
     if(p && p.inBath) add("red", `${d.serial} is currently in bath ${p.currentBath} — extract it before re-masking`);
@@ -660,13 +822,17 @@ function eventWarnings(d, events, config, nowDT){
 // Autofill: a serial's last-known job card / component from history.
 function lookupSerial(events, serial){
   let jc = "", component = "";
-  events.forEach(e => { if(e.serial === serial || (e.serials || []).includes(serial)){ if(e.jc) jc = e.jc; if(e.component) component = e.component; } });
+  // date order, not storage order — a backfilled older event must not override
+  events.slice().sort(byDate).forEach(e => { if(e.serial === serial || (e.serials || []).includes(serial)){ if(e.jc) jc = e.jc; if(e.component) component = e.component; } });
   return { jc, component };
 }
 // Active, in-band baths ranked by lowest iron — candidates to receive a re-strip.
+// A bath with no titration on record ranks LAST: unverified chemistry is not
+// a reason to prefer it over a bath measured at low iron.
 function healthyBaths(events, config, nowDT){
+  const fe = b => { const v = num((b.lastChem || {}).fePpm); return v == null ? Infinity : v; };
   return deriveBaths(events, config, nowDT).filter(b => b.active && !b.flags.length)
-    .sort((a, b) => (+((a.lastChem || {}).fePpm) || 0) - (+((b.lastChem || {}).fePpm) || 0));
+    .sort((a, b) => fe(a) - fe(b));
 }
 function suggestRescueBath(events, config, nowDT, exclude){
   const h = healthyBaths(events, config, nowDT).filter(b => b.bath !== exclude && (b.free === null || b.free > 0));
@@ -679,7 +845,6 @@ function deriveSuggestions(events, config, nowDT){
   const out = [];
   const pieces = derivePieces(events, config, nowDT);
   const baths = deriveBaths(events, config, nowDT);
-  const rescue = exclude => suggestRescueBath(events, config, nowDT, exclude);
 
   baths.forEach(b => {
     if(!b.active){ if(b.contents.length) out.push({ level:"red", icon:"⚠", title:`Bath ${b.bath}: ${b.contents.length} part(s) recorded inside a disposed bath`, detail:b.contents.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:b.contents.map(r => r.serial) } }); return; }
@@ -691,14 +856,25 @@ function deriveSuggestions(events, config, nowDT){
     if(b.age !== "" && b.age >= config.maxBathAge) out.push({ level:"amber", icon:"⌛", title:`Bath ${b.bath}: ${b.age} days old (≥ ${config.maxBathAge})`, detail:"Scheduled change due.", action:{ type:"dispose", bath:b.bath } });
     const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime;
     const dd = daysBetween(lastChemDT, nowDT);
-    if(dd !== "" && dd >= 2) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
+    const chemDue = config.chemEveryDays == null ? 2 : config.chemEveryDays;
+    if(chemDue > 0 && dd !== "" && dd >= chemDue) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
   });
 
+  // Assign rescue baths capacity-aware: each part consumes a free slot, so a
+  // group is never suggested into a bath that cannot actually hold it.
+  const healthy = healthyBaths(events, config, nowDT);
+  const freeLeft = new Map(healthy.map(b => [b.bath, b.free === null ? Infinity : b.free]));
+  const takeRescue = exclude => {
+    const h = healthy.find(b => b.bath !== exclude && freeLeft.get(b.bath) > 0);
+    if(!h) return "";
+    freeLeft.set(h.bath, freeLeft.get(h.bath) - 1);
+    return h.bath;
+  };
   const groups = new Map();
   pieces.forEach(p => {
     if(p.status.s !== "Awaiting re-strip" && p.status.s !== "Needs re-mask") return;
     const last = p.recs[p.recs.length - 1];
-    const rb = rescue(last ? last.bath : "");
+    const rb = takeRescue(last ? last.bath : "");
     const key = (p.jc || "") + "|" + rb;
     const g = groups.get(key) || { jc:p.jc, component:p.component, bath:rb, serials:[], remask:0 };
     g.serials.push(p.serial); if(p.status.s === "Needs re-mask") g.remask++;
@@ -711,12 +887,44 @@ function deriveSuggestions(events, config, nowDT){
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
 }
 
-// Idle parts: came out of a tank and are not finished — waiting to go back in
-// (awaiting another strip, or blocked needing a re-mask). Newest-out first.
-function idleParts(events, config, nowDT){
-  return derivePieces(events, config, nowDT)
-    .filter(p => p.status.s === "Awaiting re-strip" || p.status.s === "Needs re-mask")
-    .sort((a, b) => String((b.recs[b.recs.length - 1] || {}).outDT || "").localeCompare(String((a.recs[a.recs.length - 1] || {}).outDT || "")));
+// Parked parts: serials a tech logged as received in their area (a "Parts
+// Received" event) but has not yet loaded into a bath since — staged, awaiting
+// a first dip. A part drops off this list once it is loaded. Newest first.
+function parkedParts(events, config, nowDT){
+  const latest = new Map();
+  events.forEach(e => { if(e.type === "Parts Received") (e.serials || []).forEach(s => {
+    const c = latest.get(s);
+    if(!c || String(e.datetime) > String(c.datetime)) latest.set(s, { datetime:e.datetime, jc:e.jc || "", component:e.component || "", operator:e.operator || "" });
+  }); });
+  if(!latest.size) return [];
+  const out = [];
+  latest.forEach((info, s) => {
+    const loaded = events.some(e => e.type === "Load In" && (e.serials || []).includes(s) && String(e.datetime) >= String(info.datetime));
+    if(loaded) return;
+    const look = lookupSerial(events, s);
+    out.push({ serial:s, jc:info.jc || look.jc || "", component:info.component || look.component || "", datetime:info.datetime, operator:info.operator || "" });
+  });
+  return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
+}
+
+// The waiting area: everything physically out of a tank but not finished — parts
+// that came out without re-entry (awaiting re-strip, needs re-mask, or flagged for
+// engineering review), plus serials parked on receipt. One per serial, newest first.
+function waitingParts(events, config, nowDT){
+  const out = [], seen = new Set();
+  const WAIT = { "Awaiting re-strip":"awaiting re-strip", "Needs re-mask":"needs re-mask", "→ Engineering":"review" };
+  derivePieces(events, config, nowDT).forEach(p => {
+    if(p.inBath || seen.has(p.serial)) return;
+    const kind = WAIT[p.status.s];
+    if(!kind) return;   // terminal (Cleared / Accepted / Scrap / Returned) — not on the bench
+    seen.add(p.serial);
+    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "", kind, lastBath:p.lastBath || "", datetime:(p.recs[p.recs.length - 1] || {}).outDT || "" });
+  });
+  parkedParts(events, config, nowDT).forEach(p => {
+    if(seen.has(p.serial)) return; seen.add(p.serial);
+    out.push({ serial:p.serial, jc:p.jc || "", component:p.component || "", kind:"received", lastBath:"", datetime:p.datetime });
+  });
+  return out.sort((a, b) => String(b.datetime).localeCompare(String(a.datetime)));
 }
 
 /* ============================= DOMAIN END =============================== */
@@ -739,7 +947,19 @@ function clearStore(store){ return new Promise((res, rej) => { const r = tx(stor
 async function loadAll(){
   EVENTS = (await getAll("events")).sort(byDate);
   CONFIG = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-  (await getAll("config")).forEach(o => CONFIG[o.k] = o.v);
+  (await getAll("config")).forEach(o => { if(Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, o.k)) CONFIG[o.k] = o.v; });
+}
+// Accept only known keys, coerced to the type the default declares — an imported
+// backup must not introduce junk settings or reach the prototype chain.
+function sanitizeConfig(raw){
+  const out = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+  if(!raw || typeof raw !== "object") return out;
+  Object.keys(DEFAULT_CONFIG).forEach(k => {
+    const v = raw[k];
+    if(Array.isArray(DEFAULT_CONFIG[k])){ if(Array.isArray(v)) out[k] = v.map(x => String(x)).filter(Boolean); }
+    else { const n = num(v); if(n != null) out[k] = n; }
+  });
+  return out;
 }
 async function saveConfig(){ for(const k of Object.keys(CONFIG)) await putRec("config", { k, v:CONFIG[k] }); }
 
@@ -766,33 +986,59 @@ function cel(tag, attrs = {}, kids = []){
 }
 const pill = (text, cls) => cel("span", { class:"pill " + (cls || "p-grey") }, text);
 const tcell = (v, cls) => cel("td", cls ? { class:cls } : {}, v == null ? "" : String(v));
+// inline text "link" that is also reachable + operable by keyboard (Enter/Space)
+const linkish = (text, fn) => cel("span", { class:"linkish", role:"button", tabindex:"0", onclick:fn, onkeydown:e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); fn(); } } }, text);
+
+/* --- click-to-sort for data tables --- */
+const tableSort = { pieces:{ key:null, dir:1 }, events:{ key:null, dir:1 } };
+function toggleSort(table, key){ const st = tableSort[table]; if(st.key === key) st.dir = -st.dir; else { st.key = key; st.dir = 1; } render(); }
+function sortableTH(table, key, label, extraCls, titleText){
+  const st = tableSort[table], active = st.key === key;
+  return cel("th", { class:"sortable" + (extraCls ? " " + extraCls : "") + (active ? " sorted" : ""), role:"button", tabindex:"0",
+    title:titleText || ("Sort by " + label), "aria-sort":active ? (st.dir > 0 ? "ascending" : "descending") : "none",
+    onclick:() => toggleSort(table, key),
+    onkeydown:e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); toggleSort(table, key); } }
+  }, [label, cel("span", { class:"sort-ind" }, active ? (st.dir > 0 ? " ▲" : " ▼") : "")]);
+}
+function applySort(table, rows, acc){
+  const st = tableSort[table]; if(!st.key || !acc[st.key]) return rows;   // no key → keep the view's natural order
+  const f = acc[st.key];
+  return rows.slice().sort((a, b) => {
+    const va = f(a), vb = f(b);
+    if(typeof va === "number" && typeof vb === "number") return (va - vb) * st.dir;
+    return String(va == null ? "" : va).localeCompare(String(vb == null ? "" : vb), undefined, { numeric:true, sensitivity:"base" }) * st.dir;
+  });
+}
 function flash(msg, action){
-  const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#16242b;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:var(--sh)" }, msg);
+  const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1c1c1c;color:#fff;padding:9px 16px;border-radius:8px;z-index:80;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:var(--sh)" }, msg);
   if(action) b.append(cel("button", { style:"background:none;border:none;color:#7fd0ea;font-weight:700;cursor:pointer;font-size:13px", onclick:() => { b.remove(); action.fn(); } }, action.label));
   document.body.append(b); setTimeout(() => b.remove(), action ? 5000 : 1600);
 }
 /* one-step undo for the last add / edit / delete */
-let lastUndo = null;
-function setUndo(label, fn){ lastUndo = { label, fn }; }
-async function doUndo(){ if(!lastUndo) return; const u = lastUndo; lastUndo = null; try { await u.fn(); flash("Undone — " + u.label); render(); } catch(err){ alert("Could not undo: " + err.message); } }
+/* undo stack for the last adds / edits / deletes (Ctrl+Z pops newest first) */
+const undoStack = [];
+function setUndo(label, fn){ undoStack.push({ label, fn }); if(undoStack.length > 20) undoStack.shift(); }
+async function doUndo(){ const u = undoStack.pop(); if(!u) return; try { await u.fn(); flash("Undone — " + u.label); render(); } catch(err){ alert("Could not undo: " + err.message); } }
 
 function modal(title, bodyNode, footerNodes){
   const root = $("#modalRoot"); root.innerHTML = "";
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
-  const box = cel("div", { class:"modal" });
+  const box = cel("div", { class:"modal", role:"dialog", "aria-modal":"true", "aria-label":typeof title === "string" ? title : "Dialog", tabindex:"-1" });
   box.append(
-    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", onclick:closeModal }, "✕") ]),
+    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeModal }, "✕") ]),
     cel("div", { class:"modal-b" }, bodyNode),
     footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
   );
   overlay.append(box); root.append(overlay);
+  setTimeout(() => { if(box.focus) box.focus(); }, 0);
 }
 function closeModal(){ $("#modalRoot").innerHTML = ""; }
-document.addEventListener("keydown", e => { if(e.key === "Escape") closeModal(); });
+// Escape is handled once, in the global shortcut handler below, so a modal
+// stacked over the drawer closes the modal first rather than both at once.
 
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
-function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#6b7c84", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
+function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#8c8c8c", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
 function trendChart(points, opt = {}){
   const w = opt.w || 260, h = opt.h || 92, mini = !!opt.mini;
   const padL = mini ? 4 : 30, padR = mini ? 4 : 8, padT = mini ? 4 : 10, padB = mini ? 4 : 16;
@@ -806,12 +1052,12 @@ function trendChart(points, opt = {}){
   const X = i => padL + (points.length <= 1 ? (w - padL - padR) / 2 : i * (w - padL - padR) / (points.length - 1));
   const Y = v => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo));
   const svg = svgEl("svg", { class:"chart", width:"100%", height:h, viewBox:`0 0 ${w} ${h}`, preserveAspectRatio:"none" });
-  if(opt.band) svg.appendChild(svgEl("rect", { x:padL, y:Y(opt.band.hi), width:w - padL - padR, height:Math.max(0, Y(opt.band.lo) - Y(opt.band.hi)), fill:"rgba(31,122,61,.10)" }));
-  if(opt.limit != null){ const ly = Y(opt.limit); svg.appendChild(svgEl("line", { x1:padL, y1:ly, x2:w - padR, y2:ly, stroke:"#9c2a2a", "stroke-dasharray":"4 3", "stroke-width":1 })); }
+  if(opt.band) svg.appendChild(svgEl("rect", { x:padL, y:Y(opt.band.hi), width:w - padL - padR, height:Math.max(0, Y(opt.band.lo) - Y(opt.band.hi)), fill:"rgba(62,207,142,.16)" }));
+  if(opt.limit != null){ const ly = Y(opt.limit); svg.appendChild(svgEl("line", { x1:padL, y1:ly, x2:w - padR, y2:ly, stroke:"#dc2626", "stroke-dasharray":"4 3", "stroke-width":1 })); }
   if(!mini){ svg.appendChild(svgText(padL - 4, Y(hi - span * 0.05) + 3, fmtY(hi - span * 0.05), "end")); svg.appendChild(svgText(padL - 4, Y(lo + span * 0.05), fmtY(lo + span * 0.05), "end")); }
   const d = points.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.y).toFixed(1)).join(" ");
-  svg.appendChild(svgEl("path", { d, fill:"none", stroke:opt.color || "#2e6e84", "stroke-width":2, "stroke-linejoin":"round" }));
-  if(!mini) points.forEach((p, i) => { const over = opt.limit != null && p.y > opt.limit; svg.appendChild(svgEl("circle", { cx:X(i), cy:Y(p.y), r:2.6, fill:over ? "#9c2a2a" : (opt.color || "#2e6e84") })); });
+  svg.appendChild(svgEl("path", { d, fill:"none", stroke:opt.color || "#2563eb", "stroke-width":2, "stroke-linejoin":"round" }));
+  if(!mini) points.forEach((p, i) => { const over = opt.limit != null && p.y > opt.limit; svg.appendChild(svgEl("circle", { cx:X(i), cy:Y(p.y), r:2.6, fill:over ? "#dc2626" : (opt.color || "#2563eb") })); });
   return svg;
 }
 
@@ -820,11 +1066,14 @@ function eventDetail(e){
   const d = [];
   if(e.type === "Chemistry Check") d.push(`HCl ${fmtNum(e.hclPct)}%, Fe ${fmtNum(e.fePpm)} ppm, ${fmtNum(e.temp)}°C`);
   if(e.type === "Load In"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} in${e.bath ? " → " + e.bath : ""}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
-  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => waxAreasOf(i).length).length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
+  if(e.type === "Extraction"){ const it = e.items || []; const by = r => it.filter(i => i.result === r).length; const parts = []; ["Cleared","Re-strip","Re-mask","Hold"].forEach(r => { const n = by(r); if(n) parts.push(n + " " + r.toLowerCase()); }); const wax = it.filter(i => i.result !== "Re-mask" && waxAreasOf(i).length).length; d.push(`${it.length} out${e.bath ? " ← " + e.bath : ""} · ${parts.join(", ")}${wax ? ` · ${wax} wax` : ""}`); }
   if(e.type === "Immersion") d.push(`${e.timeIn || ""}-${e.timeOut || ""} ${e.result || ""}`);
   if(e.type === "Bath Fill") d.push(`HCl ${e.hclAddedL || 0} L · H₂O ${e.waterAddedL || 0} L · H₃PO₄ ${e.h3po4AddedL || 0} L`);
   if(e.type === "HCl Top-Up") d.push(`+${e.hclAddedL || 0} L HCl`);
   if(e.type === "Water Top-Up") d.push(`+${e.waterAddedL || 0} L water`);
+  if(e.type === "Top-Up"){ const p = []; if(+e.hclAddedL) p.push(`+${e.hclAddedL} L HCl`); if(+e.waterAddedL) p.push(`+${e.waterAddedL} L water`); if(+e.h3po4AddedL) p.push(`+${e.h3po4AddedL} L H₃PO₄`); d.push(p.join(" · ") || "top-up"); }
+  if(e.type === "Transfer"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} moved${e.bath ? " " + e.bath : ""} → ${e.toBath || "waiting area"}: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
+  if(e.type === "Parts Received"){ const s = e.serials || []; d.push(`${s.length} part${s.length !== 1 ? "s" : ""} → waiting area: ${s.slice(0,8).join(", ")}${s.length > 8 ? " +" + (s.length - 8) : ""}`); }
   if(e.type === "Wax Failure") d.push(e.waxFailure || "");
   if(e.type === "Engineering Review") d.push(e.status || "");
   if(e.type === "Bath Disposal") d.push(e.disposalReason || "");
@@ -833,6 +1082,8 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
+  if(e.type === "Transfer") return "moved " + (e.bath || "bath") + " → " + (e.toBath || "waiting area");
+  if(e.type === "Parts Received") return "added to waiting area" + (e.jc ? " · " + e.jc : "");
   if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
   if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
   return eventDetail(e);
@@ -844,6 +1095,7 @@ let activeTab = "Dashboard";
 let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null, drawerOpen = false;
+let lastOperator = "";   // one shift is usually one person — prefill new forms
 
 function attentionItems(){
   const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active && b.flags.length);
@@ -884,39 +1136,53 @@ function render(){
 }
 
 /* ------------------------------ log drawer ---------------------------- */
-function openDrawer(){ drawerOpen = true; renderDrawer(); }
-function closeDrawer(){ drawerOpen = false; formType = null; editId = null; formData = {}; renderDrawer(); }
+function openDrawer(){
+  drawerOpen = true; renderDrawer();
+  setTimeout(() => { const root = $("#drawerRoot"); const f = root && root.querySelector && root.querySelector("input, select, textarea, button.typetab"); if(f && f.focus) f.focus(); }, 0);
+}
+function draftRec(){ const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; }); return rec; }
+// Dirty = the form differs from how it was opened (prefills are the baseline).
+function formDirty(){ return !!(drawerOpen && formType && formData._orig != null && JSON.stringify(draftRec()) !== formData._orig); }
+function closeDrawer(){
+  if(formDirty() && !confirm("Discard this unsaved " + typeLabel(formType) + " entry?")) return;
+  drawerOpen = false; formType = null; editId = null; formData = {}; renderDrawer();
+}
 function renderDrawer(){
   const root = $("#drawerRoot"); root.innerHTML = "";
   if(!drawerOpen) return;
-  const panel = cel("div", { class:"drawer" });
+  const panel = cel("div", { class:"drawer", role:"dialog", "aria-modal":"true", "aria-label":editId != null ? "Edit event" : "Log event" });
   panel.append(cel("div", { class:"drawer-h" }, [
-    cel("h3", {}, editId != null ? ("Edit · " + formType) : (formType || "Log event")),
+    cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
-    cel("button", { class:"x", title:"Close", onclick:closeDrawer }, "✕")
+    cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "✕")
   ]));
   const body = cel("div", { class:"drawer-b" });
   const foot = cel("div", { class:"drawer-f" });
   if(!formType){
     const tabs = cel("div", { class:"typetabs" });
-    Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab", onclick:() => startNew(t) }, [cel("span", {}, t), cel("small", {}, TYPES[t].desc)])));
+    Object.keys(TYPES).filter(t => !TYPES[t].hidden).forEach(t => tabs.append(cel("button", { class:"typetab", onclick:() => startNew(t) }, [cel("span", {}, typeLabel(t)), cel("small", {}, TYPES[t].desc)])));
     body.append(tabs);
-    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Load In (parts into a bath) and Extraction (parts out), so you never need the out-time up front."));
+    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Add parts (into a bath) and Remove parts (out), so you never need the out-time up front."));
   } else {
     if(editId == null) body.append(cel("button", { class:"btn sm", style:"margin-bottom:12px", onclick:() => { formType = null; formData = { datetime:nowLocalDT() }; renderDrawer(); } }, "‹ Change event type"));
     body.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
-    if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#ece3f5;color:#6b3fa0" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
+    if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
     const warnBox = cel("div", { style:"margin-top:4px" });
     const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update" : "Save");
     const hint = cel("span", { class:"muted", style:"font-size:12px;align-self:center" });
     function formIncomplete(){
-      if(formType === "Load In") return (formData.serials || []).length ? "" : "Add at least one serial";
+      if(formType === "Load In") return !formData.bath ? "Select a bath" : ((formData.serials || []).length ? "" : "Add at least one serial");
       if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
+      if(formType === "Parts Received") return (formData.serials || []).length ? "" : "Add at least one serial";
+      if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0 || num(formData.h3po4AddedL) > 0) ? "" : "Enter an HCl, water or H₃PO₄ amount";
+      if(formType === "Transfer") return !formData.bath ? "Select the source bath" : !formData.toBath ? "Select a destination bath" : ((formData.serials || []).length ? "" : "Tick the parts to move");
       return "";
     }
     function refreshWarn(){
       warnBox.innerHTML = "";
-      eventWarnings(formData, EVENTS, CONFIG, nowLocalDT()).forEach(wn =>
+      // Adding to the waiting area is a "park", not a bath dip — check it as such.
+      const draft = (formType === "Load In" && formData.bath === WAITING_AREA) ? Object.assign({}, formData, { type:"Parts Received", bath:"" }) : formData;
+      eventWarnings(draft, EVENTS, CONFIG, nowLocalDT(), editId != null).forEach(wn =>
         warnBox.append(cel("div", { class:"warn-line " + (wn.level === "red" ? "warn-red" : "warn-amber") }, [cel("span", {}, wn.level === "red" ? "⛔" : "⚠"), cel("span", {}, wn.msg)])));
       const inc = formIncomplete(); saveBtn.disabled = !!inc; hint.textContent = inc;
     }
@@ -924,12 +1190,15 @@ function renderDrawer(){
     const custom = TYPES[formType].custom;
     if(custom === "load") buildLoadFields(fields, refreshWarn);
     else if(custom === "extract") buildExtractFields(fields, refreshWarn);
+    else if(custom === "move") buildMoveFields(fields, refreshWarn);
+    else if(custom === "received") buildReceiveFields(fields, refreshWarn);
     else if(custom === "remask") buildRemaskFields(fields, refreshWarn);
     else if(custom === "waxfail") buildWaxFailFields(fields, refreshWarn);
     else buildGenericFields(fields, refreshWarn);
     body.append(warnBox);
     foot.append(saveBtn, cel("button", { class:"btn", onclick:closeDrawer }, "Cancel"), hint);
     refreshWarn();
+    if(formData._orig == null) formData._orig = JSON.stringify(draftRec());   // baseline for the discard guard
     panel.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
   }
   panel.append(body, foot);
@@ -937,22 +1206,41 @@ function renderDrawer(){
 }
 
 /* --- Log event (drawer) --- */
-function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t }; if(t === "Extraction") formData._rows = {}; openDrawer(); }
-function startEdit(e){ formType = e.type; editId = e.id; formData = Object.assign({}, e); if(e.type === "Load In") formData._serialText = (e.serials || []).join(", "); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
-function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "" }; openDrawer(); }
-function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", _rows:{} }; openDrawer(); }
+function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t, operator:lastOperator }; if(t === "Extraction") formData._rows = {}; openDrawer(); }
+// Deep copy: a cancelled edit must not leave mutated arrays (serials, items,
+// remask) behind on the stored event.
+function startEdit(e){ formType = e.type; editId = e.id; formData = JSON.parse(JSON.stringify(e)); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
+function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "", operator:lastOperator }; openDrawer(); }
+function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", operator:lastOperator, _rows:{} }; openDrawer(); }
+function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[] }; openDrawer(); }
+// "Complete fill" = a fresh full charge; prefill the volumes from the last fill.
+function startCompleteFill(bath){
+  const lf = (deriveBath(EVENTS, CONFIG, bath, nowLocalDT()).lastFill) || {};
+  formType = "Bath Fill"; editId = null;
+  formData = { datetime:nowLocalDT(), type:"Bath Fill", bath:bath || "", hclAddedL:lf.hclAddedL, waterAddedL:lf.waterAddedL, h3po4AddedL:lf.h3po4AddedL };
+  openDrawer();
+}
+// Top up: a complete fill (new charge) or a partial addition of acid / water.
+function startTopUp(bath){
+  const body = cel("div", {});
+  body.append(cel("div", { class:"muted", style:"margin-bottom:10px" }, "How are you topping up bath " + bath + "?"));
+  const choice = (title, desc, fn) => cel("button", { class:"typetab", style:"width:100%;margin-bottom:8px", onclick:() => { closeModal(); fn(); } }, [cel("span", {}, title), cel("small", {}, desc)]);
+  body.append(choice("Complete fill", "New full charge — HCl + water + H₃PO₄", () => startCompleteFill(bath)));
+  body.append(choice("Partial addition", "Add some acid and/or water to the existing charge", () => startAction({ type:"topup", bath })));
+  modal("Top up · Bath " + bath, body, [cel("button", { class:"btn", onclick:closeModal }, "Cancel")]);
+}
 // Open the drawer prefilled for a suggested next action.
 function startAction(a){
   editId = null; const t = a.type;
-  if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice() }, formType = "Load In";
-  else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "" }, formType = "Engineering Review";
-  else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Bath Disposal";
-  else if(t === "topup-hcl") formData = { type:"HCl Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "HCl Top-Up";
-  else if(t === "topup-water") formData = { type:"Water Top-Up", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Water Top-Up";
-  else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "" }, formType = "Chemistry Check";
+  if(t === "reload") formData = { type:"Load In", datetime:nowLocalDT(), bath:a.bath || "", jc:a.jc || "", component:a.component || "", serials:(a.serials || []).slice(), operator:lastOperator }, formType = "Load In";
+  else if(t === "engineering") formData = { type:"Engineering Review", datetime:nowLocalDT(), jc:a.jc || "", serial:a.serial || "", operator:lastOperator }, formType = "Engineering Review";
+  else if(t === "dispose") formData = { type:"Bath Disposal", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Bath Disposal";
+  else if(t === "topup" || t === "topup-hcl" || t === "topup-water") formData = { type:"Top-Up", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Top-Up";
+  else if(t === "move"){ startMove(a.bath); return; }
+  else if(t === "chem") formData = { type:"Chemistry Check", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator }, formType = "Chemistry Check";
   else if(t === "viewbath"){ showBath(a.bath); return; }
   else if(t === "viewpiece"){ showSerial(a.serial); return; }
-  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", wax:[], checked:true }); }
+  else if(t === "extract"){ formType = "Extraction"; formData = { type:"Extraction", datetime:nowLocalDT(), bath:a.bath || "", operator:lastOperator, _rows:{} }; (a.preselect || []).forEach(s => formData._rows[s] = { result:"Cleared", wax:[], checked:true }); }
   else return;
   openDrawer();
 }
@@ -961,7 +1249,7 @@ function appendOpList(card){ const dl = cel("datalist", { id:"opList" }); (CONFI
 function fieldNode(name, label, kind, onin){
   const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
   let inp;
-  if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
+  if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); bathList(EVENTS, CONFIG).forEach(b => inp.append(cel("option", { value:b }, b))); }
   else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
   else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
   else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
@@ -981,12 +1269,17 @@ function buildGenericFields(card, refreshWarn){
 
 // Multi-select area toggles (which masked areas — re-masked, or failed).
 function areaToggleControl(getSel, setSel, onChange, areasList){
-  const wrap = cel("div", { class:"seg wrap" });
+  const wrap = cel("div", { style:"display:flex;flex-wrap:wrap;gap:7px" });
   (areasList || CONFIG.maskAreas || []).forEach(area => {
-    const b = cel("button", { type:"button", class:(getSel() || []).includes(area) ? "on" : "", onclick:() => {
-      let s = (getSel() || []).slice(); s.includes(area) ? s = s.filter(x => x !== area) : s.push(area); setSel(s); b.className = s.includes(area) ? "on" : ""; onChange();
-    } }, area);
-    wrap.append(b);
+    const on = () => (getSel() || []).includes(area);
+    const box = cel("input", { type:"checkbox" }); box.checked = on();
+    const chip = cel("label", { class:"chk" + (on() ? " on" : "") }, [box, cel("span", {}, area)]);
+    box.addEventListener("change", () => {
+      let s = (getSel() || []).slice();
+      if(box.checked){ if(!s.includes(area)) s.push(area); } else s = s.filter(x => x !== area);
+      setSel(s); chip.className = "chk" + (box.checked ? " on" : ""); onChange();
+    });
+    wrap.append(chip);
   });
   return wrap;
 }
@@ -1021,8 +1314,19 @@ function buildLoadFields(card, refreshWarn){
   const jcField = fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); });
   const compField = fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); });
   const jcInput = jcField.querySelector("input"), compInput = compField.querySelector("input");
+  // Destination: a bath, or the waiting area (parked, not in a bath). No empty
+  // option, so parts always land somewhere — the waiting area is the default.
+  if(!formData.bath) formData.bath = WAITING_AREA;
+  const bathField = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath / destination"));
+  const bsel = cel("select", {}, cel("option", { value:WAITING_AREA }, "Waiting area (not in a bath yet)"));
+  const knownBaths = bathList(EVENTS, CONFIG);
+  knownBaths.forEach(b => bsel.append(cel("option", { value:b }, b)));
+  if(formData.bath && formData.bath !== WAITING_AREA && !knownBaths.includes(formData.bath)) bsel.append(cel("option", { value:formData.bath }, formData.bath + " (unknown bath)"));
+  bsel.value = formData.bath;
+  bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshWaiting(); refreshWarn(); });
+  bathField.append(bsel);
   const two = cel("div", { class:"twocol" });
-  two.append(fieldNode("bath", "Bath", "baths", e => { formData.bath = e.target.value; refreshWarn(); }));
+  two.append(bathField);
   two.append(jcField, compField);
   two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
   card.append(two);
@@ -1037,27 +1341,50 @@ function buildLoadFields(card, refreshWarn){
     if(info.component && !formData.component){ formData.component = info.component; if(compInput) compInput.value = info.component; }
   };
   const wrap = cel("div", { class:"field" }, lbl);
-  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); refreshIdle(); refreshRemask(); refreshWarn(); });
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); autofill(); autofillMask(); refreshWaiting(); refreshRemask(); refreshWarn(); });
   wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
 
-  // Parts that came out and are waiting to go back in — tap to add them.
-  const idleWrap = cel("div", {}); card.append(idleWrap);
-  function refreshIdle(){
-    idleWrap.innerHTML = "";
-    const idle = idleParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
-    if(!idle.length) return;
-    idleWrap.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:8px 0 5px" }, [
-      cel("label", { class:"f", style:"margin:0;flex:1" }, "Waiting to go back in (" + idle.length + ") — tap to add"),
-      cel("button", { class:"btn sm", type:"button", onclick:() => idle.forEach(p => chipBox.addOne(p.serial)) }, "Add all")
-    ]));
-    const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-    idle.slice(0, 40).forEach(p => chips.append(cel("button", { type:"button", class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.status.s + (p.lastBath ? " · was in " + p.lastBath : ""), onclick:() => chipBox.addOne(p.serial) },
-      [cel("span", {}, "＋ " + p.serial), p.status.s === "Needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask") : null])));
-    idleWrap.append(chips);
+  // Waiting area — parts not in a bath (came out without re-entry, or parked on
+  // receipt). Select one (or add all) to pull it into this bath. Hidden when the
+  // destination IS the waiting area (you'd be adding to it, not pulling from it).
+  const waitingWrap = cel("div", {}); card.append(waitingWrap);
+  function refreshWaiting(){
+    waitingWrap.innerHTML = "";
+    if(formData.bath === WAITING_AREA) return;
+    const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
+    if(!waiting.length) return;
+    const hint = p => p.kind === "needs re-mask" ? "  ·  re-mask" : p.kind === "review" ? "  ·  review" : p.kind === "received" ? "  ·  new" : (p.lastBath ? "  ·  out " + p.lastBath : "  ·  awaiting");
+    waitingWrap.append(cel("label", { class:"f", style:"margin:8px 0 5px" }, "Waiting area (" + waiting.length + ") — select to add"));
+    const sel = cel("select", { style:"flex:1" }, cel("option", { value:"" }, "Add from waiting area…"));
+    waiting.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : "") + hint(p))));
+    sel.addEventListener("input", () => { if(sel.value){ chipBox.addOne(sel.value); sel.value = ""; } });
+    const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => waiting.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
+    waitingWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
   }
-  refreshIdle();
+  refreshWaiting();
+
+  // Wax configuration — which masked areas these parts actually have. Stored on the
+  // event so wax-failure tracking and re-mask analysis only consider real areas
+  // (e.g. a part with no cooling holes never gets a cooling-holes failure).
+  if(!Array.isArray(formData.maskAreas)) formData.maskAreas = (CONFIG.maskAreas || []).slice();
+  let maskTouched = editId != null;   // when editing, keep the saved config as-is
+  const maskWrap = cel("div", { class:"field" }); card.append(maskWrap);
+  function refreshMaskCfg(){
+    maskWrap.innerHTML = "";
+    if(!(CONFIG.maskAreas || []).length) return;
+    maskWrap.append(cel("label", { class:"f" }, "Masked areas (what these parts have)"));
+    maskWrap.append(areaToggleControl(() => formData.maskAreas, s => { formData.maskAreas = s; maskTouched = true; }, refreshWarn));
+    maskWrap.append(cel("div", { class:"faint", style:"font-size:11px;margin-top:4px" }, "Untick any area a part doesn't have (e.g. no cooling holes) — used for wax-failure and re-mask tracking."));
+  }
+  refreshMaskCfg();
+  function autofillMask(){
+    if(maskTouched || !(formData.serials || []).length) return;
+    formData.maskAreas = maskConfigFor(EVENTS, CONFIG, formData.serials[0]).slice();
+    refreshMaskCfg();
+  }
+  autofillMask();
 
   // Re-masking happens here, as part of the re-dip: any entered part that came
   // out with a wax failure must have its failed areas re-masked before loading.
@@ -1067,18 +1394,100 @@ function buildLoadFields(card, refreshWarn){
     const needing = (formData.serials || []).map(s => ({ serial:s, areas:unresolvedWaxAreas(EVENTS, s).map(a => a.area) })).filter(x => x.areas.length);
     formData.remask = (formData.remask || []).filter(r => needing.some(n => n.serial === r.serial));
     if(!needing.length) return;
-    remaskWrap.append(cel("div", { class:"warn-line", style:"background:#ece3f5;color:#6b3fa0;margin-top:4px" }, [cel("span", {}, "▦"), cel("span", {}, "Wax failure on these parts — tick the areas you re-masked before re-dipping:")]));
+    remaskWrap.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed;margin-top:4px" }, [cel("span", {}, "▦"), cel("span", {}, "Wax failure on these parts — tick the areas you re-masked before re-dipping:")]));
     needing.forEach(x => {
-      let entry = formData.remask.find(r => r.serial === x.serial);
-      if(!entry){ entry = { serial:x.serial, areas:x.areas.slice() }; formData.remask.push(entry); } // default: re-masked all failed areas
+      // No pre-ticked entry: an empty `areas` would read as a whole-part re-mask
+      // (resolves everything). Instead we keep NO entry until the operator ticks an
+      // area, so a wax-failed part stays red-blocked until its areas are re-masked.
+      const getAreas = () => { const e = (formData.remask || []).find(r => r.serial === x.serial); return e ? e.areas : []; };
+      const setAreas = s => {
+        formData.remask = formData.remask || [];
+        if(s.length){ let e = formData.remask.find(r => r.serial === x.serial); if(!e){ e = { serial:x.serial, areas:[] }; formData.remask.push(e); } e.areas = s; }
+        else formData.remask = formData.remask.filter(r => r.serial !== x.serial);   // unticked everything → drop the entry → stays blocked
+      };
       remaskWrap.append(cel("div", { class:"field", style:"margin-bottom:8px" }, [
         cel("label", { class:"f" }, x.serial + " — re-masked"),
-        areaToggleControl(() => entry.areas, s => { entry.areas = s; }, refreshWarn, x.areas)
+        areaToggleControl(getAreas, setAreas, refreshWarn, x.areas)
       ]));
     });
   }
   refreshRemask();
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+}
+
+// Waiting-area entry (Parts Received): serials parked, not yet in a bath. Reached
+// when editing an existing waiting-area entry; new ones come from the Add-parts form.
+function buildReceiveFields(card, refreshWarn){
+  appendOpList(card);
+  const two = cel("div", { class:"twocol" });
+  two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
+  two.append(fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); }));
+  card.append(two);
+  formData.serials = formData.serials || [];
+  const count = cel("span", { class:"muted", style:"font-weight:400" });
+  const lbl = cel("label", { class:"f", style:"display:flex;justify-content:space-between" }, [cel("span", {}, "Serials in waiting area"), count]);
+  const setCount = () => { const n = formData.serials.length; count.textContent = n ? (n + " part" + (n > 1 ? "s" : "")) : ""; };
+  const wrap = cel("div", { class:"field" }, lbl);
+  const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); refreshWarn(); });
+  wrap.append(chipBox);
+  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Serials parked in the waiting area, offered in the drop-down when you add parts to a bath. Ranges like 7261-01..06 expand."));
+  card.append(wrap); setCount();
+  card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+}
+
+// Transfer: move some/all of a bath's contents to another bath. Picks the source
+// bath's live contents as a checklist and a destination bath.
+function buildMoveFields(card, refreshWarn){
+  appendOpList(card);
+  formData.serials = formData.serials || [];
+  const two = cel("div", { class:"twocol" });
+  const srcWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "From bath"));
+  const ssel = cel("select", {}, cel("option", { value:"" }, "—"));
+  bathList(EVENTS, CONFIG).forEach(b => ssel.append(cel("option", { value:b }, b))); if(formData.bath) ssel.value = formData.bath;
+  ssel.addEventListener("input", () => { formData.bath = ssel.value; formData.serials = []; rebuildDest(); rebuild(); refreshWarn(); });
+  srcWrap.append(ssel);
+  const dstWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Move to"));
+  const dsel = cel("select", {}, cel("option", { value:"" }, "—"));
+  dsel.addEventListener("input", () => { formData.toBath = dsel.value; refreshWarn(); });
+  dstWrap.append(dsel);
+  function rebuildDest(){
+    dsel.innerHTML = ""; dsel.append(cel("option", { value:"" }, "—"));
+    dsel.append(cel("option", { value:WAITING_AREA }, "Waiting area (out of bath)"));
+    bathList(EVENTS, CONFIG).filter(b => b !== formData.bath).forEach(b => dsel.append(cel("option", { value:b }, b)));
+    if(formData.toBath && formData.toBath !== formData.bath) dsel.value = formData.toBath; else formData.toBath = "";
+  }
+  rebuildDest();
+  two.append(srcWrap, dstWrap); card.append(two);
+  const cont = cel("div", {}); card.append(cont);
+  function rebuild(){
+    cont.innerHTML = "";
+    if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:4px 0" }, "Select the bath the parts are in now.")); return; }
+    const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
+    if(!contents.length){ cont.append(cel("div", { class:"warn-line warn-amber" }, "Nothing is currently in bath " + formData.bath + ".")); formData.serials = []; return; }
+    formData.serials = (formData.serials || []).filter(s => contents.some(r => r.serial === s));
+    const n = formData.serials.length;
+    cont.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:8px 0 6px" }, [
+      cel("label", { class:"f", style:"margin:0;flex:1" }, "Tick the parts to move" + (n ? " (" + n + ")" : "")),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { formData.serials = contents.map(r => r.serial); rebuild(); refreshWarn(); } }, "All"),
+      cel("button", { class:"btn sm", type:"button", onclick:() => { formData.serials = []; rebuild(); refreshWarn(); } }, "None")
+    ]));
+    const boxEl = cel("div", { class:"contents" });
+    contents.forEach(r => {
+      const checked = formData.serials.includes(r.serial);
+      const cb = cel("input", { type:"checkbox" }); cb.checked = checked;
+      cb.addEventListener("change", () => { if(cb.checked){ if(!formData.serials.includes(r.serial)) formData.serials.push(r.serial); } else formData.serials = formData.serials.filter(x => x !== r.serial); refreshWarn(); rebuild(); });
+      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "");
+      const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
+      boxEl.append(cel("div", { class:"crow" + (checked ? " on" : ""), style:"grid-template-columns:24px 1fr" }, [cb, info]));
+    });
+    cont.append(boxEl);
+  }
+  rebuild();
+  const two2 = cel("div", { class:"twocol" });
+  two2.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  two2.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
+  card.append(two2);
 }
 
 // Chip entry: type/paste serials (or ranges) -> removable chips. Returns the box.
@@ -1110,7 +1519,7 @@ function buildExtractFields(card, refreshWarn){
   appendOpList(card);
   const bathWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath"));
   const bsel = cel("select", {}, cel("option", { value:"" }, "—"));
-  CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
+  bathList(EVENTS, CONFIG).forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
   bsel.addEventListener("input", () => { formData.bath = bsel.value; formData._rows = {}; rebuild(); refreshWarn(); });
   bathWrap.append(bsel); card.append(bathWrap);
   const cont = cel("div", {}); card.append(cont);
@@ -1143,25 +1552,43 @@ function buildExtractFields(card, refreshWarn){
     const boxEl = cel("div", { class:"contents" });
     rows.forEach(r => {
       const st = formData._rows[r.serial];
+      if(!Array.isArray(st.wax)) st.wax = [];
+      const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
       const cb = cel("input", { type:"checkbox" }); cb.checked = !!st.checked;
       cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); rebuild(); });
       const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
-      const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
+      const head = cel("div", { style:"display:flex;align-items:baseline;gap:8px;flex-wrap:wrap" }, [
+        cel("span", { class:"s" }, r.serial),
+        cel("span", { class:"muted", style:"font-size:11px" }, meta)
+      ]);
+      // Reasons for removing. "Re-mask" pre-selects the part's masked areas (refine
+      // below) and routes it to "Needs re-mask".
       const seg = cel("div", { class:"seg" });
-      ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
-      if(!Array.isArray(st.wax)) st.wax = [];
-      // Wax: tap a masked area if its mask failed (red = failed). No severity.
-      const wseg = cel("div", { class:"seg wax wrap" });
-      (CONFIG.maskAreas || []).forEach(area => {
-        const b = cel("button", { type:"button", class:st.wax.includes(area) ? "on full" : "", title:"mask failed on " + area, onclick:() => {
-          st.wax = st.wax.includes(area) ? st.wax.filter(a => a !== area) : st.wax.concat(area);
-          if(st.wax.length){ st.checked = true; if(st.result === "Cleared") st.result = "Re-strip"; }
-          sync(); refreshWarn(); rebuild();
-        } }, area);
-        wseg.append(b);
-      });
-      const controls = cel("div", { style:"display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end" }, [seg, cel("div", { style:"display:flex;flex-direction:column;gap:2px;align-items:flex-end" }, [cel("span", { class:"faint", style:"font-size:10px" }, "mask failed?"), wseg])]);
-      boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : "") }, [cb, info, controls]));
+      ["Cleared", "Re-strip", "Re-mask", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => {
+        st.result = o; st.checked = true;
+        if(o === "Re-mask" && !st.wax.length) st.wax = partAreas.slice();
+        if(o === "Cleared" || o === "Hold") st.wax = [];
+        sync(); refreshWarn(); rebuild();
+      } }, o)));
+      const lines = [seg];
+      // Masked areas only matter when re-stripping or re-masking — clear checkboxes.
+      if(partAreas.length && (st.result === "Re-strip" || st.result === "Re-mask")){
+        const remask = st.result === "Re-mask";
+        const grp = cel("div", { style:"display:flex;align-items:center;gap:8px;flex-wrap:wrap" }, [cel("span", { class:"faint", style:"font-size:11px" }, remask ? "Re-masking:" : "Mask failed on:")]);
+        partAreas.forEach(area => {
+          const on = st.wax.includes(area);
+          const box = cel("input", { type:"checkbox" }); box.checked = on;
+          const chip = cel("label", { class:"waxchk" + (on ? (remask ? " on-rm" : " on") : "") }, [box, cel("span", {}, area)]);
+          box.addEventListener("change", () => {
+            st.wax = box.checked ? st.wax.concat(area) : st.wax.filter(a => a !== area);
+            st.checked = true; sync(); refreshWarn(); rebuild();
+          });
+          grp.append(chip);
+        });
+        lines.push(grp);
+      }
+      const cell = cel("div", {}, [head, cel("div", { style:"display:flex;flex-direction:column;gap:6px;margin-top:7px" }, lines)]);
+      boxEl.append(cel("div", { class:"crow" + (st.checked ? " on" : ""), style:"grid-template-columns:24px 1fr;align-items:start" }, [cb, cell]));
     });
     cont.append(boxEl); sync();
   }
@@ -1170,15 +1597,28 @@ function buildExtractFields(card, refreshWarn){
 
 async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
-  if(rec.type === "Load In"){ rec.serials = parseSerials(formData._serialText != null ? formData._serialText : (rec.serials || []).join(", ")); if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Load In"){
+    if(!rec.bath){ alert("Select a bath or the waiting area."); return; }
+    // the chip list is the single source of truth — a cached text copy would
+    // silently discard chips added or removed after the drawer opened
+    rec.serials = parseSerials((rec.serials || []).join(", "));
+    if(!rec.serials.length){ alert("Enter at least one serial."); return; }
+    // Waiting area = park the serials (not a bath dip): store as Parts Received.
+    if(rec.bath === WAITING_AREA){ rec.type = "Parts Received"; delete rec.bath; delete rec.remask; }
+  }
   if(rec.type === "Extraction"){ if(!rec.bath){ alert("Select a bath."); return; } if(!rec.items || !rec.items.length){ alert("Tick at least one part to extract."); return; } }
+  if(rec.type === "Parts Received"){ rec.serials = rec.serials || []; if(!rec.serials.length){ alert("Enter at least one serial."); return; } }
+  if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0 || num(rec.h3po4AddedL) > 0)){ alert("Enter an HCl, water or H₃PO₄ amount."); return; } }
+  if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select a source and a destination."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } if(rec.toBath === WAITING_AREA) rec.toBath = ""; }   // waiting area = no destination bath
   if(editId != null){
+    if(rec.operator) lastOperator = rec.operator;
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
     rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS);
     await updateEvent(rec); setUndo("edit " + rec.eventId, async () => { await updateEvent(prior); });
     flash("Updated " + rec.eventId, { label:"Undo", fn:doUndo });
     drawerOpen = false; formType = null; editId = null; formData = {};
   } else {
+    if(rec.operator) lastOperator = rec.operator;
     await addEvent(rec); const newId = rec.id; setUndo("add " + rec.eventId, async () => { await removeEvent(newId); });
     flash("Saved " + rec.eventId, { label:"Undo", fn:doUndo });
     drawerOpen = false; formType = null; formData = {};
@@ -1186,7 +1626,15 @@ async function saveForm(){
   render();
 }
 
-function emptyState(){ return cel("div", { class:"empty" }, [cel("div", { style:"font-size:15px;margin-bottom:6px" }, "No events yet"), cel("div", {}, "Press “Log event”, or load the example from Settings → Data.")]); }
+function emptyState(){ return cel("div", { class:"empty" }, [
+  cel("div", { style:"font-size:34px;margin-bottom:6px;opacity:.5" }, "▦"),
+  cel("div", { style:"font-size:15px;margin-bottom:4px;color:var(--ink);font-weight:600" }, "No events yet"),
+  cel("div", { style:"margin-bottom:16px" }, "Log your first strip event, or load the sample data to explore the app."),
+  cel("div", { class:"btnrow", style:"justify-content:center" }, [
+    cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "＋ Log first event"),
+    cel("button", { class:"btn", onclick:loadExample }, "Load example data")
+  ])
+]); }
 
 /* --- Floor (live tanks) --- */
 function suggestionsPanel(){
@@ -1208,9 +1656,9 @@ function vEventLog(m){
   m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
   const chips = cel("div", { class:"chips" });
   const tSel = cel("select", { style:"width:auto", oninput:e => { logFilter.type = e.target.value; render(); } }, cel("option", { value:"" }, "All types"));
-  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, t))); tSel.value = logFilter.type;
+  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, typeLabel(t)))); tSel.value = logFilter.type;
   const bSel = cel("select", { style:"width:auto", oninput:e => { logFilter.bath = e.target.value; render(); } }, cel("option", { value:"" }, "All baths"));
-  CONFIG.baths.forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
+  bathList(EVENTS, CONFIG).forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
   const txt = cel("input", { style:"width:210px", placeholder:"search J/C, serial, notes…", value:logFilter.text, oninput:e => { logFilter.text = e.target.value; render(); } });
   chips.append(tSel, bSel, txt, cel("button", { class:"btn sm", onclick:() => { logFilter = { type:"", bath:"", text:"" }; render(); } }, "Clear"));
   m.append(chips);
@@ -1222,15 +1670,18 @@ function vEventLog(m){
   if(!rows.length){ m.append(emptyState()); return; }
 
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["Event ID", "When", "Type", "Bath", "J/C", "Parts", "Detail", "Op", ""].forEach(c => hr.append(cel("th", {}, c)));
+  [ ["Event ID", "eventId"], ["When", "when"], ["Type", "type"], ["Bath", "bath"], ["J/C", "jc"] ].forEach(c => hr.append(sortableTH("events", c[1], c[0])));
+  ["Parts", "Detail"].forEach(c => hr.append(cel("th", {}, c)));
+  hr.append(sortableTH("events", "op", "Op"));
+  hr.append(cel("th", {}, ""));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  rows.forEach(e => {
-    const partsCell = e.type === "Load In" ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
+  applySort("events", rows, { eventId:e => e.eventId, when:e => e.datetime, type:e => typeLabel(e.type), bath:e => e.bath, jc:e => e.jc, op:e => e.operator }).forEach(e => {
+    const partsCell = (e.type === "Load In" || e.type === "Transfer" || e.type === "Parts Received") ? ((e.serials || []).length + " parts") : e.type === "Extraction" ? ((e.items || []).length + " parts") : (e.serial || "");
     const tr = cel("tr");
     tr.append(cel("td", { class:"mono" }, e.eventId || ""));
     tr.append(tcell(fmtDT(e.datetime)));
-    tr.append(cel("td", {}, pill(e.type, TYPE_PILL[e.type])));
+    tr.append(cel("td", {}, pill(typeLabel(e.type), TYPE_PILL[e.type])));
     tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(partsCell));
     tr.append(tcell(eventDetail(e)));
     tr.append(tcell(e.operator));
@@ -1259,12 +1710,16 @@ function vPieces(m){
   const rows = all.filter(filt[pieceFilter] || (() => true));
   if(!rows.length){ m.append(all.length ? cel("div", { class:"empty" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
-  ["J/C", "Serial", "Component", "Cyc", "Cum h", "Wax", "Status", "Where", ""].forEach((c, i) => hr.append(cel("th", (i === 3 || i === 4 || i === 5) ? { class:"num" } : {}, c)));
+  [ ["J/C", "jc", ""], ["Serial", "serial", ""], ["Component", "component", "col-comp"],
+    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum h", "hours", "num", "Cumulative immersion hours"],
+    ["Wax", "wax", "num", "Open (unresolved) wax-failure areas"], ["Status", "status", ""], ["Where", "where", ""] ]
+    .forEach(c => hr.append(sortableTH("pieces", c[1], c[0], c[2], c[3])));
+  hr.append(cel("th", {}, ""));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  rows.forEach(r => {
+  applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.hours, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
     const tr = cel("tr");
-    tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component));
+    tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
@@ -1273,7 +1728,7 @@ function vPieces(m){
     const act = cel("div", { class:"btnrow" });
     if(r.status.s === "Awaiting re-strip" || r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, r.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
-    act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
+    act.append(linkish("history", () => showSerial(r.serial)));
     tr.append(cel("td", {}, act));
     tb.append(tr);
   });
@@ -1288,7 +1743,7 @@ function pieceTimeline(evs, serial, recs){
     if(e.type === "Load In" && byLoad.has(e.id)) cyc = "cycle " + byLoad.get(e.id).cycle;
     else if(e.type === "Extraction" && byExtract.has(e.id)){ const r = byExtract.get(e.id); cyc = "cycle " + r.cycle + (r.hours != null ? " · " + r.hours + " h" : ""); }
     ul.append(cel("li", {}, [
-      cel("div", { class:"tl-h" }, [pill(e.type, TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), cyc ? cel("span", { class:"tag", style:"margin:0" }, cyc) : null, e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
+      cel("div", { class:"tl-h" }, [pill(typeLabel(e.type), TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), cyc ? cel("span", { class:"tag", style:"margin:0" }, cyc) : null, e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
       cel("div", { class:"tl-d" }, eventDetailForSerial(e, serial) || "")
     ]));
   });
@@ -1304,6 +1759,8 @@ function showSerial(serial){
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.hours)), cel("div", { class:"l" }, "Cum hours")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
   ]));
+  const cfg = maskConfigFor(EVENTS, CONFIG, serial);
+  if((CONFIG.maskAreas || []).length) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:10px" }, "Masked areas: " + (cfg.length ? cfg.join(", ") : "none")));
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
@@ -1312,7 +1769,7 @@ function showSerial(serial){
   } else if(p.status.s === "→ Engineering"){
     foot.push(cel("button", { class:"btn danger", onclick:() => { closeModal(); startAction({ type:"engineering", serial:p.serial, jc:p.jc }); } }, "Engineering review"));
   }
-  foot.push(cel("button", { class:"btn primary", onclick:closeModal }, "Close"));
+  foot.push(cel("button", { class:"btn", onclick:closeModal }, "Close"));
   modal("Serial " + serial + (p.component ? " · " + p.component : ""), body, foot);
 }
 function printTraveler(p){
@@ -1324,6 +1781,8 @@ function printTraveler(p){
   const meta = cel("table", { style:"width:auto;margin-bottom:14px" });
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Job card"), cel("td", { class:"pr-meta" }, p.jc || "—"), cel("td", { class:"pr-meta" }, "Cycles"), cel("td", { class:"pr-meta" }, String(p.cycles))]));
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cum hours"), cel("td", { class:"pr-meta" }, String(p.hours))]));
+  const cfg = maskConfigFor(EVENTS, CONFIG, p.serial);
+  if((CONFIG.maskAreas || []).length) meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Masked areas"), cel("td", { class:"pr-meta", colspan:"3" }, cfg.length ? cfg.join(", ") : "none")]));
   pa.append(meta);
   const t = cel("table"), hr = cel("tr");
   ["Event ID", "When", "Type", "Bath", "Detail", "Operator"].forEach(c => hr.append(cel("th", {}, c)));
@@ -1340,7 +1799,11 @@ function showBath(bath){
   const body = cel("div", {});
   body.append(cel("div", { class:"muted", style:"margin-bottom:6px" },
     s.disposal ? ("Disposed " + fmtDT(s.disposal.datetime) + " · " + (s.disposal.disposalReason || "")) : (s.lastFill ? "Filled " + fmtDT(s.lastFill.datetime) : "No fill logged")));
-  if(s.lastFill) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water"));
+  if(s.lastFill){
+    let chargeTxt = "Charge: HCl " + (s.lastFill.hclAddedL || 0) + " L · H₂O " + (s.lastFill.waterAddedL || 0) + " L · H₃PO₄ " + (s.lastFill.h3po4AddedL || 0) + " L";
+    if(s.hclAdded || s.waterAdded || s.h3po4Added) chargeTxt += " · top-ups since: +" + s.hclAdded + " L HCl, +" + s.waterAdded + " L water, +" + s.h3po4Added + " L H₃PO₄";
+    body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:8px" }, chargeTxt));
+  }
   if(s.flags.length) body.append(cel("div", { class:"warn-line warn-red" }, "⚠ " + s.flags.join(" · ")));
 
   if(s.contents.length){
@@ -1348,16 +1811,15 @@ function showBath(bath){
     const cw = cel("div", {});
     s.contents.forEach(r => cw.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " · " + round(r.elapsedH) + " h")));
     body.append(cw);
-    body.append(cel("div", { style:"margin-top:8px" }, cel("button", { class:"btn sm primary", onclick:() => { closeModal(); startExtraction(bath); } }, "Extract from this bath")));
   }
   if(s.chem.length){
     const charts = cel("div", { class:"charts3" });
     const mk = (title, key, opt, unit) => { const ch = cel("div", { class:"ch" }); const last = s.chem[s.chem.length - 1];
       ch.append(cel("div", { class:"chttl" }, [cel("span", {}, title), cel("span", {}, fmtNum(last[key]) + (unit || ""))]));
       ch.append(trendChart(s.chem.map(e => ({ y:+e[key] || 0 })), opt)); return ch; };
-    charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#9c2a2a" }, ""));
-    charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#2e6e84" }, "%"));
-    charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#8a5a00" }, "°"));
+    charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#c0392b" }, ""));
+    charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#2563eb" }, "%"));
+    charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#b45309" }, "°"));
     body.append(charts);
     body.append(cel("div", { class:"muted", style:"font-size:11px;margin-top:4px" }, "Red dashed = limit · green band = control band"));
   }
@@ -1366,12 +1828,13 @@ function showBath(bath){
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
   const act = (label, fn, cls) => cel("button", { class:"btn sm" + (cls ? " " + cls : ""), onclick:() => { closeModal(); fn(); } }, label);
-  const foot = [act("Load in", () => startLoad(bath))];
-  if(s.contents.length) foot.push(act("Extract", () => startExtraction(bath)));
+  const foot = [act("Add parts", () => startLoad(bath))];
+  if(s.contents.length) foot.push(act("Remove parts", () => startExtraction(bath)));
+  if(s.contents.length) foot.push(act("Move", () => startMove(bath)));
   foot.push(act("Chemistry", () => startAction({ type:"chem", bath })));
-  foot.push(act("Top-up HCl", () => startAction({ type:"topup-hcl", bath })));
+  foot.push(act("Top up", () => startTopUp(bath)));
   if(s.active) foot.push(act("Dispose", () => startAction({ type:"dispose", bath }), "danger"));
-  foot.push(cel("button", { class:"btn primary", onclick:closeModal }, "Close"));
+  foot.push(cel("button", { class:"btn", onclick:closeModal }, "Close"));
   modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, foot);
 }
 
@@ -1394,9 +1857,9 @@ function vQuality(m){
     const e = d.e, jc = jcBySerial[d.serial] || "";
     const tr = cel("tr");
     tr.append(tcell(fmtDT(e.datetime)));
-    tr.append(cel("td", {}, pill(d.kind, TYPE_PILL[e.type] || "p-amber")));
+    tr.append(cel("td", {}, pill(d.kind, { "Wax failure":"p-red", "Re-mask":"p-purple", "Re-strip":"p-grey", "Eng review":"p-amber" }[d.kind] || "p-amber")));
     tr.append(tcell(jc));
-    tr.append(cel("td", {}, d.serial ? cel("span", { class:"linkish", onclick:() => showSerial(d.serial) }, d.serial) : ""));
+    tr.append(cel("td", {}, d.serial ? linkish(d.serial, () => showSerial(d.serial)) : ""));
     tr.append(tcell(d.bath)); tr.append(tcell(d.detail)); tr.append(tcell(e.operator));
     tb.append(tr);
   });
@@ -1404,9 +1867,36 @@ function vQuality(m){
 }
 
 /* --- Dashboard (Floor + Baths + KPIs in one) --- */
+// Waiting area: parts not in a bath but still in play — came out without re-entry
+// (awaiting re-strip / needs re-mask) or parked on receipt. Tap to add to a bath.
+function parkedPanel(){
+  const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT());
+  const card = cel("div", { class:"card", style:"margin-bottom:16px" });
+  card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
+    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Waiting area — parts not in a bath yet (" + waiting.length + ")"),
+    cel("button", { class:"btn sm", onclick:() => startLoad(WAITING_AREA) }, "＋ Add to waiting area")
+  ]));
+  if(!waiting.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Parts that come out of a bath without re-entry — and serials added to the waiting area — show up here.")); return card; }
+  const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+  waiting.slice(0, 80).forEach(p => {
+    const review = p.kind === "review";
+    const tag = p.kind === "needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask")
+      : review ? cel("span", { class:"idlechip-tag", style:"background:var(--red-bg);color:var(--red)" }, "review")
+      : p.kind === "received" ? cel("span", { class:"idlechip-tag", style:"background:var(--green-bg);color:var(--green)" }, "new")
+      : (p.lastBath ? cel("span", { class:"idlechip-tag", style:"background:var(--grey-bg);color:#5b6470" }, "out " + p.lastBath) : null);
+    const onclick = review
+      ? () => startAction({ type:"engineering", serial:p.serial, jc:p.jc })
+      : () => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component, bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath) });
+    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + (review ? " — tap to review" : " — tap to add to a bath"), onclick }, [cel("span", {}, "＋ " + p.serial), tag]));
+  });
+  card.append(chips);
+  return card;
+}
 // One tank: the parts inside (visual), its chemistry summary, status and actions.
 function tankCard(s){
-  const c = cel("div", { class:"tankcard", onclick:() => showBath(s.bath) });
+  const c = cel("div", { class:"tankcard", role:"button", tabindex:"0", "aria-label":"Bath " + s.bath + " — open details",
+    onclick:() => showBath(s.bath),
+    onkeydown:e => { if(e.target === c && (e.key === "Enter" || e.key === " ")){ e.preventDefault(); showBath(s.bath); } } });
   const dotCls = !s.active ? "x" : (s.flags.length ? "r" : "g");
   c.append(cel("div", { class:"tank-h" }, [
     cel("span", { class:"dot " + dotCls }), cel("b", {}, s.bath), cel("span", { style:"flex:1" }),
@@ -1421,30 +1911,51 @@ function tankCard(s){
   } else tank.append(cel("span", { class:"tank-empty" }, s.disposal ? "disposed" : "empty"));
   c.append(tank);
   if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
-  const acts = cel("div", { class:"btnrow", style:"margin-top:10px", onclick:e => e.stopPropagation() });
-  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Load in"));
-  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Extract"));
+  const acts = cel("div", { class:"tank-acts", onclick:e => e.stopPropagation() });
+  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Add parts"));
+  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Remove parts"));
   acts.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"chem", bath:s.bath }) }, "Chem"));
+  acts.append(cel("button", { class:"btn sm", onclick:() => startTopUp(s.bath) }, "Top up"));
+  if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startMove(s.bath) }, "Move"));
+  if(s.active) acts.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"dispose", bath:s.bath }) }, "Dispose"));
   c.append(acts);
   return c;
 }
 function vDash(m){
   const now = nowLocalDT();
-  m.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px" }, [
-    cel("button", { class:"btn primary", onclick:() => startLoad("") }, "＋ Load in"),
-    cel("button", { class:"btn", onclick:() => startExtraction("") }, "Extract"),
-    cel("button", { class:"btn", onclick:() => startNew("Chemistry Check") }, "Chemistry check")
-  ]));
   const k = deriveKpis(EVENTS, CONFIG, now);
   const kp = cel("div", { class:"kpis" });
-  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpy + "%", k.total && k.fpy < 70 ? "warn" : (k.total ? "good" : "")], ["Cleared", k.cleared, ""]]
+  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpyBase ? k.fpy + "%" : "—", k.fpyBase && k.fpy < 70 ? "warn" : (k.fpyBase ? "good" : "")], ["Cleared", k.cleared, ""]]
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
   m.append(kp);
   if(EVENTS.length) m.append(suggestionsPanel());
+  // Safety net: open parts whose bath isn't one of the configured tanks (or that
+  // were saved with no bath) would otherwise be invisible — surface them so they
+  // can be recovered. Click one to edit its load and assign a bath.
+  if(EVENTS.length){
+    const known = bathList(EVENTS, CONFIG);
+    const orphan = bathContents(EVENTS, now, "").filter(r => !known.includes(r.bath));
+    if(orphan.length){
+      const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#f3c4c0" });
+      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
+      const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+      orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath or the waiting area", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
+      oc.append(chips);
+      m.append(oc);
+    }
+  }
+  if(EVENTS.length) m.append(parkedPanel());
+  const baths = deriveBaths(EVENTS, CONFIG, now);
+  if(!baths.length){
+    m.append(cel("div", { class:"empty" }, [
+      cel("div", { style:"font-size:15px;margin-bottom:6px" }, EVENTS.length ? "No baths yet" : "Nothing here yet"),
+      cel("div", {}, "Add your bath IDs in Settings, log a Bath Fill, or load the example data — baths appear here automatically from your data.")
+    ]));
+    return;
+  }
   m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
-  if(!EVENTS.length){ m.append(emptyState()); return; }
   const grid = cel("div", { class:"tankgrid" });
-  deriveBaths(EVENTS, CONFIG, now).forEach(s => grid.append(tankCard(s)));
+  baths.forEach(s => grid.append(tankCard(s)));
   m.append(grid);
 
   const jr = deriveJobCards(EVENTS, CONFIG, now);
@@ -1452,8 +1963,8 @@ function vDash(m){
     m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
     const bars = cel("div", { class:"card", style:"max-width:560px" });
     jr.forEach(r => bars.append(cel("div", { style:"margin-bottom:8px" }, [
-      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.fp + "/" + r.pieces + " · " + r.fpy + "%")]),
-      cel("div", { class:"bar" }, cel("i", { style:"width:" + r.fpy + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
+      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.decided ? (r.fp + "/" + r.decided + " · " + r.fpy + "%") : (r.pieces + " in process"))]),
+      cel("div", { class:"bar" }, cel("i", { style:"width:" + (r.decided ? r.fpy : 0) + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
     ])));
     m.append(bars);
   }
@@ -1461,20 +1972,24 @@ function vDash(m){
 
 /* --- Settings --- */
 function vSettings(m){
-  m.append(cel("h2", { class:"sec" }, "Settings"));
   const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
-  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts)"]];
+  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"], ["chemEveryDays", "Titration due every (days, 0 = never)"]];
   const lg = cel("div", { class:"twocol" });
-  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key], oninput:async e => { CONFIG[key] = +e.target.value; await saveConfig(); renderNav(); } })])));
+  // never persist a half-typed / cleared field: "" would become 0 and silently
+  // flip every limit check (maxCycles 0 routes ALL pieces to engineering)
+  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key],
+    oninput:async e => { const v = num(e.target.value); if(e.target.classList) e.target.classList.toggle("bad", v == null); if(v == null) return; CONFIG[key] = v; await saveConfig(); renderNav(); },
+    onblur:e => { if(num(e.target.value) == null){ e.target.value = CONFIG[key]; if(e.target.classList) e.target.classList.remove("bad"); } } })])));
   c1.append(lg); m.append(c1);
 
   const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", value:CONFIG.baths.join(", "), oninput:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), oninput:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), oninput:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "Changes apply to dropdowns immediately."));
+  // onchange, not oninput: a half-typed list must never be persisted
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107", value:CONFIG.baths.join(", "), onchange:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "These tanks are always shown on the floor. Any extra bath that appears in your data is added automatically.")]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), onchange:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), onchange:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "List changes apply when you leave the field."));
   m.append(c2);
 
   const c3 = cel("div", { class:"card", style:"max-width:560px" });
@@ -1491,16 +2006,52 @@ function vSettings(m){
 function download(name, text, type){ const b = new Blob([text], { type }); const u = URL.createObjectURL(b); const a = cel("a", { href:u, download:name }); document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(u); }
 $("#exportJson").onclick = () => download("strip_historian_backup_" + todayISODate() + ".json", JSON.stringify({ app:"stripping-historian", version:2, exported:new Date().toISOString(), config:CONFIG, events:EVENTS }, null, 2), "application/json");
 $("#exportCsv").onclick = () => {
-  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "result", "waxFailure", "open", "anomaly"];
+  // eventIdIn / eventIdOut make every row traceable back to the ledger entries it came from
+  const cols = ["serial", "bath", "jc", "component", "cycle", "timeIn", "timeOut", "hours", "status", "wax", "anomaly", "eventIdIn", "eventIdOut"];
   const { records } = deriveImmersions(EVENTS, nowLocalDT());
   const lines = [cols.join(",")];
   records.forEach(r => {
     const row = { serial:r.serial, bath:r.bath, jc:r.jc, component:r.component, cycle:r.cycle, timeIn:r.inDT || "", timeOut:r.outDT || "",
-      hours:r.open ? ("in bath " + (r.elapsedH || 0) + "h") : (r.hours == null ? "" : r.hours), result:r.result || "", waxFailure:waxSummary(r), open:r.open ? "yes" : "", anomaly:r.anomaly || "" };
-    lines.push(cols.map(c => { let v = row[c] == null ? "" : String(row[c]); if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"'; return v; }).join(","));
+      hours:r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), status:dipStatus(r), wax:waxSummary(r), anomaly:r.anomaly || "",
+      eventIdIn:(r.loadEvent && r.loadEvent.eventId) || "", eventIdOut:(r.extractEvent && r.extractEvent.eventId) || "" };
+    lines.push(cols.map(c => {
+      let v = row[c] == null ? "" : String(row[c]);
+      // neutralize spreadsheet formula injection (=,+,-,@ lead) — but a plain
+      // number must stay numeric so hours/cycle still aggregate in a pivot
+      if(/^[=+\-@\t\r]/.test(v) && !/^-?\d+(\.\d+)?$/.test(v)) v = "'" + v;
+      if(/[",\n]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';      // RFC-4180 quoting
+      return v;
+    }).join(","));
   });
   download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
 };
+// Color-coded, self-contained HTML report — opens/prints anywhere.
+const STATUS_COLOR = { Completed:["#dcf3e3", "#1b7a3d"], Ongoing:["#dcebf5", "#1f5e84"], "Re-strip":["#fceccb", "#8a5a00"], "Re-mask":["#ece3f5", "#6b3fa0"], Hold:["#eaeef0", "#5b6770"], Moved:["#eaeef0", "#5b6770"] };
+function buildReportHTML(){
+  const { records } = deriveImmersions(EVENTS, nowLocalDT());
+  const rows = records.slice().sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)) || String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
+  const k = deriveKpis(EVENTS, CONFIG, nowLocalDT());
+  const body = rows.map(r => {
+    const s = dipStatus(r), col = STATUS_COLOR[s] || ["#eaeef0", "#5b6770"];
+    const td = (v, extra) => "<td" + (extra ? " style='" + extra + "'" : "") + ">" + esc(v == null ? "" : String(v)) + "</td>";
+    return "<tr>" + td(r.serial) + td(r.jc) + td(r.component) + td(r.bath) + td(r.cycle || "", "text-align:center")
+      + td(fmtDT(r.inDT)) + td(fmtDT(r.outDT)) + td(r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), "text-align:right")
+      + td(waxSummary(r))
+      + "<td><span class='st' style='background:" + col[0] + ";color:" + col[1] + "'>" + esc(s) + "</span></td></tr>";
+  }).join("");
+  return "<!doctype html><html><head><meta charset='utf-8'><title>Stripping report " + todayISODate() + "</title><style>"
+    + "body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16242b;margin:24px;font-size:13px}"
+    + "h1{font-size:18px;margin:0 0 2px} .muted{color:#647078;font-size:12px;margin-bottom:14px}"
+    + "table{border-collapse:collapse;width:100%} th,td{border:1px solid #e4e9ec;padding:6px 9px;text-align:left;vertical-align:top}"
+    + "th{background:#f6f9fa;text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:#647078}"
+    + ".st{display:inline-block;padding:2px 9px;border-radius:10px;font-weight:600;font-size:11.5px;white-space:nowrap}"
+    + "tr:nth-child(even) td{background:#fbfcfd}</style></head><body>"
+    + "<h1>Stripping Historian — report</h1>"
+    + "<div class='muted'>Generated " + esc(fmtDT(nowLocalDT())) + " · " + rows.length + " dip records · " + k.cleared + " completed · " + k.inBath + " ongoing · first-pass yield " + k.fpy + "%</div>"
+    + "<table><thead><tr><th>Serial</th><th>J/C</th><th>Component</th><th>Bath</th><th>Cycle</th><th>Time in</th><th>Time out</th><th>Hours</th><th>Wax</th><th>Status</th></tr></thead><tbody>"
+    + (body || "<tr><td colspan='10' style='text-align:center;color:#647078'>No dip records yet.</td></tr>") + "</tbody></table></body></html>";
+}
+$("#exportReport").onclick = () => download("strip_historian_report_" + todayISODate() + ".html", buildReportHTML(), "text/html");
 $("#importBtn").onclick = () => $("#importFile").click();
 $("#importFile").onchange = e => {
   const f = e.target.files[0]; if(!f) return;
@@ -1509,11 +2060,13 @@ $("#importFile").onchange = e => {
     try {
       const d = JSON.parse(r.result);
       if(!Array.isArray(d.events)) throw new Error("no events array in file");
-      if(!confirm("Import will REPLACE current data with the backup (" + d.events.length + " events). Continue?")) return;
+      const good = d.events.filter(ev => ev && typeof ev === "object" && !Array.isArray(ev) && typeof ev.type === "string" && typeof ev.datetime === "string");
+      const skipped = d.events.length - good.length;
+      if(!confirm("Import will REPLACE current data with the backup (" + good.length + " events" + (skipped ? "; " + skipped + " malformed entries will be skipped" : "") + "). Continue?")) return;
       await clearStore("events");
-      for(const ev of d.events){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
-      if(d.config){ CONFIG = Object.assign(JSON.parse(JSON.stringify(DEFAULT_CONFIG)), d.config); await saveConfig(); }
-      await loadAll(); flash("Imported " + d.events.length + " events"); render();
+      for(const ev of good){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
+      if(d.config){ CONFIG = sanitizeConfig(d.config); await saveConfig(); }
+      await loadAll(); flash("Imported " + good.length + " events"); render();
     } catch(err){ alert("Could not read file: " + err.message); }
   };
   r.readAsText(f); e.target.value = "";
@@ -1521,6 +2074,7 @@ $("#importFile").onchange = e => {
 
 /* --- chrome: log button, global search, keyboard shortcuts --- */
 $("#logBtn").onclick = () => { formType = null; editId = null; formData = {}; openDrawer(); };
+$("#helpBtn").onclick = showShortcuts;
 $("#globalSearch").addEventListener("keydown", e => {
   if(e.key !== "Enter") return;
   const q = e.target.value.trim(); if(!q) return;
@@ -1529,16 +2083,42 @@ $("#globalSearch").addEventListener("keydown", e => {
   else { logFilter = { type:"", bath:"", text:q }; activeTab = "Events"; render(); }
 });
 document.addEventListener("keydown", e => {
-  if(e.key === "Escape"){ if(drawerOpen) closeDrawer(); return; }
+  const modalOpen = !!($("#modalRoot") && $("#modalRoot").firstChild);
+  if(e.key === "Escape"){ if(modalOpen) closeModal(); else if(drawerOpen) closeDrawer(); return; }
   const tag = (e.target && e.target.tagName) || "";
   if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if(drawerOpen || modalOpen) return;   // never hijack plain letter keys while a dialog is up
   if(e.key === "/"){ e.preventDefault(); const gs = $("#globalSearch"); if(gs) gs.focus(); }
   else if(e.key === "l" || e.key === "L") startLoad("");
   else if(e.key === "e" || e.key === "E") startExtraction("");
   else if(e.key === "n" || e.key === "N"){ formType = null; editId = null; formData = {}; openDrawer(); }
+  else if(e.key === "?"){ e.preventDefault(); showShortcuts(); }
 });
+function showShortcuts(){
+  const items = [
+    ["N", "New event — open the type picker"],
+    ["L", "Load in — add parts to a bath"],
+    ["E", "Extraction — remove parts from a bath"],
+    ["/", "Jump to search"],
+    ["⌘ / Ctrl + Enter", "Save the open form"],
+    ["⌘ / Ctrl + Z", "Undo the last add, edit or delete"],
+    ["Esc", "Close the open dialog"],
+    ["?", "Show this help"]
+  ];
+  const body = cel("div", {});
+  items.forEach(([k, d], i) => body.append(cel("div", { style:"display:flex;align-items:center;gap:14px;padding:8px 0" + (i < items.length - 1 ? ";border-bottom:1px solid var(--line-2)" : "") }, [
+    cel("span", { class:"kbd", style:"min-width:118px;text-align:center;flex:none;padding:3px 6px" }, k),
+    cel("span", {}, d)
+  ])));
+  body.append(cel("div", { class:"muted", style:"margin-top:14px;font-size:12px" }, "Tip: click any underlined column header to sort a table — click again to reverse."));
+  modal("Keyboard shortcuts", body, [cel("button", { class:"btn primary", onclick:closeModal }, "Got it")]);
+}
 document.addEventListener("keydown", e => {
-  if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && lastUndo){ e.preventDefault(); doUndo(); }
+  if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && undoStack.length){
+    const tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;   // text fields keep their native undo
+    e.preventDefault(); doUndo();
+  }
 });
 
 /* --- example data --- */
@@ -1582,7 +2162,9 @@ async function loadExample(){
     { datetime:agoDT(60 * 30), type:"Bath Fill", bath:"206-207", hclAddedL:320, waterAddedL:680, h3po4AddedL:100, operator:"Maint" },
     { datetime:agoDT(60 * 29), type:"Chemistry Check", bath:"206-207", temp:90, hclPct:21, fePpm:12, operator:"Maint" },
     { datetime:agoDT(60 * 8), type:"Load In", bath:"206-207", jc:"7501", component:C, serials:["7501-01","7501-02","7501-03","7501-04","7501-05"], operator:"Diang" },
-    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared" }, { serial:"7501-04", result:"Re-strip", wax:["Part body"] }] }
+    { datetime:agoDT(60 * 2), type:"Extraction", bath:"206-207", operator:"Diang", items:[{ serial:"7501-01", result:"Cleared" }, { serial:"7501-04", result:"Re-strip", wax:["Part body"] }] },
+    // --- Parts received at the bench, parked and waiting to be added to a bath ---
+    { datetime:agoDT(60 * 5), type:"Parts Received", jc:"7501", component:C, serials:["7501-06","7501-07","7501-08"], operator:"Diang", notes:"received at bench, awaiting a tank" }
   ];
   for(const e of ex) await addEvent(e);
   flash("Example loaded (" + ex.length + " events)");

@@ -73,11 +73,12 @@ const handle = new Function(
     "openForm:t=>startNew(t)," +
     "loadBath:b=>startLoad(b)," +
     "extractBath:b=>startExtraction(b)," +
+    "moveBath:b=>startMove(b)," +
     "closeDrawer:()=>closeDrawer()," +
     "serialHistory:s=>showSerial(s)," +
     "bathModal:b=>showBath(b)," +
     "loadExample:()=>loadExample()," +
-    "clickExport:()=>{document.querySelector('#exportCsv').onclick();document.querySelector('#exportJson').onclick();}," +
+    "clickExport:()=>{document.querySelector('#exportCsv').onclick();document.querySelector('#exportJson').onclick();document.querySelector('#exportReport').onclick();}," +
     "mainKids:()=>document.querySelector('#main').children.length," +
     "drawerKids:()=>document.querySelector('#drawerRoot').children.length," +
     "pieces:()=>derivePieces(EVENTS,CONFIG,nowLocalDT())," +
@@ -107,6 +108,9 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   safe("opens Load for a specific bath", () => { handle.loadBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Extraction drawer with live contents", () => { handle.extractBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Chemistry Check drawer", () => { handle.openForm("Chemistry Check"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Move (Transfer) drawer for a live bath", () => { handle.moveBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Parts Received (parked) drawer", () => { handle.openForm("Parts Received"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the partial Top-Up drawer", () => { handle.openForm("Top-Up"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("a re-load of a wax-failed part shows the inline re-mask step", () => { handle.doAction({ type:"reload", serials:["7501-04"], bath:"206-207", jc:"7501" }); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
   safe("the drawer renders exactly once and does not stack on re-open", () => { handle.openForm("Load In"); handle.openForm("Load In"); const k = handle.drawerKids(); if(k !== 2) throw new Error("expected 1 drawer (scrim+panel = 2 nodes), got " + k); handle.closeDrawer(); });

@@ -23,10 +23,10 @@ const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf(
 
 const EXPORTS = [
   "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
-  "parseSerials","eventsForSerial","deriveImmersions","bathContents","pieceStatusFor","derivePieces",
-  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings",
-  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","idleParts",
-  "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","TYPES","F","TYPE_PILL"
+  "parseSerials","eventsForSerial","deriveImmersions","bathContents","dipStatus","pieceStatusFor","derivePieces",
+  "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
+  "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","parkedParts","waitingParts",
+  "waxFailures","lastUnresolvedWax","waxAreasOf","unresolvedWaxAreas","maskConfigFor","TYPES","F","TYPE_PILL"
 ];
 // eslint-disable-next-line no-new-func
 const D = new Function(domainSrc + "\nreturn {" + EXPORTS.join(",") + "};")();
@@ -102,6 +102,59 @@ test("extracting a part that was never loaded is flagged as an anomaly", () => {
   assert.match(records[0].anomaly, /not in bath/);
 });
 
+/* ------------------- removal reasons / report status ------------------- */
+test("'Re-mask' is a removal reason that routes a part to Needs re-mask", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"], { jc:"J", maskAreas:["Cooling holes", "Part body"] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-mask", wax:["Cooling holes", "Part body"] }])
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Needs re-mask");
+  // it's logged in Quality as a re-mask, not a wax failure
+  const defs = D.deriveDefects(events);
+  assert.ok(defs.some(d => d.kind === "Re-mask" && d.serial === "A"));
+  assert.ok(!defs.some(d => d.kind === "Wax failure"));
+});
+test("a 'Re-mask' with no areas is still logged in Quality and not a wax failure", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["N"], { maskAreas:[] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"N", result:"Re-mask", wax:[] }])
+  ];
+  const defs = D.deriveDefects(events);
+  assert.ok(defs.some(d => d.kind === "Re-mask" && d.serial === "N"), "re-mask intent is logged even with no areas");
+});
+test("wax counters use area-based failures and exclude intentional Re-mask", () => {
+  const fail = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }])
+  ];
+  assert.equal(D.deriveKpis(fail, CONFIG, NOW).wax, 1);          // an area-based wax failure is counted
+  assert.equal(D.derivePieces(fail, CONFIG, NOW)[0].wax, 1);
+  assert.equal(D.deriveBath(fail, CONFIG, "B1", NOW).wax, 1);
+  const remask = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["Z"], { maskAreas:["Cooling holes", "Part body"] }),
+    extract("2026-03-02T10:00", "B1", [{ serial:"Z", result:"Re-mask", wax:["Cooling holes", "Part body"] }])
+  ];
+  assert.equal(D.deriveKpis(remask, CONFIG, NOW).wax, 0);        // an intentional re-mask is NOT a failure
+  assert.equal(D.derivePieces(remask, CONFIG, NOW)[0].wax, 0);
+  assert.equal(D.deriveBath(remask, CONFIG, "B1", NOW).wax, 0);
+});
+test("dipStatus: Ongoing while in a bath, Completed when cleared, else the reason", () => {
+  const events = [
+    load("2026-03-02T08:00", "B1", ["A", "B", "C"]),
+    extract("2026-03-02T10:00", "B1", [{ serial:"A", result:"Cleared" }, { serial:"B", result:"Re-strip" }])
+    // C still in the bath
+  ];
+  const { records } = D.deriveImmersions(events, "2026-03-02T12:00");
+  const byS = Object.fromEntries(records.map(r => [r.serial, D.dipStatus(r)]));
+  assert.equal(byS.A, "Completed");
+  assert.equal(byS.B, "Re-strip");
+  assert.equal(byS.C, "Ongoing");
+});
+
 /* ----------------------------- pieces ------------------------------ */
 test("piece status: In bath, Cleared (first pass), Awaiting, and over-cycle routing", () => {
   const events = [
@@ -167,6 +220,21 @@ test("bath state is scoped to the current charge (resets after a refill)", () =>
   assert.equal(s.flags.length, 0);
 });
 
+test("bathList = configured baths + any extra bath seen in the event log", () => {
+  // bathList adds nothing on its own — with nothing configured and no events, none
+  assert.deepEqual(D.bathList([], { baths:[] }), []);
+  // baths referenced in events appear even when none are configured
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A"]),
+    ev({ datetime:"2026-03-02T09:00", type:"Transfer", bath:"B1", toBath:"B2", serials:["A"] })
+  ];
+  assert.deepEqual(D.bathList(events, { baths:[] }), ["B1", "B2"]);
+  // configured baths come first, then any extra ones seen in data; no dupes
+  assert.deepEqual(D.bathList(events, { baths:["B2", "B9"] }), ["B2", "B9", "B1"]);
+  assert.equal(D.deriveBaths([], { baths:[] }, NOW).length, 0);
+});
+
 /* ------------------------------ KPIs ------------------------------- */
 test("KPIs: FPY, re-strip rate, and parts-in-bath count", () => {
   const events = [
@@ -180,7 +248,10 @@ test("KPIs: FPY, re-strip rate, and parts-in-bath count", () => {
   assert.equal(k.total, 3);
   assert.equal(k.cleared, 2);
   assert.equal(k.fp, 1);                 // only A cleared on its first pull
-  assert.equal(k.fpy, 33);
+  // yield is over *decided* pieces (extracted at least once): A + B = 2; C is
+  // still on its first, never-pulled dip so it doesn't count yet → 1/2 = 50%.
+  assert.equal(k.fpyBase, 2);
+  assert.equal(k.fpy, 50);
   assert.equal(k.inBath, 1);             // C
   assert.equal(k.dips, 4);               // A, B×2, C
   assert.equal(k.reStrip, 1);
@@ -360,6 +431,20 @@ test("wax failure is tracked per masked area; a re-mask resolves only the areas 
   assert.equal(D.unresolvedWaxAreas(full, "A").length, 0);
   assert.equal(D.derivePieces(full, cfg, NOW)[0].status.s, "Awaiting re-strip");
 });
+test("maskConfigFor = the areas a part has, defaulting to all configured areas", () => {
+  const cfg = { ...CONFIG, maskAreas:["Cooling holes", "Part body"] };
+  // not yet configured -> defaults to every configured area
+  assert.deepEqual(D.maskConfigFor([load("2026-03-02T08:00", "B1", ["A"])], cfg, "A"), ["Cooling holes", "Part body"]);
+  // a part loaded with an explicit wax config keeps just those areas
+  const events = [load("2026-03-02T08:00", "B1", ["A"], { maskAreas:["Part body"] })];
+  assert.deepEqual(D.maskConfigFor(events, cfg, "A"), ["Part body"]);
+  // the most recent specifying event wins
+  const relog = events.concat(load("2026-03-03T08:00", "B1", ["A"], { maskAreas:["Cooling holes", "Part body"] }));
+  assert.deepEqual(D.maskConfigFor(relog, cfg, "A"), ["Cooling holes", "Part body"]);
+  // a waiting-area (Parts Received) entry can carry the config too, including none
+  const parked = [ev({ datetime:"2026-03-01T08:00", type:"Parts Received", serials:["Z"], maskAreas:[] })];
+  assert.deepEqual(D.maskConfigFor(parked, cfg, "Z"), []);
+});
 test("waxAreasOf reads the simple name list, the old {area} shape, and the legacy field", () => {
   assert.deepEqual(D.waxAreasOf({ wax:["Cooling holes", "Part body"] }), ["Cooling holes", "Part body"]);
   assert.deepEqual(D.waxAreasOf({ wax:[{ area:"Cooling holes" }] }), ["Cooling holes"]);   // old shape still readable
@@ -417,17 +502,228 @@ test("a part over the cycle/hour limit is held for engineering with a stated rea
   assert.match(p.status.reason, /3 cycles/);
 });
 
-/* ===================== idle parts (waiting to go back in) ===================== */
-test("idleParts lists parts that came out and are not finished (awaiting / needs re-mask)", () => {
+/* ===================== parked parts (received in the tech's area) ===================== */
+test("parkedParts lists received serials until they are loaded into a bath", () => {
+  const base = [ev({ datetime:"2026-03-20T08:00", type:"Parts Received", serials:["P1", "P2", "P3"], jc:"J9", component:"GT" })];
+  assert.deepEqual(D.parkedParts(base, CONFIG, NOW).map(p => p.serial).sort(), ["P1", "P2", "P3"]);
+  assert.equal(D.parkedParts(base, CONFIG, NOW).find(p => p.serial === "P1").jc, "J9");   // J/C carried from the received event
+  const afterLoad = base.concat(load("2026-03-21T08:00", "B1", ["P1"]));
+  assert.deepEqual(D.parkedParts(afterLoad, CONFIG, NOW).map(p => p.serial).sort(), ["P2", "P3"]);   // P1 drops off once loaded
+});
+test("waitingParts = parts out of a bath without re-entry, plus parked serials", () => {
   const events = [
     ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-02T07:00", type:"Parts Received", serials:["W9"], jc:"JX" }),   // parked
     load("2026-03-02T08:00", "B1", ["A", "B", "C", "D"]),
     extract("2026-03-02T10:00", "B1", [
-      { serial:"A", result:"Cleared" },                          // done -> not idle
-      { serial:"B", result:"Re-strip" },                         // awaiting re-strip -> idle
-      { serial:"C", result:"Re-strip", wax:["Cooling holes"] }   // needs re-mask -> idle
+      { serial:"A", result:"Cleared" },                           // done -> not waiting
+      { serial:"B", result:"Re-strip" },                          // out, not back -> waiting
+      { serial:"C", result:"Re-strip", wax:["Cooling holes"] }    // out, needs re-mask -> waiting
     ])
-    // D never extracted -> still in bath -> not idle
+    // D is still in the bath -> not waiting
   ];
-  assert.deepEqual(D.idleParts(events, CONFIG, "2026-03-02T12:00").map(p => p.serial).sort(), ["B", "C"]);
+  const w = D.waitingParts(events, CONFIG, "2026-03-02T12:00");
+  const byS = Object.fromEntries(w.map(p => [p.serial, p]));
+  assert.deepEqual(w.map(p => p.serial).sort(), ["B", "C", "W9"]);
+  assert.equal(byS.B.kind, "awaiting re-strip");
+  assert.equal(byS.B.lastBath, "B1");           // remembers where it came from
+  assert.equal(byS.C.kind, "needs re-mask");
+  assert.equal(byS.W9.kind, "received");
+  // once a waiting part goes back into a bath, it leaves the waiting area
+  const back = events.concat(load("2026-03-02T11:00", "B1", ["B"], { remask:[] }));
+  assert.ok(!D.waitingParts(back, CONFIG, "2026-03-02T12:00").some(p => p.serial === "B"));
+});
+test("waitingParts includes parts routed to engineering by a stop condition", () => {
+  // P hits the cycle limit, so removing it routes it to engineering — it must
+  // still be visible on the bench (waiting area), not silently disappear.
+  const events = [ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" })];
+  for(let c = 0; c < 3; c++){ events.push(load(`2026-03-02T0${c}:00`, "B1", ["P"]), extract(`2026-03-02T0${c}:30`, "B1", [{ serial:"P", result:"Re-strip" }])); }
+  assert.equal(D.derivePieces(events, CONFIG, NOW).find(p => p.serial === "P").status.s, "→ Engineering");
+  const w = D.waitingParts(events, CONFIG, NOW).find(p => p.serial === "P");
+  assert.ok(w, "an over-limit part removed from the tank still shows in the waiting area");
+  assert.equal(w.kind, "review");
+});
+
+/* ===================== move parts to another bath (Transfer) ===================== */
+test("a Transfer moves parts to another bath, continuing the same cycle (not a new dip)", () => {
+  const events = [
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B2" }),
+    load("2026-03-22T08:00", "B1", ["A", "B"], { jc:"J" }),
+    ev({ datetime:"2026-03-22T10:00", type:"Transfer", bath:"B1", toBath:"B2", serials:["A"] })
+  ];
+  assert.deepEqual(D.bathContents(events, "2026-03-22T12:00", "B2").map(r => r.serial), ["A"]); // A moved into B2
+  assert.deepEqual(D.bathContents(events, "2026-03-22T12:00", "B1").map(r => r.serial), ["B"]); // B stays in B1
+  const pa = D.derivePieces(events, CONFIG, "2026-03-22T12:00").find(p => p.serial === "A");
+  assert.equal(pa.status.s, "In bath");
+  assert.equal(pa.currentBath, "B2");
+  assert.equal(pa.cycles, 1);                 // the move did NOT add a strip cycle
+  const cleared = events.concat(extract("2026-03-22T14:00", "B2", [{ serial:"A", result:"Cleared" }]));
+  const pc = D.derivePieces(cleared, CONFIG, "2026-03-22T16:00").find(p => p.serial === "A");
+  assert.equal(pc.status.s, "Cleared");
+  assert.equal(pc.cycles, 1);
+  assert.equal(pc.firstPass, true);           // moved then cleared, never re-stripped
+});
+test("moving parts out to the waiting area pulls them from the bath into Waiting", () => {
+  const events = [
+    ev({ datetime:"2026-03-01T08:00", type:"Bath Fill", bath:"B1" }),
+    load("2026-03-02T08:00", "B1", ["A", "B"], { jc:"J" }),
+    ev({ datetime:"2026-03-02T10:00", type:"Transfer", bath:"B1", toBath:"", serials:["A"] })   // toBath "" = waiting area
+  ];
+  assert.deepEqual(D.bathContents(events, "2026-03-02T12:00", "B1").map(r => r.serial), ["B"]); // A left the bath
+  assert.equal(D.derivePieces(events, CONFIG, "2026-03-02T12:00").find(p => p.serial === "A").inBath, false);
+  assert.ok(D.waitingParts(events, CONFIG, "2026-03-02T12:00").some(p => p.serial === "A")); // A is now waiting
+});
+test("eventWarnings: moving to the same bath, or a part not in the source, is flagged", () => {
+  const events = [
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-22T08:00", type:"Bath Fill", bath:"B2" }),
+    load("2026-03-22T08:00", "B1", ["A"])
+  ];
+  assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B1", serials:["A"] }, events, CONFIG, NOW).some(x => x.level === "red" && /same bath/.test(x.msg)));
+  assert.ok(D.eventWarnings({ type:"Transfer", bath:"B1", toBath:"B2", serials:["Z"] }, events, CONFIG, NOW).some(x => /not currently in bath/.test(x.msg)));
+});
+
+/* ===================================================================
+   Regression tests for the audited domain fixes (ported from the
+   tool-audit round). Each one pins a bug that was empirically
+   reproducible before the fix.
+   =================================================================== */
+
+test("nextEventId never reuses an id after a same-day delete (max+1, not count+1)", () => {
+  const events = [{ eventId:"20260313-0001" }, { eventId:"20260313-0003" }]; // -0002 was deleted
+  assert.equal(D.nextEventId("2026-03-13T14:00", events), "20260313-0004");
+  assert.equal(D.nextEventId("2026-03-13T14:00", [{ eventId:"20260313-0001" }, { eventId:"20260313-0002" }]), "20260313-0003");
+});
+
+test("parseSerials: mismatched-prefix, reversed and oversized ranges stay literal", () => {
+  assert.deepEqual(D.parseSerials("7261-01..7300-06"), ["7261-01..7300-06"]); // never fabricate 7261-xx
+  assert.deepEqual(D.parseSerials("7261-06..01"), ["7261-06..01"]);
+  assert.deepEqual(D.parseSerials("7261-0001..99999"), ["7261-0001..99999"]); // >= 10000 span guard
+  assert.deepEqual(D.parseSerials("a..b"), ["a..b"]);
+  assert.deepEqual(D.parseSerials("7261-05..05"), ["7261-05"]);
+  assert.deepEqual(D.parseSerials("01..03"), ["01", "02", "03"]);
+});
+
+test("a re-loaded cleared part is In bath again — Cleared is a state, not history", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }]),
+    load("2026-03-22T12:00", "B1", ["A"])
+  ];
+  const row = D.derivePieces(events, CONFIG, "2026-03-22T14:00")[0];
+  assert.equal(row.status.s, "In bath");
+  assert.equal(row.inBath, true);
+  assert.equal(row.cycles, 2);
+  const k = D.deriveKpis(events, CONFIG, "2026-03-22T14:00");
+  assert.equal(k.cleared, 0);      // no longer double-counted as cleared AND in bath
+  assert.equal(k.inBath, 1);
+});
+
+test("a Scrap / Return disposition after clearing wins over Cleared", () => {
+  const base = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }])
+  ];
+  const scrapped = base.concat(ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"A", status:"Scrap" }));
+  assert.equal(D.derivePieces(scrapped, CONFIG, NOW)[0].status.s, "Scrap");
+  const returned = base.concat(ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"A", status:"Return to vendor" }));
+  assert.equal(D.derivePieces(returned, CONFIG, NOW)[0].status.s, "Returned");
+});
+
+test("orphan (never-loaded) extractions do not inflate cycles or the dip KPIs", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Re-strip" }]),
+    extract("2026-03-22T10:05", "B1", [{ serial:"A", result:"Re-strip" }]), // double-tap
+    extract("2026-03-22T10:10", "B1", [{ serial:"A", result:"Re-strip" }])
+  ];
+  const row = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(row.cycles, 1, "one real dip, not three");
+  assert.equal(row.status.s, "Awaiting re-strip", "must not be routed to engineering by duplicates");
+  const k = D.deriveKpis(events, CONFIG, NOW);
+  assert.equal(k.dips, 1);
+  assert.equal(k.reStrip, 1);
+});
+
+test("healthyBaths ranks a never-titrated bath last, not first", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), // no chemistry on record
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }),
+    ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 })
+  ];
+  assert.deepEqual(D.healthyBaths(events, CONFIG, "2026-03-10T12:00").map(b => b.bath), ["B2", "B1"]);
+  assert.equal(D.suggestRescueBath(events, CONFIG, "2026-03-10T12:00", ""), "B2");
+});
+
+test("a same-minute re-failure AFTER a re-mask stays unresolved (event order, not datetime)", () => {
+  const mk = (n, o) => ({ id:n, eventId:"20260302-" + String(n).padStart(4, "0"), ...o });
+  const events = [
+    mk(1, { datetime:"2026-03-02T08:00", type:"Load In", bath:"B1", serials:["A"] }),
+    mk(2, { datetime:"2026-03-02T10:00", type:"Extraction", bath:"B1", items:[{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }] }),
+    mk(3, { datetime:"2026-03-02T11:00", type:"Load In", bath:"B1", serials:["A"], remask:[{ serial:"A", areas:["Cooling holes"] }] }),
+    mk(4, { datetime:"2026-03-02T11:00", type:"Extraction", bath:"B1", items:[{ serial:"A", result:"Re-strip", wax:["Cooling holes"] }] }) // same minute, later event
+  ];
+  assert.deepEqual(D.unresolvedWaxAreas(events, "A").map(u => u.area), ["Cooling holes"]);
+  // ...while a same-minute re-mask AFTER the failure still resolves it
+  const resolved = events.concat(mk(5, { datetime:"2026-03-02T11:00", type:"Re-Masking", serial:"A", areas:["Cooling holes"] }));
+  assert.equal(D.unresolvedWaxAreas(resolved, "A").length, 0);
+});
+
+test("lookupSerial reads history in DATE order — a backfilled older event cannot override", () => {
+  const backfilled = [ // insertion order: newer first, older entered later
+    load("2026-03-20T08:00", "B1", ["A"], { jc:"J-NEW" }),
+    load("2026-03-01T08:00", "B1", ["A"], { jc:"J-OLD", component:"C-OLD" })
+  ];
+  assert.deepEqual(D.lookupSerial(backfilled, "A"), { jc:"J-NEW", component:"C-OLD" });
+});
+
+test("re-load suggestions are capacity-aware: a group never exceeds the rescue bath's free slots", () => {
+  const cfg = { ...CONFIG, bathCapacity:2 };
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:20 }),
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B2" }), ev({ datetime:"2026-03-10T08:30", type:"Chemistry Check", bath:"B2", temp:90, hclPct:20, fePpm:10 }),
+    load("2026-03-10T09:00", "B2", ["X"]),                                    // B2 has 1 of 2 slots taken
+    load("2026-03-10T09:00", "B1", ["A", "B", "C"], { jc:"J" }),
+    extract("2026-03-10T11:00", "B1", [{ serial:"A", result:"Re-strip" }, { serial:"B", result:"Re-strip" }, { serial:"C", result:"Re-strip" }])
+  ];
+  const reloads = D.deriveSuggestions(events, cfg, "2026-03-10T12:00").filter(s => s.action.type === "reload");
+  const toB2 = reloads.find(s => s.action.bath === "B2");
+  const unplaced = reloads.find(s => !s.action.bath);
+  assert.ok(toB2 && toB2.action.serials.length === 1, "only one part fits in B2");
+  assert.ok(unplaced && unplaced.action.serials.length === 2, "the remainder is not crammed into a full bath");
+});
+
+test("chemEveryDays config drives the titration-overdue suggestion (default 2, 0 disables)", () => {
+  const events = [
+    ev({ datetime:"2026-03-10T08:00", type:"Bath Fill", bath:"B1" }),
+    ev({ datetime:"2026-03-10T09:00", type:"Chemistry Check", bath:"B1", temp:90, hclPct:20, fePpm:10 })
+  ];
+  const chemSug = cfg => D.deriveSuggestions(events, cfg, "2026-03-13T09:00").some(s => s.action.type === "chem");
+  assert.equal(chemSug(CONFIG), true, "3 days silent >= default 2");
+  assert.equal(chemSug({ ...CONFIG, chemEveryDays:5 }), false);
+  assert.equal(chemSug({ ...CONFIG, chemEveryDays:0 }), false, "0 disables the nag");
+});
+
+test("deriveImmersions is memoized on (events identity, now) and stays pure", () => {
+  const events = [load("2026-03-22T08:00", "B1", ["A"])];
+  assert.equal(D.deriveImmersions(events, NOW), D.deriveImmersions(events, NOW), "same inputs: cached object");
+  assert.notEqual(D.deriveImmersions(events, NOW), D.deriveImmersions(events, "2026-05-01T00:00"), "different now: recomputed");
+  const more = events.concat(extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Cleared" }]));
+  assert.equal(D.deriveImmersions(more, NOW).records.length, 1);
+  assert.equal(D.deriveImmersions(more, NOW).open.size, 0, "new array identity sees the new event");
+});
+
+test("KPI wax counts failed areas across both the wax:[] and legacy shapes", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A", "B"]),
+    extract("2026-03-22T10:00", "B1", [
+      { serial:"A", result:"Re-strip", wax:["Cooling holes", "Part body"] },
+      { serial:"B", result:"Re-strip", waxFailure:"Complete mask loss" }
+    ])
+  ];
+  assert.equal(D.deriveKpis(events, CONFIG, NOW).wax, 3);
+  const rows = Object.fromEntries(D.derivePieces(events, CONFIG, NOW).map(r => [r.serial, r]));
+  assert.equal(rows.A.wax, 2);
+  assert.equal(rows.B.wax, 1);
 });
