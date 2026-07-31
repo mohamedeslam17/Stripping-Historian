@@ -1,34 +1,86 @@
 # Reviewer notes
 
+## Round 2 — reviewed
+
+`TOTALS pass=209 fail=61 record=57 threw=35 skipped=0`.
+
+96 non-passing lines. I re-verified every cluster directly against `main` before
+believing any of it. **One real defect. The other 95 lines are harness bugs or
+outdated expectations.**
+
+### The one real defect — post-clear engineering disposition is invisible
+
+`pieceStatusFor` checks `cleared` before `engEvents.length`, so a disposition recorded
+*after* a part cleared is swallowed:
+
+| Scenario | Status shown | Should be |
+|---|---|---|
+| dip Cleared → Eng Review `Hold` | `Cleared` | `→ Engineering` |
+| dip Cleared → Eng Review `Engineering review` | `Cleared` | `→ Engineering` |
+| dip Cleared → Eng Review `Accepted` | `Cleared` | `Accepted` (cosmetic — both green) |
+
+`Scrap` and `Return to vendor` already override correctly (round 1's fix). `Hold` does not.
+
+Verified consequences on `main`:
+
+```
+cleared-then-Hold  → status "Cleared",       job card eng count 0
+restrip-then-Hold  → status "→ Engineering", job card eng count 1
+```
+
+So engineering flags a cleared part for review and the board still reads `Cleared`, the
+job card shows zero parts at engineering, and no red suggestion is raised. On a shop
+floor that is a part walking out with an open review against it.
+
+Cases: **M4, M14** (root), M3 (cosmetic), E7, E10, E11, E26, G20, I26.
+
+### Everything else I probed is correct on `main`
+
+Directly confirmed working, against Haiku's FAIL/THREW claims:
+
+- capacity flag at 13/12 → `Over capacity 13/12`; `free` 0 at 12/12 (F23, F25, F26)
+- `loadH` sums closed dips → 11 (F35)
+- `nextEventId` → `20260301-0003` (K31)
+- full bath excluded as a rescue target → `""` (I7)
+- iron-over-limit → `red/dispose` suggestion (I17)
+- Load In capacity warnings, including the already-inside case (H22, H24, H25)
+- duplicate-disposition warning (H49); awaiting-engineering load block (H15)
+- hour and cycle limits still fire for non-cleared parts — `25 h ≥ 24`, 3 cycles → `→ Engineering`
+
+### Harness bugs behind the rest
+
+| Cause | Cases | Detail |
+|---|---|---|
+| `deriveImmersions` misuse | all 35 of group B | Called `.filter` on the returned object and mis-indexed `records`. The function still returns `{records, open}` — unchanged from round 1, verified. Called correctly, B4 gives `records.length 1, hours 10, open.size 0`. |
+| `ev` scoping | B28–B30, D23, F31, F32, H41, H43 | "Cannot access 'ev' before initialization" / "ev is not a function" — a shadowed fixture helper. |
+| Fixture ≠ expectation | F23, F25, F26, F35, G13, G16, H15, H22, H24, H25, H49, I17, K31, L5 | Same class as round 1, and round 1's guidance did not prevent it. L5 flipped: round 1 expected 1.5 and got 2.5, round 2 expected 2.5 and got 1.5 — the fixture changed underneath the expectation. |
+| Spec outdated vs `main` | F40 | `deriveBaths` now derives from config **and** data by design (commit `079d465`), so a bath seen only in events does appear. Expectation is stale, not a bug. |
+| Spec ambiguity (mine) | D15, E16 | D15 returns area objects, not strings; E16 emits `"25 h ≥ 24"`, not the literal `"hours limit"`. |
+
+### Process note
+
+Two rounds, and both times the harness was the dominant source of failures — 35 throws this
+round. The case list is not the hard part; the fixtures are. Round 3 removes that variable:
+the harness is committed here, already correct, and Haiku only runs it.
+
 ## Round 1 — reviewed
 
 Haiku pushed `audit.mjs` to `claude/execute-this-9qmuo9` (no results file). Re-run here.
 
 **Coverage:** 55 of ~300 cases implemented.
 
-**44 reported failures. Most were harness bugs, not app bugs:**
+**44 reported failures, nearly all harness bugs:**
 
 | Cause | Cases | Detail |
 |---|---|---|
 | Bath age contamination | F6–F16, F24, G10, H8, I1, I5, I10 | Baths filled `2026-03-01`, `NOW = 2026-04-01`, `maxBathAge: 30` → an extra age flag on nearly every bath. Raising `maxBathAge` made all 13 pass with no code change. |
-| Wrong argument order | I14, I15 | `deriveSuggestions(events, nowDT, CONFIG)`; the real signature is `(events, config, nowDT)`. Both threw. |
-| Wrong fixture signature | I13, I17, I22 | `fill(dt, bath, null, {fePpm:150})` against `fill(dt, bath, x = {})` — chemistry silently dropped, bath looked healthy. |
-| Expectation ≠ fixture built | G7, L5, L17, E19, E16, F37, B33, D22 | e.g. G7 asserted 40% from 6 dips (33% correct); L5 asserted 1.5 from cycles of 2 and 3 (2.5 correct); L17 asserted 2 cycles from 3 loads; E19 asserted a 24 h breach from 22 h. |
+| Wrong argument order | I14, I15 | `deriveSuggestions(events, nowDT, CONFIG)`; the real signature is `(events, config, nowDT)`. |
+| Wrong fixture signature | I13, I17, I22 | `fill(dt, bath, null, {fePpm:150})` against `fill(dt, bath, x = {})` — chemistry silently dropped. |
+| Expectation ≠ fixture | G7, L5, L17, E19, E16, F37, B33, D22 | G7 asserted 40% from 6 dips (33% correct); L5 asserted 1.5 from cycles of 2 and 3 (2.5 correct). |
 
-**One real defect, and it explained the rest.**
+**Real defect found:** `pieceStatusFor` treated *any* historical `Cleared` as current state, so
+later dispositions and re-loads were invisible. Cascaded into E7–E11, E20, E25–E27, G20,
+H13–H15, I13, I26.
 
-`pieceStatusFor` tested `recs.some(r => r.result === "Cleared")` — *any* historical clear —
-before every other branch. So a piece that cleared and was later scrapped still read
-`Cleared`, and one that cleared and was re-loaded read `Cleared` while sitting in a bath.
-
-Cascaded into: E7–E11, E20, E25, E26, E27, G20, H13, H14, H15, I13, I26.
-
-**Status: fixed on `main`** (commit `d7090c9`). `cleared` is now scoped to the latest dip,
-and `Scrap` / `Return to vendor` take precedence over it. `npm test` green on `main`
-(domain + smoke). Group M in `TASK.md` regression-tests this so it cannot return quietly.
-
-## Round 2 — open
-
-Auditing current `main`, merged into this branch. Note `idleParts` no longer exists, so
-round 1's hardcoded `EXPORTS` list throws on load — `TASK.md` has Haiku derive it from the
-file instead. ~245 cases from the original list were never implemented; they run this round.
+**Fixed on `main`** (`d7090c9`) — `cleared` scoped to the latest dip, `Scrap`/`Return to vendor`
+override. Round 2 confirms that fix holds (M1, M2, M5 pass) but shows it stopped one branch short.
