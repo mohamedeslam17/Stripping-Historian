@@ -1,1 +1,4 @@
-awaiting round 5 results — run: node audit/cases.mjs --fails
+SUITE	pass=2000	fail=0	threw=0	total=2000
+HARNESS	pass=22	fail=0
+NPMTEST	pass
+CLEAN
