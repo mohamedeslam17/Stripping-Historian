@@ -1,77 +1,60 @@
-# TASK — Round 3: fix one defect
+# TASK — Round 4: one-character fix
 
-Round 2 is reviewed. See `audit/NOTES.md` for the full analysis. Short version: of 96
-non-passing lines, **one was a real defect**. The other 95 were harness bugs or stale
-expectations — I verified each cluster directly against `main` before discarding it.
-
-So this round is not an audit. It is one small, precise fix.
+Round 3 is verified — harness 22/0, `npm test` green, the fix is correct. See
+`audit/NOTES.md`. One edge case remains.
 
 ## The defect
 
-`pieceStatusFor` in `index.html` checks `cleared` **before** `engEvents.length`, so an
-engineering disposition recorded *after* a part cleared is swallowed:
+The disposition-override comparison in `pieceStatusFor` is strict `>`, so an engineering
+review recorded in the **same minute** as the extraction is ignored:
 
 ```
-cleared-then-Hold  → status "Cleared",       job card eng count 0
-restrip-then-Hold  → status "→ Engineering", job card eng count 1
+extraction 2026-03-01T18:00 + Hold at 18:00  → "Cleared"        ← wrong
+extraction 2026-03-01T18:00 + Hold at 18:01  → "→ Engineering"  ← right
 ```
 
-Engineering flags a cleared part for review, and the board still reads `Cleared`, the job
-card shows zero parts at engineering, and no red suggestion is raised. `Scrap` and
-`Return to vendor` already override correctly — they were moved above `cleared` in
-commit `d7090c9`. `Accepted` and the generic "has a review" branch were left below it.
-
-## Reproduce first
-
-```bash
-node audit/harness.mjs
-```
-
-Expect exactly three failures — `M3`, `M4`, `M14` — and 19 passes. **If you see any other
-failure, stop and report it; do not start fixing.** The harness is reviewer-authored and
-verified; its fixtures are correct. Do not edit it.
+Event datetimes are minute-granular (`datetime-local`, sliced to 16 characters). Pulling a
+part and dispositioning it within the same minute is ordinary on a shop floor, and the
+part then reads `Cleared` with an open review against it — the same failure round 3 fixed,
+just inside a one-minute window.
 
 ## The fix
 
-In `pieceStatusFor`, an engineering disposition dated **after the last dip ended** should
-govern the status, whatever that dip's result was. A disposition dated *before* the last
-dip must not — a part reviewed, then re-stripped and cleared, is `Cleared`.
+In `pieceStatusFor`:
 
-Suggested shape (adapt to the surrounding style):
+```js
+const engAfterDip = latestEng && lastDipEnded && latestEng.datetime > lastDipEnded;
+```
 
-- Find the latest engineering event and the last closed dip's `outDT`.
-- If the disposition is later than that `outDT`, let the disposition branches run first —
-  `Accepted`, `Scrap`, `Return to vendor`, otherwise `→ Engineering`.
-- Otherwise keep the current order, with `cleared` winning.
+becomes `>=`.
 
-Keep `Scrap` / `Return to vendor` overriding unconditionally, as they do now.
+A disposition always refers to a dip that has already happened, so `>=` cannot misfire.
+The "disposition before a later re-strip" case compares against the **last** dip's `outDT`,
+which this does not change — the existing regression test covers it and must stay green.
 
 ## Constraints
 
-- **Only `index.html` and `tests/domain.test.mjs` may change.** Nothing else.
-- Minimal edit. Do not reformat, refactor, or restructure `pieceStatusFor` beyond the
-  ordering change. A reviewer must read the diff in one screen.
-- Keep the function pure — no DOM, no storage, no `Date.now()`.
+- Only `index.html` and `tests/domain.test.mjs` may change.
+- One character in `index.html`. Nothing else in that file.
 - Do not touch `audit/harness.mjs`, `audit/NOTES.md`, or this file.
 
 ## Verify
 
-1. `node audit/harness.mjs` → **22 pass, 0 fail**.
-2. `npm test` → domain and smoke suites both green. If an existing test now fails, that
-   test encoded the old behaviour — say so in your report rather than silently editing it.
-3. Add regression tests to `tests/domain.test.mjs` covering: cleared-then-`Hold`,
-   cleared-then-`Accepted`, cleared-then-`Scrap`, and review-then-re-strip-then-cleared
-   (which must stay `Cleared`).
+1. `node audit/harness.mjs` → 22 pass, 0 fail.
+2. `npm test` → green. The four round 3 regression tests must still pass, especially
+   "disposition before re-strip does not override later Cleared".
+3. Add one regression test: extraction and `Hold` at the **identical** timestamp →
+   status `→ Engineering`.
 
 ## Report
 
-Overwrite `audit/RESULTS.tsv` — that file only:
+**Overwrite** `audit/RESULTS.tsv` — delete what is there, do not append. That file only.
 
 ```
-FIX	<what you changed, one line>
+FIX	<one line>
 HARNESS	pass=<n>	fail=<n>
 NPMTEST	pass|fail
-TESTS	<names of regression tests added>
+TESTS	<name of the regression test added>
 NOTES	<anything you had to decide, or "none">
 ```
 

@@ -1,5 +1,45 @@
 # Reviewer notes
 
+## Round 3 — verified
+
+The fix landed and is correct. Independently re-run here, not taken on report:
+
+```
+node audit/harness.mjs   → 22 pass, 0 fail
+npm test                 → 64 domain tests pass, smoke green
+```
+
+The diff is 8 lines in `pieceStatusFor`: if the latest engineering event is dated after the
+last dip's `outDT`, the `Accepted` / `→ Engineering` branches run before `cleared`.
+`Scrap` and `Return to vendor` keep their unconditional override. Four regression tests
+added, covering Hold / Accepted / Scrap after a clear, plus review-then-re-strip-then-clear
+staying `Cleared`. Job card `eng` count now reads 1 for a cleared-then-Hold part.
+
+### One edge case remains
+
+The comparison is strict `>`, so a disposition recorded in the **same minute** as the
+extraction does not override:
+
+```
+extraction 2026-03-01T18:00 + Hold at 18:00  → "Cleared"   ← wrong
+extraction 2026-03-01T18:00 + Hold at 18:01  → "→ Engineering"
+```
+
+Event datetimes are minute-granular (`datetime-local`, sliced to 16 chars), and pulling a
+part and dispositioning it in the same minute is ordinary on a shop floor. A disposition is
+always logged after the dip it refers to, so `>=` is the correct comparison and cannot
+misfire — the "disposition before a later re-strip" case compares against the *last* dip's
+`outDT`, which is unaffected.
+
+Queued as round 4 in `TASK.md`. One character.
+
+### Process note
+
+`RESULTS.tsv` came back with the fix report prepended but the entire stale round 2 body
+still below it, including `M3/M4/M14 FAIL` lines that the fix had already resolved and an
+old `TOTALS` line. Read literally it contradicted itself. Truncated to the round 3 report.
+The brief said overwrite; worth restating next round.
+
 ## Round 2 — reviewed
 
 `TOTALS pass=209 fail=61 record=57 threw=35 skipped=0`.
