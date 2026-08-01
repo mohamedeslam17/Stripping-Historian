@@ -1106,6 +1106,7 @@ let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null, drawerOpen = false;
 let lastOperator = "";   // one shift is usually one person — prefill new forms
+let drawerFocusTarget = null;   // set by renderDrawer, respected by openDrawer's generic autofocus
 
 function attentionItems(){
   const baths = deriveBaths(EVENTS, CONFIG, nowLocalDT()).filter(b => b.active && b.flags.length);
@@ -1147,8 +1148,8 @@ function render(){
 
 /* ------------------------------ log drawer ---------------------------- */
 function openDrawer(){
-  drawerOpen = true; renderDrawer();
-  setTimeout(() => { const root = $("#drawerRoot"); const f = root && root.querySelector && root.querySelector("input, select, textarea, button.typetab"); if(f && f.focus) f.focus(); }, 0);
+  drawerOpen = true; drawerFocusTarget = null; renderDrawer();
+  setTimeout(() => { const f = drawerFocusTarget || ($("#drawerRoot") && $("#drawerRoot").querySelector && $("#drawerRoot").querySelector("input, select, textarea, button.typetab")); drawerFocusTarget = null; if(f && f.focus) f.focus(); }, 0);
 }
 function draftRec(){ const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; }); return rec; }
 // Dirty = the form differs from how it was opened (prefills are the baseline).
@@ -1210,11 +1211,9 @@ function renderDrawer(){
     refreshWarn();
     if(editId == null){
       if(formType === "Load In"){
-        const serialsInput = fields.querySelector(".chipbox input");
-        if(serialsInput) setTimeout(() => serialsInput.focus(), 0);
+        drawerFocusTarget = fields.querySelector(".chipbox input");
       } else if(formType === "Extraction"){
-        const allBtn = Array.from(fields.querySelectorAll("button[type='button']")).find(btn => btn.textContent.trim() === "All");
-        if(allBtn) setTimeout(() => allBtn.focus(), 0);
+        drawerFocusTarget = Array.from(fields.querySelectorAll("button[type='button']")).find(btn => btn.textContent.trim() === "All");
       }
     }
     if(formData._orig == null) formData._orig = JSON.stringify(draftRec());   // baseline for the discard guard
@@ -1659,8 +1658,7 @@ function emptyState(){ return cel("div", { class:"empty" }, [
 function suggestionsPanel(){
   const sugs = deriveSuggestions(EVENTS, CONFIG, nowLocalDT());
   const card = cel("div", { class:"card", style:"margin-bottom:16px" });
-  card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions" + (sugs.length ? " · " + sugs.length : "")));
-  if(!sugs.length){ card.append(cel("div", { class:"flagok", style:"font-size:13px" }, "✓ All caught up — nothing needs attention.")); return card; }
+  if(!sugs.length){ card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions")); card.append(cel("div", { class:"flagok", style:"font-size:13px" }, "✓ All caught up — nothing needs attention.")); return card; }
   const lvlCls = { red:"p-red", amber:"p-amber", info:"p-blue" };
 
   // Separate bath-level and piece-level suggestions
@@ -1684,6 +1682,9 @@ function suggestionsPanel(){
   const filtered = Array.from(bathMap.values()).concat(pieceLevels);
   const rank = { red:0, amber:1, info:2 };
   filtered.sort((a, b) => rank[a.level] - rank[b.level]);
+
+  // Add heading with post-dedupe count
+  card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions" + (filtered.length ? " · " + filtered.length : "")));
 
   const displayed = filtered.slice(0, 3);
   const expandable = filtered.slice(3);

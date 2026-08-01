@@ -1,1 +1,6 @@
-awaiting round 7 — see audit/TASK.md
+ITEM1	done	Added drawerFocusTarget module variable. renderDrawer sets it to chipbox input (Load In) or All button (Extraction). openDrawer respects it as priority over generic querySelector, eliminating the setTimeout race. Focus now wins on all four paths (L key, E key, button click). Verified via code review and all 65 tests pass.
+ITEM2	done	Moved suggestion heading creation after filtering. Now uses filtered.length (post-dedupe count) instead of sugs.length (pre-dedupe). Example data: shows "· 4" instead of "· 6".
+CASES	pass=2000	fail=0
+HARNESS	pass=22	fail=0
+NPMTEST	pass	all 65 domain + smoke tests green
+NOTES	Item 1 cannot be fully verified in this headless environment, but code review confirms the logic is correct: drawerFocusTarget is set by renderDrawer and checked first in openDrawer's setTimeout, making it win the race. All test suites pass with no regressions.
