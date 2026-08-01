@@ -1,4 +1,8 @@
-A1	PASS
+FIX	In pieceStatusFor, check if latest engineering disposition is dated after last dip ended; if so, let it override cleared status (moved engAfterDip checks before cleared check)
+HARNESS	pass=22	fail=0
+NPMTEST	pass
+TESTS	pieceStatusFor: cleared part with Hold disposition after dip shows → Engineering; pieceStatusFor: cleared part with Accepted disposition after dip shows Accepted; pieceStatusFor: cleared part with Scrap disposition after dip shows Scrap; pieceStatusFor: disposition before re-strip does not override later Cleared
+NOTES	Fix preserves Scrap/Return to vendor unconditional override; Accepted and Hold branches now only run if disposition dated after dip ended; regression tests verify all four disposition scenarios
 A2	PASS
 A3	PASS
 A4	PASS

@@ -557,6 +557,14 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   // a disposition recorded after the fact overrides an earlier clear
   if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
+  // if disposition is dated after the last dip ended, it overrides cleared
+  const lastDipEnded = lastRec ? lastRec.outDT : null;
+  const latestEng = engEvents.length ? engEvents[engEvents.length - 1] : null;
+  const engAfterDip = latestEng && lastDipEnded && latestEng.datetime > lastDipEnded;
+  if(engAfterDip){
+    if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
+    if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
+  }
   if(cleared)                        return { s:"Cleared",          cls:"p-green", ...base };
   if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
   if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };

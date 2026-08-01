@@ -727,3 +727,42 @@ test("KPI wax counts failed areas across both the wax:[] and legacy shapes", () 
   assert.equal(rows.A.wax, 2);
   assert.equal(rows.B.wax, 1);
 });
+
+test("pieceStatusFor: cleared part with Hold disposition after dip shows → Engineering", () => {
+  const events = [
+    load("2026-03-01T08:00", "B1", ["S1"]),
+    extract("2026-03-01T18:00", "B1", [{ serial:"S1", result:"Cleared" }]),
+    ev({ datetime:"2026-03-02T08:00", type:"Engineering Review", serial:"S1", status:"Hold" })
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "→ Engineering");
+  assert.equal(D.deriveJobCards(events, CONFIG, NOW)[0].eng, 1);
+});
+
+test("pieceStatusFor: cleared part with Accepted disposition after dip shows Accepted", () => {
+  const events = [
+    load("2026-03-01T08:00", "B1", ["S1"]),
+    extract("2026-03-01T18:00", "B1", [{ serial:"S1", result:"Cleared" }]),
+    ev({ datetime:"2026-03-02T08:00", type:"Engineering Review", serial:"S1", status:"Accepted" })
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Accepted");
+});
+
+test("pieceStatusFor: cleared part with Scrap disposition after dip shows Scrap", () => {
+  const events = [
+    load("2026-03-01T08:00", "B1", ["S1"]),
+    extract("2026-03-01T18:00", "B1", [{ serial:"S1", result:"Cleared" }]),
+    ev({ datetime:"2026-03-02T08:00", type:"Engineering Review", serial:"S1", status:"Scrap" })
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Scrap");
+});
+
+test("pieceStatusFor: disposition before re-strip does not override later Cleared", () => {
+  const events = [
+    load("2026-03-01T08:00", "B1", ["S1"]),
+    extract("2026-03-01T12:00", "B1", [{ serial:"S1", result:"Re-strip" }]),
+    ev({ datetime:"2026-03-01T12:30", type:"Engineering Review", serial:"S1", status:"Hold" }),
+    load("2026-03-02T08:00", "B1", ["S1"]),
+    extract("2026-03-02T12:00", "B1", [{ serial:"S1", result:"Cleared" }])
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Cleared");
+});
