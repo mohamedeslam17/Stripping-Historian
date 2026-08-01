@@ -1,5 +1,36 @@
 # Reviewer notes
 
+## Round 6 — operator UX review (drove the real app)
+
+Ran `index.html` in Chromium with the example data at 1440×900 and 1024×768, walked add /
+remove / re-mask, checked shortcuts and focus. Findings written up as six ordered items in
+`TASK.md`. Evidence:
+
+| Finding | Measured |
+|---|---|
+| Tanks below the fold | tanks start at **y≈793px**; at 1024×768 the KPI tiles wrap to two rows and no tank is visible on arrival |
+| Wrong focus target | `document.activeElement` on opening Add parts *and* Remove parts is the **date input**, which is already prefilled with now |
+| Form runs backwards | J/C + Component render above Serials but are auto-filled from it (`7261-01` → `7261` / `GT26 R2011 V3`, verified) |
+| Disposed bath dead end | card offers Add parts / Chem / Top up — all invalid — and **no Fill**; the warning says "fill it before loading" with no button to do it |
+| Duplicate reporting | bath 106-107 age appears in the banner, on the card, and twice in suggestions; 4 baths → 6 suggestion rows |
+| Extraction pre-selects | every row shows **Cleared** active before the row is ticked |
+
+**Correction to my own first pass:** I initially flagged "operator name retyped on every
+event". Wrong — `lastOperator` (line 1108) already prefills new forms, and it was only
+empty in my session because loading example data is a bulk import, not a save. The real
+residual is that it is in-memory only and resets on reload; demoted to a minor item.
+
+Working well and deliberately left alone: the Remove parts checklist (live contents,
+per-part result, All/None — two clicks to pull a whole bath), waiting-area chips, serial
+autofill, `L`/`E`/`N`/`/` shortcuts, and the Pieces filter chips with inline actions.
+
+## Round 5 — returned clean
+
+Haiku's run (commit `88e944d`): `SUITE pass=2000 fail=0 threw=0`, `HARNESS 22/0`,
+`NPMTEST pass`, `CLEAN`. Matches my own run of the same suite exactly, and no DISPUTE
+lines — so the 2000 cases agree with the code on this branch. First round of this whole
+exercise to come back with nothing to triage.
+
 ## Round 4 — done (reviewer)
 
 Made the one-character fix myself: `engAfterDip` now compares `>=`, so a disposition logged
