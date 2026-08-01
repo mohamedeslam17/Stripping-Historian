@@ -26,7 +26,8 @@ function elNode(tag){
     remove(){}, click(){}, focus(){},
     set innerHTML(v){ this._html = v; if(v === "") this.children = []; },
     get innerHTML(){ return this._html; },
-    querySelector(){ return null; }
+    querySelector(){ return null; },
+    querySelectorAll(){ return []; }
   };
   return node;
 }

@@ -1208,6 +1208,15 @@ function renderDrawer(){
     body.append(warnBox);
     foot.append(saveBtn, cel("button", { class:"btn", onclick:closeDrawer }, "Cancel"), hint);
     refreshWarn();
+    if(editId == null){
+      if(formType === "Load In"){
+        const serialsInput = fields.querySelector(".chipbox input");
+        if(serialsInput) setTimeout(() => serialsInput.focus(), 0);
+      } else if(formType === "Extraction"){
+        const allBtn = Array.from(fields.querySelectorAll("button[type='button']")).find(btn => btn.textContent.trim() === "All");
+        if(allBtn) setTimeout(() => allBtn.focus(), 0);
+      }
+    }
     if(formData._orig == null) formData._orig = JSON.stringify(draftRec());   // baseline for the discard guard
     panel.addEventListener("keydown", e => { if((e.metaKey || e.ctrlKey) && e.key === "Enter") saveForm(); });
   }
@@ -1335,11 +1344,7 @@ function buildLoadFields(card, refreshWarn){
   bsel.value = formData.bath;
   bsel.addEventListener("input", () => { formData.bath = bsel.value; refreshWaiting(); refreshWarn(); });
   bathField.append(bsel);
-  const two = cel("div", { class:"twocol" });
-  two.append(bathField);
-  two.append(jcField, compField);
-  two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
-  card.append(two);
+  card.append(bathField);
   formData.serials = formData.serials || [];
   const count = cel("span", { class:"muted", style:"font-weight:400" });
   const lbl = cel("label", { class:"f", style:"display:flex;justify-content:space-between" }, [cel("span", {}, "Serials"), count]);
@@ -1355,6 +1360,10 @@ function buildLoadFields(card, refreshWarn){
   wrap.append(chipBox);
   wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Type, or paste a whole column from Excel (or a comma/space list) — each becomes a chip. Ranges like 7261-01..06 expand; known serials fill in J/C & component."));
   card.append(wrap); setCount(); autofill();
+  const two = cel("div", { class:"twocol" });
+  two.append(jcField, compField);
+  two.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
+  card.append(two);
 
   // Waiting area — parts not in a bath (came out without re-entry, or parked on
   // receipt). Select one (or add all) to pull it into this bath. Hidden when the
@@ -1574,7 +1583,7 @@ function buildExtractFields(card, refreshWarn){
       // Reasons for removing. "Re-mask" pre-selects the part's masked areas (refine
       // below) and routes it to "Needs re-mask".
       const seg = cel("div", { class:"seg" });
-      ["Cleared", "Re-strip", "Re-mask", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => {
+      ["Cleared", "Re-strip", "Re-mask", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:(st.checked && st.result === o) ? "on" : "", disabled:!st.checked, onclick:() => {
         st.result = o; st.checked = true;
         if(o === "Re-mask" && !st.wax.length) st.wax = partAreas.slice();
         if(o === "Cleared" || o === "Hold") st.wax = [];
@@ -1653,12 +1662,54 @@ function suggestionsPanel(){
   card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions" + (sugs.length ? " · " + sugs.length : "")));
   if(!sugs.length){ card.append(cel("div", { class:"flagok", style:"font-size:13px" }, "✓ All caught up — nothing needs attention.")); return card; }
   const lvlCls = { red:"p-red", amber:"p-amber", info:"p-blue" };
-  sugs.slice(0, 8).forEach((s, i) => card.append(cel("div", { style:"display:flex;align-items:center;gap:10px;padding:9px 0" + (i ? ";border-top:1px solid var(--line-2)" : "") }, [
+
+  // Separate bath-level and piece-level suggestions
+  const bathMap = new Map();
+  const pieceLevels = [];
+  sugs.forEach(s => {
+    const isBathLevel = s.title.startsWith("Bath ");
+    if(isBathLevel && s.action?.bath){
+      const bath = s.action.bath;
+      const existing = bathMap.get(bath);
+      const rank = { red:0, amber:1, info:2 };
+      if(!existing || rank[s.level] < rank[existing.level]){
+        bathMap.set(bath, s);
+      }
+    } else {
+      pieceLevels.push(s);
+    }
+  });
+
+  // Combine filtered suggestions (one per bath + all piece-level)
+  const filtered = Array.from(bathMap.values()).concat(pieceLevels);
+  const rank = { red:0, amber:1, info:2 };
+  filtered.sort((a, b) => rank[a.level] - rank[b.level]);
+
+  const displayed = filtered.slice(0, 3);
+  const expandable = filtered.slice(3);
+  let expanded = false;
+
+  displayed.forEach((s, i) => card.append(cel("div", { style:"display:flex;align-items:center;gap:10px;padding:9px 0" + (i ? ";border-top:1px solid var(--line-2)" : "") }, [
     cel("span", { class:"pill nodot " + (lvlCls[s.level] || "p-grey"), style:"min-width:26px;justify-content:center" }, s.icon || "•"),
     cel("div", { style:"flex:1;min-width:0" }, [cel("div", { style:"font-weight:550;font-size:13px" }, s.title), s.detail ? cel("div", { class:"muted", style:"font-size:12px" }, s.detail) : null]),
     cel("button", { class:"btn sm primary", onclick:() => startAction(s.action) }, "Do it")
   ])));
-  if(sugs.length > 8) card.append(cel("div", { class:"muted", style:"font-size:12px;padding-top:8px" }, "+" + (sugs.length - 8) + " more"));
+
+  if(expandable.length){
+    const expandBtn = cel("button", { class:"btn sm", style:"margin-top:8px;width:100%", onclick:() => {
+      expanded = !expanded;
+      expandBtn.textContent = expanded ? "show less (" + expandable.length + ")" : "show all (" + expandable.length + ")";
+      expandableRows.style.display = expanded ? "block" : "none";
+    } }, "show all (" + expandable.length + ")");
+    card.append(expandBtn);
+    const expandableRows = cel("div", { style:"display:none" });
+    expandable.forEach((s, i) => expandableRows.append(cel("div", { style:"display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line-2)" }, [
+      cel("span", { class:"pill nodot " + (lvlCls[s.level] || "p-grey"), style:"min-width:26px;justify-content:center" }, s.icon || "•"),
+      cel("div", { style:"flex:1;min-width:0" }, [cel("div", { style:"font-weight:550;font-size:13px" }, s.title), s.detail ? cel("div", { class:"muted", style:"font-size:12px" }, s.detail) : null]),
+      cel("button", { class:"btn sm primary", onclick:() => startAction(s.action) }, "Do it")
+    ])));
+    card.append(expandableRows);
+  }
   return card;
 }
 /* --- Event log --- */
@@ -1922,24 +1973,23 @@ function tankCard(s){
   c.append(tank);
   if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
   const acts = cel("div", { class:"tank-acts", onclick:e => e.stopPropagation() });
-  acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Add parts"));
-  if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Remove parts"));
-  acts.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"chem", bath:s.bath }) }, "Chem"));
-  acts.append(cel("button", { class:"btn sm", onclick:() => startTopUp(s.bath) }, "Top up"));
-  if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startMove(s.bath) }, "Move"));
-  if(s.active) acts.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"dispose", bath:s.bath }) }, "Dispose"));
+  if(!s.active && s.disposal){
+    acts.append(cel("button", { class:"btn sm primary", onclick:() => startCompleteFill(s.bath) }, "Fill — new charge"));
+  } else {
+    acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Add parts"));
+    if(s.contents.length) acts.append(cel("button", { class:"btn sm primary", onclick:() => startExtraction(s.bath) }, "Remove parts"));
+    acts.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"chem", bath:s.bath }) }, "Chem"));
+    acts.append(cel("button", { class:"btn sm", onclick:() => startTopUp(s.bath) }, "Top up"));
+    if(s.contents.length) acts.append(cel("button", { class:"btn sm", onclick:() => startMove(s.bath) }, "Move"));
+    if(s.active) acts.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"dispose", bath:s.bath }) }, "Dispose"));
+  }
   c.append(acts);
   return c;
 }
 function vDash(m){
   const now = nowLocalDT();
   const k = deriveKpis(EVENTS, CONFIG, now);
-  const kp = cel("div", { class:"kpis" });
-  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpyBase ? k.fpy + "%" : "—", k.fpyBase && k.fpy < 70 ? "warn" : (k.fpyBase ? "good" : "")], ["Cleared", k.cleared, ""]]
-    .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
-  m.append(kp);
-  if(EVENTS.length) m.append(suggestionsPanel());
-  // Safety net: open parts whose bath isn't one of the configured tanks (or that
+  // Safety net: open parts whose bath isn’t one of the configured tanks (or that
   // were saved with no bath) would otherwise be invisible — surface them so they
   // can be recovered. Click one to edit its load and assign a bath.
   if(EVENTS.length){
@@ -1947,14 +1997,13 @@ function vDash(m){
     const orphan = bathContents(EVENTS, now, "").filter(r => !known.includes(r.bath));
     if(orphan.length){
       const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#f3c4c0" });
-      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don't show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
+      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don’t show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
       const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
       orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath or the waiting area", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
       oc.append(chips);
       m.append(oc);
     }
   }
-  if(EVENTS.length) m.append(parkedPanel());
   const baths = deriveBaths(EVENTS, CONFIG, now);
   if(!baths.length){
     m.append(cel("div", { class:"empty" }, [
@@ -1963,10 +2012,16 @@ function vDash(m){
     ]));
     return;
   }
-  m.append(cel("h3", { class:"sub" }, "Baths — what's inside right now"));
+  m.append(cel("h3", { class:"sub" }, "Baths — what’s inside right now"));
   const grid = cel("div", { class:"tankgrid" });
   baths.forEach(s => grid.append(tankCard(s)));
   m.append(grid);
+  if(EVENTS.length) m.append(parkedPanel());
+  if(EVENTS.length) m.append(suggestionsPanel());
+  const kp = cel("div", { class:"kpis" });
+  [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpyBase ? k.fpy + "%" : "—", k.fpyBase && k.fpy < 70 ? "warn" : (k.fpyBase ? "good" : "")], ["Cleared", k.cleared, ""]]
+    .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
+  m.append(kp);
 
   const jr = deriveJobCards(EVENTS, CONFIG, now);
   if(jr.length){
