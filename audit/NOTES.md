@@ -1,5 +1,51 @@
 # Reviewer notes
 
+## Round 4 — done (reviewer)
+
+Made the one-character fix myself: `engAfterDip` now compares `>=`, so a disposition logged
+in the same minute as the extraction governs. Comment added explaining why. One regression
+test added. Verified: harness 22/0, `npm test` 65 pass, smoke green.
+
+```
+extraction 18:00 + Hold at 18:00  → "→ Engineering"   (was "Cleared")
+extraction 18:00 + Hold at 18:01  → "→ Engineering"
+```
+
+## Round 5 — 2000-case suite built
+
+`audit/cases.mjs` — 2000 deterministic cases (seeded PRNG, so case N is the same input on
+every run). Expectations come from independent models, never from the app: an arithmetic
+model for `parseSerials`, a separate simulator for dip pairing, contract rules and
+metamorphic relations for status, and config-derived bounds for bath flags.
+
+| Family | Cases | Basis |
+|---|---|---|
+| A | 250 | `parseSerials`, expected list computed arithmetically |
+| B | 450 | dip pairing vs. an independent simulator |
+| C | 400 | status contract rules over the full cartesian product + metamorphic relations |
+| D | 300 | bath flags, values on every boundary |
+| E | 300 | warning contract rules |
+| F | 300 | whole-stream invariants |
+
+**Currently 2000 pass, 0 fail, 0 threw.**
+
+A suite that passes everything is worthless unless it is proven sensitive, so I
+mutation-tested it. Three independent one-character mutations to `index.html`:
+
+| Mutation | Result |
+|---|---|
+| `engAfterDip` `>=` → `>` (revert round 4) | 12 fails, all in C |
+| capacity flag `>` → `>=` | 17 fails, all in D |
+| iron flag `>` → `>=` | 60 fails, all in D |
+
+Each localized to the right family; reverting restored 2000/0. A clean run means something.
+
+Two generator bugs of my own, caught by running it: key ordering in the family-B comparison
+produced 34 phantom failures, and family C's cartesian product yields 162 combinations, not
+200, so the suite was 1962 cases until the cycle dimension was widened. Both fixed before
+committing — which is the argument for committing a runnable generator rather than a
+document describing one.
+
 ## Round 3 — verified
 
 The fix landed and is correct. Independently re-run here, not taken on report:

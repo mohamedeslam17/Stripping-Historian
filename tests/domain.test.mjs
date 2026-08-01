@@ -766,3 +766,12 @@ test("pieceStatusFor: disposition before re-strip does not override later Cleare
   ];
   assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Cleared");
 });
+
+test("pieceStatusFor: a disposition in the same minute as the extraction still governs", () => {
+  const events = [
+    load("2026-03-01T08:00", "B1", ["S1"]),
+    extract("2026-03-01T18:00", "B1", [{ serial:"S1", result:"Cleared" }]),
+    ev({ datetime:"2026-03-01T18:00", type:"Engineering Review", serial:"S1", status:"Hold" })
+  ];
+  assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "→ Engineering");
+});

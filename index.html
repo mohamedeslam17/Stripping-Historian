@@ -560,7 +560,9 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   // if disposition is dated after the last dip ended, it overrides cleared
   const lastDipEnded = lastRec ? lastRec.outDT : null;
   const latestEng = engEvents.length ? engEvents[engEvents.length - 1] : null;
-  const engAfterDip = latestEng && lastDipEnded && latestEng.datetime > lastDipEnded;
+  // >= not >: datetimes are minute-granular, and a part is often pulled and
+  // dispositioned within the same minute — that review still governs.
+  const engAfterDip = latestEng && lastDipEnded && latestEng.datetime >= lastDipEnded;
   if(engAfterDip){
     if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
     if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };

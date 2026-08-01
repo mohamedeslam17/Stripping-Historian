@@ -1,61 +1,55 @@
-# TASK — Round 4: one-character fix
+# TASK — Round 5: run the 2000-case suite and report
 
-Round 3 is verified — harness 22/0, `npm test` green, the fix is correct. See
-`audit/NOTES.md`. One edge case remains.
+Round 4 is done (the reviewer made the one-character fix; harness 22/0, `npm test` 65 green).
 
-## The defect
+`audit/cases.mjs` generates and runs **2000 cases**. It is reviewer-authored and currently
+passes 2000/0 on this branch. Your job is to run it, and report — **not** to fix.
 
-The disposition-override comparison in `pieceStatusFor` is strict `>`, so an engineering
-review recorded in the **same minute** as the extraction is ignored:
+## Run
 
-```
-extraction 2026-03-01T18:00 + Hold at 18:00  → "Cleared"        ← wrong
-extraction 2026-03-01T18:00 + Hold at 18:01  → "→ Engineering"  ← right
-```
-
-Event datetimes are minute-granular (`datetime-local`, sliced to 16 characters). Pulling a
-part and dispositioning it within the same minute is ordinary on a shop floor, and the
-part then reads `Cleared` with an open review against it — the same failure round 3 fixed,
-just inside a one-minute window.
-
-## The fix
-
-In `pieceStatusFor`:
-
-```js
-const engAfterDip = latestEng && lastDipEnded && latestEng.datetime > lastDipEnded;
+```bash
+node audit/cases.mjs            # all 2000, TSV to stdout
+node audit/cases.mjs --fails    # only the non-PASS lines
 ```
 
-becomes `>=`.
+Deterministic: case N is the same input on every run and every machine, so a change in the
+output is a real change in behaviour, never noise.
 
-A disposition always refers to a dip that has already happened, so `>=` cannot misfire.
-The "disposition before a later re-strip" case compares against the **last** dip's `outDT`,
-which this does not change — the existing regression test covers it and must stay green.
+## What it covers
 
-## Constraints
+| Family | Cases | How the expectation is derived |
+|---|---|---|
+| A | 250 | `parseSerials` — expected list computed arithmetically from prefix/width/range |
+| B | 450 | dip pairing — expected open-set, per-serial cycles and bath occupancy from a **separate simulator**, not from the app |
+| C | 400 | piece status — contract rules over the full cartesian product of result × disposition × cycles × timing, plus metamorphic relations (appending `Scrap` always yields `Scrap`; shuffling input order must not change the result) |
+| D | 300 | bath flags — expected flag count computed from the config bounds, with values sitting **on** every boundary (`fePpm` 99/100/101, `hclPct` 15.9/16/22/22.1, temp ±tolerance, age 29/30/31, capacity 0–16) |
+| E | 300 | `eventWarnings` — "this state must warn at this level" contract rules |
+| F | 300 | whole-stream invariants that must hold for **any** event stream: `kpis.inBath` equals open dips, every status is a known status, hours never negative or NaN, derivation independent of array identity (memo must not leak), every suggestion level valid, bath contents account for every open dip |
 
-- Only `index.html` and `tests/domain.test.mjs` may change.
-- One character in `index.html`. Nothing else in that file.
-- Do not touch `audit/harness.mjs`, `audit/NOTES.md`, or this file.
-
-## Verify
-
-1. `node audit/harness.mjs` → 22 pass, 0 fail.
-2. `npm test` → green. The four round 3 regression tests must still pass, especially
-   "disposition before re-strip does not override later Cleared".
-3. Add one regression test: extraction and `Hold` at the **identical** timestamp →
-   status `→ Engineering`.
+The suite is mutation-tested. Three separate one-character mutations to `index.html` each
+produced distinct localized failures (12, 17 and 60), and reverting restored 2000/0 — so a
+clean run is meaningful, not vacuous.
 
 ## Report
 
-**Overwrite** `audit/RESULTS.tsv` — delete what is there, do not append. That file only.
+**Overwrite** `audit/RESULTS.tsv` — delete what is there first, do not append. That file only.
 
 ```
-FIX	<one line>
+SUITE	pass=<n>	fail=<n>	threw=<n>	total=<n>
 HARNESS	pass=<n>	fail=<n>
 NPMTEST	pass|fail
-TESTS	<name of the regression test added>
-NOTES	<anything you had to decide, or "none">
 ```
+
+Then every non-PASS line from `node audit/cases.mjs --fails`, verbatim, one per line.
+If there are none, write `CLEAN` on its own line.
+
+## Rules
+
+- **Read-only.** Do not edit `index.html`, `audit/cases.mjs`, `audit/harness.mjs`,
+  `audit/NOTES.md`, or this file. Do not fix anything you find.
+- Do not edit the generator to make a case pass. If you believe a case's expectation is
+  wrong, report it as a line `DISPUTE <id> <one-line reason>` and leave the code alone.
+- Report the totals the tool prints. Do not recount by hand, summarise, or round.
+- If the suite throws on load, report the error verbatim and stop — do not repair it.
 
 Then commit and push to `claude/cloudflare-pages-hosting-tajgyw`.
