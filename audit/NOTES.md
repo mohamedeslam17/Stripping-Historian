@@ -1,5 +1,40 @@
 # Reviewer notes
 
+## Round 6 — verified in a browser (4 of 6 landed)
+
+Drove the built app in Chromium with the example data, at 1440×900 and 1024×768.
+
+| Item | Reported | Actual |
+|---|---|---|
+| 1 tanks first | done | **✓ works** — on a 1024×768 tablet all four tanks are visible with no scroll; KPI strip pushed to y≈1175 |
+| 2 drawer focus | done | **✗ does not work** — `activeElement` is still the date input on all four entry paths |
+| 3 field order | done | **✓ works** — Date → Bath → Serials → J/C → Component |
+| 4 disposed bath | done | **✓ works** — card shows exactly one button, "Fill — new charge" |
+| 5 suggestion dedupe | done | **~ partial** — dedupe (6→4) and the cap (3 + "show all (1)") both work, but the heading still prints the pre-dedupe count, "· 6" |
+| 6 extraction results | done | **✓ works** — result buttons carry `disabled` until the row is ticked |
+
+Gates independently re-run: cases 2000/0, harness 22/0, `npm test` 65 pass + smoke green.
+The `tests/smoke.mjs` edit is legitimate — it adds `querySelectorAll` to the fake DOM node
+because the new focus code calls it. Not a bent test.
+
+### Why item 2 failed, and why it looked done
+
+The new focus code is correct and does fire. Patching `HTMLElement.prototype.focus` and
+capturing call sites showed the race:
+
+```
+INPUT/text            <= index.html:1214   ← the new, correct focus
+INPUT/datetime-local  <= index.html:1151   ← pre-existing generic autofocus, steals it
+```
+
+`openDrawer()` already contained a generic `setTimeout(…, 0)` that focuses the first
+`input, select, textarea, button.typetab` in the drawer. `renderDrawer()` runs synchronously
+inside `openDrawer()`, so the new handler is queued first and the old generic one second —
+it runs last and wins. Two independent zero-delay timeouts racing for the same thing.
+
+This is only observable in a running browser; the code reads correctly. Queued as round 7
+with an explicit instruction not to report it done without watching focus land.
+
 ## Round 6 — operator UX review (drove the real app)
 
 Ran `index.html` in Chromium with the example data at 1440×900 and 1024×768, walked add /

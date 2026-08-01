@@ -1,10 +1,1 @@
-ITEM1	done	Reordered vDash panels: orphan → tanks → waiting → suggestions → KPIs → job cards. Tanks now visible without scrolling on 1024×768 tablet.
-ITEM2	done	Added focus logic to renderDrawer: Load In focuses serials chip input, Extraction focuses All button. Only when opening new forms (editId == null).
-ITEM3	done	Reordered Load In fields: Bath → Serials → J/C → Component. Serials now appear before auto-filled fields, reducing operator confusion.
-ITEM4	done	Replaced buttons for disposed baths with single "Fill — new charge" button that opens Bath Fill drawer prefilled with that bath.
-ITEM5	done	Collapsed bath-level suggestions to at most one per bath (red > amber > info ranking). Capped rendered list at 3 rows with "show all (N)" expander.
-ITEM6	done	Disabled result buttons in extraction rows until checkbox is ticked. On tick, Cleared shows as default. No change to what gets saved.
-CASES	pass=2000	fail=0
-HARNESS	pass=22	fail=0
-NPMTEST	pass	all 65 domain + smoke tests green
-NOTES	Item 5 filtering happens in suggestionsPanel rendering logic, not in deriveSuggestions (keeping DOMAIN pure). Items 1-4, 6 are visual/UX only.
+awaiting round 7 — see audit/TASK.md
