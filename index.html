@@ -242,7 +242,7 @@
 <body>
 <div id="app">
   <aside id="sidebar">
-    <div class="brand"><div class="logo">S</div><div><b>Stripping&nbsp;Historian</b><small>offline · on this PC</small></div></div>
+    <div class="brand"><div class="logo">S</div><div><b>Stripping&nbsp;Historian</b><small id="brandMode">offline · on this PC</small></div></div>
     <nav id="nav"></nav>
     <div class="side-sp"></div>
     <button class="side-log" id="logBtn">＋&nbsp; Log event&nbsp; <span class="kbd">N</span></button>
@@ -251,6 +251,7 @@
       <button id="exportJson" title="Download a full JSON backup">Backup</button>
       <button id="importBtn" title="Restore from a backup">Import</button>
       <button id="exportCsv" title="Export the dip log as CSV">CSV</button>
+      <button id="signOutBtn" title="Sign out of the shared log" style="display:none">Sign out</button>
     </div>
     <input type="file" id="importFile" accept="application/json" style="display:none">
   </aside>
@@ -282,8 +283,26 @@
    still in each bath. Every view is a PURE function of the event stream.
    ========================================================================= */
 
-const DB_NAME = "strip_historian_db", DB_VER = 1;
+const DB_NAME = "strip_historian_db", DB_VER = 2;
 let db = null, EVENTS = [], CONFIG = {};
+
+/* The app runs in two modes, decided by how it was opened.
+ *
+ *  - Offline (file://): everything lives in IndexedDB on this PC, exactly as it
+ *    always has. No server, no login, no sharing. This is still a supported way
+ *    to run it and every domain test exercises this path.
+ *  - Shared (http/https): a Cloudflare D1 database behind /api/sync is the
+ *    source of truth, so every operator and the dashboard see one log.
+ *    IndexedDB stays on as a local mirror plus an outbox, so a dropped network
+ *    never blocks anyone standing at a tank.
+ */
+const ONLINE = typeof location !== "undefined" && /^https?:$/.test(location.protocol);
+let ROLE = null;             // "admin" | "operator" | null
+let SYNC_STATE = "idle";     // idle | syncing | offline | error
+let SYNC_NOTE = "";
+
+// Offline mode has no roles, so the single local user can do everything.
+function isAdmin(){ return !ONLINE || ROLE === "admin"; }
 
 const DEFAULT_CONFIG = {
   tempSet: 90, tempTol: 3,
@@ -944,7 +963,9 @@ function openDB(){ return new Promise((res, rej) => {
   const r = indexedDB.open(DB_NAME, DB_VER);
   r.onupgradeneeded = e => { const d = e.target.result;
     if(!d.objectStoreNames.contains("events")) d.createObjectStore("events", { keyPath:"id", autoIncrement:true });
-    if(!d.objectStoreNames.contains("config")) d.createObjectStore("config", { keyPath:"k" }); };
+    if(!d.objectStoreNames.contains("config")) d.createObjectStore("config", { keyPath:"k" });
+    // v2: work recorded while the network was down, waiting to reach the server.
+    if(!d.objectStoreNames.contains("outbox")) d.createObjectStore("outbox", { keyPath:"seq", autoIncrement:true }); };
   r.onsuccess = e => { db = e.target.result; res(); };
   r.onerror = e => rej(e.target.error);
 }); }
@@ -971,14 +992,124 @@ function sanitizeConfig(raw){
   });
   return out;
 }
-async function saveConfig(){ for(const k of Object.keys(CONFIG)) await putRec("config", { k, v:CONFIG[k] }); }
+async function saveConfig(){
+  for(const k of Object.keys(CONFIG)){
+    await putRec("config", { k, v:CONFIG[k] });
+    await queueOp({ op:"config", k, v:CONFIG[k] });
+  }
+}
 
 function nowLocalDT(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
 function todayISODate(){ return new Date().toISOString().slice(0,10); }
 
-async function addEvent(obj){ obj.datetime = obj.datetime || nowLocalDT(); obj.eventId = nextEventId(obj.datetime, EVENTS); const id = await putRec("events", obj); obj.id = id; await loadAll(); }
-async function updateEvent(obj){ await putRec("events", obj); await loadAll(); }
-async function removeEvent(id){ await delRec("events", id); await loadAll(); }
+/* --------------------------- server sync ------------------------------ */
+/* Every one of these is a no-op offline, so the local-only mode keeps the
+ * exact behaviour it had before there was a server. */
+
+function newUid(){
+  if(typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  return "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+// The local mirror carries an auto-increment `id` that is meaningless to anyone
+// else; `uid` is what identifies an event across machines.
+function forServer(obj){ const o = Object.assign({}, obj); delete o.id; return o; }
+
+function cachedRole(){ try { return localStorage.getItem("sh_role"); } catch(e){ return null; } }
+function cacheRole(r){ try { r ? localStorage.setItem("sh_role", r) : localStorage.removeItem("sh_role"); } catch(e){ /* private mode */ } }
+
+async function api(path, opts){
+  const r = await fetch(path, Object.assign({
+    headers: { "Content-Type":"application/json" }, credentials: "same-origin"
+  }, opts || {}));
+  let body = null;
+  try { body = await r.json(); } catch(e){ /* non-JSON error page */ }
+  if(!r.ok){
+    const err = new Error((body && body.error) || ("Request failed (" + r.status + ")"));
+    err.status = r.status;
+    throw err;
+  }
+  return body;
+}
+
+// Replace the local mirror with exactly what the server holds.
+async function adoptServerState(state){
+  if(state.role){ ROLE = state.role; cacheRole(ROLE); }
+  await clearStore("events");
+  for(const ev of (state.events || [])) await putRec("events", forServer(ev));
+  await clearStore("config");
+  const cfg = sanitizeConfig(state.config || {});
+  for(const k of Object.keys(cfg)) await putRec("config", { k, v:cfg[k] });
+  await loadAll();
+}
+
+let syncTimer = null;
+async function queueOp(op){
+  if(!ONLINE) return;
+  await putRec("outbox", { op });
+  // Debounced: saving settings writes a dozen keys in a loop, and a whole
+  // import writes hundreds of events. Those should be one upload, not hundreds.
+  if(syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 250);
+}
+
+let syncing = false;
+async function syncNow(){
+  if(!ONLINE || !ROLE || syncing) return;
+  syncing = true;
+  SYNC_STATE = "syncing"; paintSync();
+  try {
+    const queued = (await getAll("outbox")).sort((a, b) => a.seq - b.seq);
+    const state = queued.length
+      ? await api("/api/sync", { method:"POST", body: JSON.stringify({ ops: queued.map(q => q.op) }) })
+      : await api("/api/sync");
+    if(queued.length) await clearStore("outbox");
+    await adoptServerState(state);
+    SYNC_STATE = "idle"; SYNC_NOTE = "";
+  } catch(err){
+    if(err.status === 401){
+      // The session expired. Keep the queued work — it will go up after login.
+      ROLE = null; cacheRole(null); syncing = false; SYNC_STATE = "error";
+      render(); return;
+    }
+    if(err.status >= 400 && err.status < 500){
+      // The server refused these ops and always will (usually an operator
+      // attempting an admin-only change). Retrying forever would wedge the
+      // queue and silently block every later event, so drop them and say so.
+      await clearStore("outbox");
+      SYNC_STATE = "error"; SYNC_NOTE = err.message;
+      try { await adoptServerState(await api("/api/sync")); } catch(e){ /* stay on the mirror */ }
+      flash("Not saved to the server: " + err.message);
+    } else {
+      SYNC_STATE = "offline";
+      SYNC_NOTE = "Working offline — your entries are saved here and will upload when the network returns.";
+    }
+  }
+  syncing = false;
+  paintSync();
+  if(typeof render === "function" && SYNC_STATE !== "syncing") render();
+}
+
+async function addEvent(obj){
+  obj.datetime = obj.datetime || nowLocalDT();
+  obj.eventId = nextEventId(obj.datetime, EVENTS);
+  obj.uid = obj.uid || newUid();
+  const id = await putRec("events", obj); obj.id = id;
+  await loadAll();
+  await queueOp({ op:"put", uid:obj.uid, event:forServer(obj) });
+}
+async function updateEvent(obj){
+  obj.uid = obj.uid || newUid();
+  await putRec("events", obj);
+  await loadAll();
+  await queueOp({ op:"put", uid:obj.uid, event:forServer(obj) });
+}
+async function removeEvent(id){
+  const gone = EVENTS.find(e => e.id === id);
+  await delRec("events", id);
+  await loadAll();
+  if(gone && gone.uid) await queueOp({ op:"del", uid:gone.uid });
+}
 
 /* ---------------------------- DOM helpers ----------------------------- */
 const $ = (s, el = document) => el.querySelector(s);
@@ -1749,7 +1880,7 @@ function vEventLog(m){
     tr.append(tcell(e.operator));
     tr.append(cel("td", { style:"white-space:nowrap" }, [
       cel("button", { class:"btn sm", title:"Edit", onclick:() => startEdit(e) }, "✎"),
-      cel("button", { class:"btn sm danger", title:"Delete", style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; await putRec("events", prior); await loadAll(); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "✕")
+      cel("button", { class:"btn sm danger", title:"Delete", style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; prior.uid = prior.uid || newUid(); prior.id = await putRec("events", prior); await loadAll(); await queueOp({ op:"put", uid:prior.uid, event:forServer(prior) }); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "✕")
     ]));
     tb.append(tr);
   });
@@ -2062,9 +2193,11 @@ function vSettings(m){
   c3.append(cel("h2", { class:"sec" }, "Data"));
   c3.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap" }, [
     cel("button", { class:"btn", onclick:loadExample }, "Load example data"),
-    cel("button", { class:"btn danger", onclick:async () => { if(confirm("Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); flash("All events cleared"); render(); } } }, "Clear all events")
+    cel("button", { class:"btn danger", disabled:!isAdmin(), onclick:async () => { if(!isAdmin()) return; if(confirm(ONLINE ? "Delete ALL events for EVERYONE? This clears the shared log on the server. This cannot be undone (export a backup first)." : "Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); await queueOp({ op:"reset" }); flash("All events cleared"); render(); } } }, "Clear all events")
   ]));
-  c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, "Data is stored in this browser, on this PC only. Use “Backup” (top bar) regularly, and “Import” to restore or move to another machine."));
+  c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, ONLINE
+    ? "Data is stored on the server and shared by everyone with the link and a password. “Backup” saves a snapshot you can keep; “Import” replaces the shared log for everyone, so use it deliberately."
+    : "Data is stored in this browser, on this PC only. Use “Backup” (top bar) regularly, and “Import” to restore or move to another machine."));
   m.append(c3);
 }
 
@@ -2130,7 +2263,13 @@ $("#importFile").onchange = e => {
       const skipped = d.events.length - good.length;
       if(!confirm("Import will REPLACE current data with the backup (" + good.length + " events" + (skipped ? "; " + skipped + " malformed entries will be skipped" : "") + "). Continue?")) return;
       await clearStore("events");
-      for(const ev of good){ const o = Object.assign({}, ev); delete o.id; await putRec("events", o); }
+      if(ONLINE) await queueOp({ op:"reset" });
+      for(const ev of good){
+        const o = Object.assign({}, ev); delete o.id;
+        o.uid = o.uid || newUid();
+        await putRec("events", o);
+        await queueOp({ op:"put", uid:o.uid, event:o });
+      }
       if(d.config){ CONFIG = sanitizeConfig(d.config); await saveConfig(); }
       await loadAll(); flash("Imported " + good.length + " events"); render();
     } catch(err){ alert("Could not read file: " + err.message); }
@@ -2237,11 +2376,102 @@ async function loadExample(){
   activeTab = "Dashboard"; render();
 }
 
+/* ------------------------- sign in (hosted only) ----------------------- */
+
+// A small status pill so an operator can always tell whether what they just
+// recorded actually reached the server. Silence here would be the worst
+// outcome: entries sitting in a queue nobody knows about.
+function paintSync(){
+  if(!ONLINE || typeof document === "undefined") return;
+  let el = document.querySelector("#syncPill");
+  if(!el){
+    el = cel("div", { id:"syncPill" });
+    el.setAttribute("style", "position:fixed;right:14px;bottom:12px;z-index:80;font:12px/1.4 system-ui,sans-serif;padding:6px 10px;border-radius:999px;box-shadow:0 1px 6px rgba(0,0,0,.18)");
+    document.body.appendChild(el);
+  }
+  const look = {
+    idle:    ["Synced",        "#e8f5e9", "#1b5e20"],
+    syncing: ["Syncing…",      "#e3f2fd", "#0d47a1"],
+    offline: ["Offline — queued", "#fff8e1", "#7a4f01"],
+    error:   ["Not synced",    "#ffebee", "#8e0000"]
+  }[SYNC_STATE] || ["", "#eee", "#333"];
+  el.textContent = look[0] + (ROLE ? " · " + ROLE : "");
+  el.setAttribute("title", SYNC_NOTE || "");
+  el.setAttribute("style", el.getAttribute("style").replace(/;background[^;]*|;color[^;]*/g, "") + ";background:" + look[1] + ";color:" + look[2]);
+}
+
+function renderLogin(message){
+  document.body.innerHTML = "";
+  const wrap = cel("div", { style:"min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif" });
+  const card = cel("div", { style:"max-width:360px;width:100%;border:1px solid #d8dde3;border-radius:12px;padding:24px;box-shadow:0 2px 14px rgba(0,0,0,.07)" });
+  card.append(cel("h1", { style:"margin:0 0 4px;font-size:19px" }, "Stripping Historian"));
+  card.append(cel("div", { style:"color:#667;font-size:13px;margin-bottom:18px" }, "Enter the password you were given."));
+
+  const input = cel("input", { type:"password", placeholder:"Password", style:"width:100%;padding:10px;font-size:15px;border:1px solid #c8ced6;border-radius:8px;box-sizing:border-box" });
+  const err = cel("div", { style:"color:#b3261e;font-size:12.5px;min-height:18px;margin:8px 0" }, message || "");
+  const btn = cel("button", { style:"width:100%;padding:10px;font-size:15px;border:0;border-radius:8px;background:#15507a;color:#fff;cursor:pointer" }, "Sign in");
+
+  async function submit(){
+    const pw = input.value;
+    if(!pw){ err.textContent = "Enter the password."; return; }
+    btn.disabled = true; btn.textContent = "Checking…"; err.textContent = "";
+    try {
+      const res = await api("/api/login", { method:"POST", body: JSON.stringify({ password: pw }) });
+      ROLE = res.role; cacheRole(ROLE);
+      document.body.innerHTML = "";
+      await syncNow();
+      render();
+    } catch(e){
+      btn.disabled = false; btn.textContent = "Sign in";
+      err.textContent = e.status === 401 ? "Wrong password." : e.message;
+      input.value = "";
+    }
+  }
+  btn.addEventListener("click", submit);
+  input.addEventListener("keydown", e => { if(e.key === "Enter") submit(); });
+
+  card.append(input, err, btn);
+  wrap.append(card);
+  document.body.appendChild(wrap);
+  input.focus();
+}
+
+async function signOut(){
+  try { await api("/api/login", { method:"DELETE" }); } catch(e){ /* going anyway */ }
+  ROLE = null; cacheRole(null);
+  renderLogin("Signed out.");
+}
+
 /* boot */
 (async function(){
   try { await openDB(); await loadAll(); }
   catch(err){ document.body.innerHTML = "<p style='padding:20px'>This app needs a browser with IndexedDB. Error: " + esc(err.message || err) + "</p>"; return; }
+
+  if(!ONLINE){ render(); return; }   // opened as a local file: unchanged behaviour
+
+  let reachable = true;
+  try { ROLE = (await api("/api/login")).role; }
+  catch(e){
+    // Can't reach the server. If this browser signed in before, trust that and
+    // run on the local mirror rather than locking an operator out mid-shift.
+    reachable = false; ROLE = cachedRole();
+  }
+  cacheRole(ROLE);
+
+  if(!ROLE){ renderLogin(reachable ? "" : "Cannot reach the server. Check the network and try again."); return; }
+
+  if(reachable) await syncNow();
+  else { SYNC_STATE = "offline"; SYNC_NOTE = "Working offline — entries are saved here and will upload when the network returns."; }
+
+  const mode = document.querySelector("#brandMode");
+  if(mode) mode.textContent = "shared · " + ROLE;
+  const out = document.querySelector("#signOutBtn");
+  if(out){ out.style.display = ""; out.addEventListener("click", signOut); }
+
   render();
+  paintSync();
+  setInterval(syncNow, 20000);                        // pick up other people's work
+  window.addEventListener("online", () => syncNow());
 })();
 </script>
 </body>
