@@ -2449,18 +2449,23 @@ async function signOut(){
 
   if(!ONLINE){ render(); return; }   // opened as a local file: unchanged behaviour
 
-  let reachable = true;
-  try { ROLE = (await api("/api/login")).role; }
+  // One request answers both "am I signed in?" and "what is the log?".
+  let reachable = true, state = null;
+  try { state = await api("/api/sync"); ROLE = state.role; }
   catch(e){
-    // Can't reach the server. If this browser signed in before, trust that and
-    // run on the local mirror rather than locking an operator out mid-shift.
-    reachable = false; ROLE = cachedRole();
+    if(e.status === 401){ ROLE = null; }
+    else {
+      // Can't reach the server at all. If this browser signed in before, trust
+      // that and run on the local mirror rather than locking an operator out
+      // mid-shift.
+      reachable = false; ROLE = cachedRole();
+    }
   }
   cacheRole(ROLE);
 
   if(!ROLE){ renderLogin(reachable ? "" : "Cannot reach the server. Check the network and try again."); return; }
 
-  if(reachable) await syncNow();
+  if(state) await adoptServerState(state);
   else { SYNC_STATE = "offline"; SYNC_NOTE = "Working offline — entries are saved here and will upload when the network returns."; }
 
   const mode = document.querySelector("#brandMode");

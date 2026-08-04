@@ -1,11 +1,9 @@
-import { roleForPassword, issueToken, sessionCookie, clearCookie, verifyToken, readCookie, json } from "../_lib/auth.js";
+import { roleForPassword, issueToken, sessionCookie, clearCookie, json } from "../_lib/auth.js";
 
-// GET /api/login — "am I signed in?", used by the app on boot.
-export async function onRequestGet({ request, env }) {
-  if (!env.AUTH_SECRET) return json({ role: null, configured: false });
-  const role = await verifyToken(env, readCookie(request));
-  return json({ role, configured: true });
-}
+// There is deliberately no GET here. Cloudflare Pages serves static assets in
+// preference to a function for GET requests, so a GET route on this path is
+// answered by index.html and never reaches this code. The app asks
+// GET /api/sync instead and treats a 401 as "not signed in".
 
 // POST /api/login {password} — exchange a password for a session cookie.
 export async function onRequestPost({ request, env }) {
