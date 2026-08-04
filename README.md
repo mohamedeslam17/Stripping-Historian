@@ -63,7 +63,9 @@ loaded again — that's its next cycle.
 1. Open **https://stripping-historian.pages.dev** and sign in with the password
    you were given. (Or, for a private local copy, open `index.html` from disk —
    no password, no sharing.)
-2. Go to **Settings → Data → Load example data** to explore a realistic dataset.
+2. Start with the first real shop event. The realistic example dataset is available
+   only when `index.html` is opened as a private local (`file://`) copy, so demo
+   records cannot contaminate the shared production ledger.
 3. The **Dashboard** is home: one card per tank showing what's currently in it,
    with **Add parts / Remove parts / Move / Chem / Top up / Dispose** buttons. Use
    the **＋ Log event** drawer (sidebar) for anything else; everything updates
@@ -189,8 +191,9 @@ already true:
 - **Capacity** — **off by default** (no part limit). Set a per‑bath capacity in
   Settings (0 = no limit) and loads that would overfill are flagged, the fill level
   shows on each tank, and a full bath is never offered as a rescue.
-- **Undo** — recent adds / edits / deletes (up to 20) can be reverted from the
-  toast or with Ctrl/Cmd‑Z (text fields keep their native undo). Closing a
+- **Undo** — admins (and private local copies) can revert recent adds / edits /
+  deletes (up to 20) from the toast or with Ctrl/Cmd‑Z. Operator entries are
+  immutable once recorded, matching the shared-log permission model. Closing a
   half‑filled form asks before discarding it.
 
 **Configurable limits** (Settings): temperature setpoint/tolerance, free‑HCl band,
@@ -213,9 +216,13 @@ index.html
  ├── <style>            self-contained UI
  └── <script>
       ├── DOMAIN block   ← pure functions of (events, config): no DOM, no storage
-      ├── storage        ← IndexedDB read/write
+      ├── storage        ← IndexedDB mirror + durable offline outbox
+      ├── sync           ← bounded, retry-safe batches to the hosted API
       ├── DOM helpers    ← element + modal + SVG chart builders
       └── views          ← render the derived data
+functions/
+ ├── _middleware.js     ← signed-session gate
+ └── api/sync.js        ← role checks + atomic D1 writes
 ```
 
 The **DOMAIN block** holds all the logic worth trusting — `derivePieces`,
@@ -232,7 +239,7 @@ test harness below.
 
 ## Tests
 
-Two layers, both reading straight from `index.html` so they can't drift from what
+Three layers, reading the shipped source directly so they can't drift from what
 ships:
 
 - **`tests/domain.test.mjs`** — extracts the DOMAIN block and unit‑tests the pure
@@ -241,6 +248,10 @@ ships:
 - **`tests/smoke.mjs`** — boots the real app against a tiny in‑memory DOM +
   IndexedDB shim, loads the example data, and renders every tab, both custom forms,
   and the modals — catching view‑layer runtime errors headlessly.
+- **`tests/shared-sync.test.mjs`** — drives the hosted client against controlled
+  network/IndexedDB fakes and the real sync API handler. It covers in-flight saves,
+  queues over 500 operations, rejected mixed-role batches, permissions, event-ID
+  collisions, required form fields, tombstones, and clear-vs-config scope.
 
 ```bash
 npm test
@@ -257,10 +268,10 @@ npm test
 - **Export CSV** → flat one‑row‑per‑dip table (same *Status* column) for
   spreadsheets/BI, with a numeric hours column and `eventIdIn` / `eventIdOut`
   tracing each row back to the ledger entries it came from.
-- **Import** replaces local data from a backup (with confirmation). Malformed
-  entries are skipped and config is validated against known keys, so a bad file
-  can't corrupt the store. Use it to move between machines or restore after a
-  browser reset.
+- **Import** replaces data from a backup (with confirmation). In shared mode it
+  is admin-only and replaces the shared log; in local mode it replaces only that
+  browser's private data. Malformed entries are skipped and config is validated
+  against known keys.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
   "name": "stripping-historian",
   "version": "1.0.0",
-  "description": "Single-file, offline, event-sourced shop log for chemical stripping of turbine components.",
+  "description": "Offline-capable, shared event-sourced shop log for chemical stripping of turbine components.",
   "private": true,
   "type": "module",
   "scripts": {

@@ -108,7 +108,8 @@ domains. Cloudflare issues the certificate automatically.
 
 ## A note on data
 
-The app stores everything in **IndexedDB in the visitor's browser**. Deploying
-a new version never touches operator data, and data does not travel between
-machines or browsers. **Backup** in the sidebar remains the only way to move or
-preserve a dataset.
+The hosted app stores the shared source of truth in **Cloudflare D1**. IndexedDB
+is a local mirror and offline outbox: queued entries upload when connectivity
+returns. Opening `index.html` directly with `file://` is different — that private
+mode stores its separate dataset only in that browser. Deploying a new version
+does not clear either dataset, and **Backup** remains the recovery snapshot.
