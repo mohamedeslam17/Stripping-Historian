@@ -2378,6 +2378,32 @@ async function loadExample(){
 
 /* ------------------------- sign in (hosted only) ----------------------- */
 
+let hostedShellStarted = false;
+
+function setHostedShellVisible(visible){
+  ["app", "drawerRoot", "modalRoot", "printArea"].forEach(id => {
+    const el = document.querySelector("#" + id);
+    if(el) el.hidden = !visible;
+  });
+}
+
+function activateHostedShell(){
+  const login = document.querySelector("#loginRoot");
+  if(login) login.remove();
+  setHostedShellVisible(true);
+
+  const mode = document.querySelector("#brandMode");
+  if(mode) mode.textContent = "shared · " + ROLE;
+  const out = document.querySelector("#signOutBtn");
+  if(out){ out.style.display = ""; out.onclick = signOut; }
+
+  if(!hostedShellStarted){
+    hostedShellStarted = true;
+    setInterval(syncNow, 20000);                        // pick up other people's work
+    window.addEventListener("online", () => syncNow());
+  }
+}
+
 // A small status pill so an operator can always tell whether what they just
 // recorded actually reached the server. Silence here would be the worst
 // outcome: entries sitting in a queue nobody knows about.
@@ -2401,8 +2427,14 @@ function paintSync(){
 }
 
 function renderLogin(message){
-  document.body.innerHTML = "";
-  const wrap = cel("div", { style:"min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif" });
+  setHostedShellVisible(false);
+  const prior = document.querySelector("#loginRoot");
+  if(prior) prior.remove();
+  const pill = document.querySelector("#syncPill");
+  if(pill) pill.remove();
+
+  drawerOpen = false; formType = null; editId = null; formData = {};
+  const wrap = cel("div", { id:"loginRoot", style:"min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif" });
   const card = cel("div", { style:"max-width:360px;width:100%;border:1px solid #d8dde3;border-radius:12px;padding:24px;box-shadow:0 2px 14px rgba(0,0,0,.07)" });
   card.append(cel("h1", { style:"margin:0 0 4px;font-size:19px" }, "Stripping Historian"));
   card.append(cel("div", { style:"color:#667;font-size:13px;margin-bottom:18px" }, "Enter the password you were given."));
@@ -2418,9 +2450,11 @@ function renderLogin(message){
     try {
       const res = await api("/api/login", { method:"POST", body: JSON.stringify({ password: pw }) });
       ROLE = res.role; cacheRole(ROLE);
-      document.body.innerHTML = "";
+      activateHostedShell();
       await syncNow();
+      if(!ROLE){ renderLogin("The session could not be established. Please sign in again."); return; }
       render();
+      paintSync();
     } catch(e){
       btn.disabled = false; btn.textContent = "Sign in";
       err.textContent = e.status === 401 ? "Wrong password." : e.message;
@@ -2439,6 +2473,7 @@ function renderLogin(message){
 async function signOut(){
   try { await api("/api/login", { method:"DELETE" }); } catch(e){ /* going anyway */ }
   ROLE = null; cacheRole(null);
+  SYNC_STATE = "idle"; SYNC_NOTE = "";
   renderLogin("Signed out.");
 }
 
@@ -2468,15 +2503,9 @@ async function signOut(){
   if(state) await adoptServerState(state);
   else { SYNC_STATE = "offline"; SYNC_NOTE = "Working offline — entries are saved here and will upload when the network returns."; }
 
-  const mode = document.querySelector("#brandMode");
-  if(mode) mode.textContent = "shared · " + ROLE;
-  const out = document.querySelector("#signOutBtn");
-  if(out){ out.style.display = ""; out.addEventListener("click", signOut); }
-
+  activateHostedShell();
   render();
   paintSync();
-  setInterval(syncNow, 20000);                        // pick up other people's work
-  window.addEventListener("online", () => syncNow());
 })();
 </script>
 </body>
