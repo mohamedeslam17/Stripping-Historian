@@ -1,9 +1,23 @@
 # Stripping Historian
 
-A single‑file, **fully offline**, event‑sourced shop‑floor log for the **chemical
-stripping of turbine components** (HCl strip baths). Open `index.html` in any
-modern browser — no server, no install, no network. All data stays in that
-browser, on that PC, in IndexedDB.
+A single‑file, event‑sourced shop‑floor log for the **chemical stripping of
+turbine components** (HCl strip baths).
+
+It runs in **two modes**, and the difference matters:
+
+| | **Shared** (hosted) | **Local** (single file) |
+|---|---|---|
+| How it's opened | the site URL, over https | `index.html` from disk (`file://`) |
+| Who sees the data | everyone with the link **and** a password | only that browser, on that PC |
+| Where data lives | Cloudflare D1, server‑side | IndexedDB, in that browser |
+| Login | operator or admin password | none |
+| Network needed | no — entries queue offline and upload when it returns | never |
+
+The hosted deployment is the shared shop log: **https://stripping-historian.pages.dev**.
+Opening the file directly still works exactly as it always did, and is a fine
+way to look at a backup on a machine with no network — but understand that a
+local copy is a *separate, private* dataset. It does not sync with the shared
+log, and never has.
 
 It is built around one idea: **the event log is the single source of truth.**
 Operators only ever record *what happened*. Every other screen — piece tracker,
@@ -46,7 +60,9 @@ loaded again — that's its next cycle.
 
 ## Quick start
 
-1. Open `index.html` (double‑click, or serve the folder).
+1. Open **https://stripping-historian.pages.dev** and sign in with the password
+   you were given. (Or, for a private local copy, open `index.html` from disk —
+   no password, no sharing.)
 2. Go to **Settings → Data → Load example data** to explore a realistic dataset.
 3. The **Dashboard** is home: one card per tank showing what's currently in it,
    with **Add parts / Remove parts / Move / Chem / Top up / Dispose** buttons. Use
@@ -59,8 +75,39 @@ keyboard shortcuts — **L** add parts · **E** remove parts · **N** new event 
 Serials are entered as **chips** (type/paste, Enter to add; ranges like
 `7261-01..06` expand).
 
-> Because storage is per‑browser/per‑PC, treat **Backup** as your save button and
-> keep snapshots somewhere durable.
+A status pill sits at the bottom‑right of the shared app: **Synced**, **Syncing…**,
+**Offline — queued**, or **Not synced**. If the network drops, keep recording —
+entries are held locally and upload automatically when it returns. Don't close
+the browser while it still says *queued*.
+
+> **Local mode only:** storage is per‑browser/per‑PC, so treat **Backup** as your
+> save button and keep snapshots somewhere durable.
+
+---
+
+## Who can do what
+
+Two passwords, no user accounts — deliberately the least machinery that keeps
+outsiders out.
+
+| | Operator | Admin |
+|---|---|---|
+| Record events (load in, extract, chem, top‑up…) | ✅ | ✅ |
+| See the dashboard, floor, pieces, reports | ✅ | ✅ |
+| Export / backup | ✅ | ✅ |
+| **Edit an event already recorded** | ❌ | ✅ |
+| **Delete an event** | ❌ | ✅ |
+| **Change settings** (limits, baths, operators) | ❌ | ✅ |
+| **Clear or import the whole log** | ❌ | ✅ |
+
+Operators can always *add* to the log; correcting or removing what is already
+recorded is an admin action, because engineering reads this log as the record of
+what actually happened.
+
+This is a shared‑password gate, not real security: it keeps out someone who
+merely finds the link. Anyone holding a password can act as that role, and you
+cannot tell two operators apart in the log. Rotate the passwords by changing the
+Pages secrets (see `DEPLOYMENT.md`) — that signs everyone out.
 
 ---
 
