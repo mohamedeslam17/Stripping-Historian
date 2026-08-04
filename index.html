@@ -38,6 +38,7 @@
   .side-foot{display:flex;gap:6px;padding:2px}
   .side-foot button{flex:1;background:#fff;border:1px solid var(--line);color:#4b5563;border-radius:var(--r-xs);padding:6px 4px;font-size:11px;cursor:pointer}
   .side-foot button:hover{background:#f2f2f2}
+  .side-foot button:disabled{opacity:.45;cursor:not-allowed;background:#fff}
 
   #content{display:flex;flex-direction:column;min-width:0}
   #topbar{position:sticky;top:0;z-index:20;min-height:54px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:14px;padding:0 18px}
@@ -118,6 +119,7 @@
   .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s,border-color .12s;display:flex;flex-direction:column}
   .tankcard:hover{box-shadow:var(--sh);border-color:#d6d6d6}
   .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:auto;padding-top:12px}
+  .tank-acts > :only-child{grid-column:1 / -1}
   .tank-h{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .tank{position:relative;border:1px solid #cdeadd;border-top:none;border-radius:0 0 12px 12px;min-height:92px;background:linear-gradient(180deg,#eafaf3,#d3f1e4);padding:10px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
   .tank.spent{background:linear-gradient(180deg,#fdecec,#f8d6d6);border-color:#f0c4c0}
@@ -326,7 +328,8 @@ function fmtNum(v){ const n = num(v); return n == null ? "" : String(round(n, 2)
 
 function byDate(a, b){
   return String(a.datetime || "").localeCompare(String(b.datetime || ""))
-      || String(a.eventId || "").localeCompare(String(b.eventId || ""));
+      || String(a.eventId || "").localeCompare(String(b.eventId || ""))
+      || String(a.uid || "").localeCompare(String(b.uid || ""));
 }
 
 function hrsBetween(a, b){ // clock-time difference, tolerant of overnight roll-over
@@ -992,15 +995,16 @@ function sanitizeConfig(raw){
   });
   return out;
 }
-async function saveConfig(){
-  for(const k of Object.keys(CONFIG)){
+async function saveConfig(keys = Object.keys(CONFIG)){
+  if(ONLINE && !isAdmin()) throw new Error("Only an admin can change settings.");
+  for(const k of keys){
     await putRec("config", { k, v:CONFIG[k] });
     await queueOp({ op:"config", k, v:CONFIG[k] });
   }
 }
 
 function nowLocalDT(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,16); }
-function todayISODate(){ return new Date().toISOString().slice(0,10); }
+function todayISODate(){ return nowLocalDT().slice(0,10); }
 
 /* --------------------------- server sync ------------------------------ */
 /* Every one of these is a no-op offline, so the local-only mode keeps the
@@ -1017,6 +1021,8 @@ function forServer(obj){ const o = Object.assign({}, obj); delete o.id; return o
 
 function cachedRole(){ try { return localStorage.getItem("sh_role"); } catch(e){ return null; } }
 function cacheRole(r){ try { r ? localStorage.setItem("sh_role", r) : localStorage.removeItem("sh_role"); } catch(e){ /* private mode */ } }
+function cachedOperator(){ try { return localStorage.getItem("sh_operator") || ""; } catch(e){ return ""; } }
+function cacheOperator(name){ try { name ? localStorage.setItem("sh_operator", name) : localStorage.removeItem("sh_operator"); } catch(e){ /* private mode */ } }
 
 async function api(path, opts){
   const r = await fetch(path, Object.assign({
@@ -1027,6 +1033,7 @@ async function api(path, opts){
   if(!r.ok){
     const err = new Error((body && body.error) || ("Request failed (" + r.status + ")"));
     err.status = r.status;
+    if(body && Number.isInteger(body.opIndex)) err.opIndex = body.opIndex;
     throw err;
   }
   return body;
@@ -1044,28 +1051,72 @@ async function adoptServerState(state){
 }
 
 let syncTimer = null;
+function scheduleSync(delay = 250){
+  if(syncTimer) clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => { syncTimer = null; syncNow(); }, delay);
+}
 async function queueOp(op){
   if(!ONLINE) return;
   await putRec("outbox", { op });
-  // Debounced: saving settings writes a dozen keys in a loop, and a whole
-  // import writes hundreds of events. Those should be one upload, not hundreds.
-  if(syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(syncNow, 250);
+  // Debounced: a config restore writes every key and a whole import writes
+  // hundreds of events. Those should be one upload sequence, not hundreds.
+  scheduleSync();
 }
 
 let syncing = false;
+let syncAgain = false;
 async function syncNow(){
-  if(!ONLINE || !ROLE || syncing) return;
+  if(!ONLINE || !ROLE) return;
+  if(syncing){ syncAgain = true; return; }
   syncing = true;
+  syncAgain = false;
   SYNC_STATE = "syncing"; paintSync();
+  let rejectedNote = "";
   try {
-    const queued = (await getAll("outbox")).sort((a, b) => a.seq - b.seq);
-    const state = queued.length
-      ? await api("/api/sync", { method:"POST", body: JSON.stringify({ ops: queued.map(q => q.op) }) })
-      : await api("/api/sync");
-    if(queued.length) await clearStore("outbox");
-    await adoptServerState(state);
-    SYNC_STATE = "idle"; SYNC_NOTE = "";
+    while(ROLE){
+      const queued = (await getAll("outbox")).sort((a, b) => a.seq - b.seq);
+      if(!queued.length){
+        const state = await api("/api/sync");
+        await adoptServerState(state);
+        // A save may have landed while the GET and mirror replacement were in
+        // flight. Its outbox row is authoritative; loop and upload it now.
+        if((await getAll("outbox")).length) continue;
+        break;
+      }
+
+      // The API accepts at most 500 operations. Process large offline queues in
+      // bounded chunks instead of submitting one oversized request and losing it.
+      const batch = queued.slice(0, 500);
+      let state;
+      try {
+        state = await api("/api/sync", { method:"POST", body: JSON.stringify({ ops: batch.map(q => q.op) }) });
+      } catch(err){
+        // The server validates the batch before applying it and identifies the
+        // rejected operation. Remove only that row; every valid row remains and
+        // is retried in the next pass.
+        if(err.status >= 400 && err.status < 500 && Number.isInteger(err.opIndex) && batch[err.opIndex]){
+          await delRec("outbox", batch[err.opIndex].seq);
+          rejectedNote = err.message;
+          flash("One queued change was rejected: " + err.message);
+          continue;
+        }
+        throw err;
+      }
+
+      // Delete exactly what this request submitted. clearStore() is unsafe: a
+      // second save can append a row while fetch is in flight.
+      for(const q of batch) await delRec("outbox", q.seq);
+
+      // Do not replace the mirror until every pending local operation has been
+      // accepted. Otherwise the server snapshot would temporarily erase later
+      // offline work from the UI.
+      if((await getAll("outbox")).length) continue;
+      await adoptServerState(state);
+      if((await getAll("outbox")).length) continue;
+      break;
+    }
+    SYNC_STATE = rejectedNote ? "error" : "idle";
+    SYNC_NOTE = rejectedNote;
   } catch(err){
     if(err.status === 401){
       // The session expired. Keep the queued work — it will go up after login.
@@ -1073,12 +1124,9 @@ async function syncNow(){
       render(); return;
     }
     if(err.status >= 400 && err.status < 500){
-      // The server refused these ops and always will (usually an operator
-      // attempting an admin-only change). Retrying forever would wedge the
-      // queue and silently block every later event, so drop them and say so.
-      await clearStore("outbox");
+      // Preserve the queue when the server cannot identify one bad operation.
+      // Losing valid shop-floor work is worse than leaving a visible retry error.
       SYNC_STATE = "error"; SYNC_NOTE = err.message;
-      try { await adoptServerState(await api("/api/sync")); } catch(e){ /* stay on the mirror */ }
       flash("Not saved to the server: " + err.message);
     } else {
       SYNC_STATE = "offline";
@@ -1088,23 +1136,32 @@ async function syncNow(){
   syncing = false;
   paintSync();
   if(typeof render === "function" && SYNC_STATE !== "syncing") render();
+  // A debounced call may have fired while this pass was busy. Never leave its
+  // outbox rows waiting for the 20-second poll.
+  try { if(syncAgain || (await getAll("outbox")).length) scheduleSync(0); } catch(e){ /* database is closing */ }
 }
 
 async function addEvent(obj){
   obj.datetime = obj.datetime || nowLocalDT();
-  obj.eventId = nextEventId(obj.datetime, EVENTS);
   obj.uid = obj.uid || newUid();
+  const baseId = nextEventId(obj.datetime, EVENTS);
+  // Daily counters are local and two shared clients can choose the same number.
+  // Keep the readable counter, plus a short UID suffix, so the ledger reference
+  // remains unique without needing an online round trip.
+  obj.eventId = obj.eventId || (ONLINE ? baseId + "-" + String(obj.uid).replace(/-/g, "").slice(0, 12).toUpperCase() : baseId);
   const id = await putRec("events", obj); obj.id = id;
   await loadAll();
   await queueOp({ op:"put", uid:obj.uid, event:forServer(obj) });
 }
 async function updateEvent(obj){
+  if(ONLINE && !isAdmin()) throw new Error("Only an admin can edit an event.");
   obj.uid = obj.uid || newUid();
   await putRec("events", obj);
   await loadAll();
   await queueOp({ op:"put", uid:obj.uid, event:forServer(obj) });
 }
 async function removeEvent(id){
+  if(ONLINE && !isAdmin()) throw new Error("Only an admin can delete an event.");
   const gone = EVENTS.find(e => e.id === id);
   await delRec("events", id);
   await loadAll();
@@ -1236,7 +1293,7 @@ let activeTab = "Dashboard";
 let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
 let formType = null, formData = {}, editId = null, drawerOpen = false;
-let lastOperator = "";   // one shift is usually one person — prefill new forms
+let lastOperator = cachedOperator();   // one shift is usually one person — prefill new forms, including after reload
 let drawerFocusTarget = null;   // set by renderDrawer, respected by openDrawer's generic autofocus
 
 function attentionItems(){
@@ -1283,6 +1340,51 @@ function openDrawer(){
   setTimeout(() => { const f = drawerFocusTarget || ($("#drawerRoot") && $("#drawerRoot").querySelector && $("#drawerRoot").querySelector("input, select, textarea, button.typetab")); drawerFocusTarget = null; if(f && f.focus) f.focus(); }, 0);
 }
 function draftRec(){ const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; }); return rec; }
+function formIncompleteFor(type, d, isEdit = false){
+  if(!d.datetime) return "Enter a date and time";
+  if(type === "Load In"){
+    if(!d.bath) return "Select a bath or the waiting area";
+    if(!(d.serials || []).length) return "Add at least one serial";
+    if(!String(d.jc || "").trim()) return "Enter the J/C number";
+    if(!isEdit && d.bath !== WAITING_AREA){
+      for(const serial of d.serials || []){
+        const failed = unresolvedWaxAreas(EVENTS, serial).map(item => item.area);
+        if(!failed.length) continue;
+        const remask = (d.remask || []).find(item => item.serial === serial);
+        const covered = remask ? (Array.isArray(remask.areas) && remask.areas.length ? remask.areas : null) : [];
+        const remaining = covered == null ? [] : failed.filter(area => !covered.includes(area));
+        if(remaining.length) return "Re-mask " + remaining.join(", ") + " on " + serial + " before loading";
+      }
+    }
+  } else if(type === "Extraction"){
+    if(!d.bath) return "Select a bath";
+    if(!(d.items || []).length) return "Tick the parts you are pulling";
+  } else if(type === "Parts Received"){
+    if(!(d.serials || []).length) return "Add at least one serial";
+    if(!String(d.jc || "").trim()) return "Enter the J/C number";
+  } else if(type === "Transfer"){
+    if(!d.bath) return "Select the source bath";
+    if(!d.toBath) return "Select a destination bath";
+    if(!(d.serials || []).length) return "Tick the parts to move";
+  } else if(type === "Chemistry Check"){
+    if(!d.bath) return "Select a bath";
+    if(num(d.temp) == null && num(d.hclPct) == null && num(d.fePpm) == null) return "Enter at least one chemistry reading";
+  } else if(type === "Top-Up"){
+    if(!d.bath) return "Select a bath";
+    if(!(num(d.hclAddedL) > 0 || num(d.waterAddedL) > 0 || num(d.h3po4AddedL) > 0)) return "Enter an HCl, water or H₃PO₄ amount";
+  } else if(type === "Bath Fill"){
+    if(!d.bath) return "Select a bath";
+    if(!(num(d.hclAddedL) > 0 || num(d.waterAddedL) > 0 || num(d.h3po4AddedL) > 0)) return "Enter the new-charge volumes";
+  } else if(type === "Engineering Review"){
+    if(!String(d.serial || "").trim()) return "Enter a serial";
+    if(!d.status) return "Select a disposition";
+  } else if(type === "Bath Disposal"){
+    if(!d.bath) return "Select a bath";
+    if(!d.disposalReason) return "Select a disposal reason";
+  }
+  if(!String(d.operator || "").trim()) return "Enter the operator";
+  return "";
+}
 // Dirty = the form differs from how it was opened (prefills are the baseline).
 function formDirty(){ return !!(drawerOpen && formType && formData._orig != null && JSON.stringify(draftRec()) !== formData._orig); }
 function closeDrawer(){
@@ -1307,18 +1409,13 @@ function renderDrawer(){
     body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-top:2px" }, "Pick an event type. Dips are split into Add parts (into a bath) and Remove parts (out), so you never need the out-time up front."));
   } else {
     if(editId == null) body.append(cel("button", { class:"btn sm", style:"margin-bottom:12px", onclick:() => { formType = null; formData = { datetime:nowLocalDT() }; renderDrawer(); } }, "‹ Change event type"));
-    body.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
+    body.append(cel("div", { class:"field" }, [cel("label", { class:"f", for:"event-datetime" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { id:"event-datetime", type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
     if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
     const warnBox = cel("div", { style:"margin-top:4px" });
     const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update" : "Save");
     const hint = cel("span", { class:"muted", style:"font-size:12px;align-self:center" });
     function formIncomplete(){
-      if(formType === "Load In") return !formData.bath ? "Select a bath" : ((formData.serials || []).length ? "" : "Add at least one serial");
-      if(formType === "Extraction") return !formData.bath ? "Select a bath" : ((formData.items || []).length ? "" : "Tick the parts you are pulling");
-      if(formType === "Parts Received") return (formData.serials || []).length ? "" : "Add at least one serial";
-      if(formType === "Top-Up") return (num(formData.hclAddedL) > 0 || num(formData.waterAddedL) > 0 || num(formData.h3po4AddedL) > 0) ? "" : "Enter an HCl, water or H₃PO₄ amount";
-      if(formType === "Transfer") return !formData.bath ? "Select the source bath" : !formData.toBath ? "Select a destination bath" : ((formData.serials || []).length ? "" : "Tick the parts to move");
-      return "";
+      return formIncompleteFor(formType, formData, editId != null);
     }
     function refreshWarn(){
       warnBox.innerHTML = "";
@@ -1358,15 +1455,15 @@ function renderDrawer(){
 function startNew(t){ formType = t; editId = null; formData = { datetime:nowLocalDT(), type:t, operator:lastOperator }; if(t === "Extraction") formData._rows = {}; openDrawer(); }
 // Deep copy: a cancelled edit must not leave mutated arrays (serials, items,
 // remask) behind on the stored event.
-function startEdit(e){ formType = e.type; editId = e.id; formData = JSON.parse(JSON.stringify(e)); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
+function startEdit(e){ if(!isAdmin()){ flash("Admin access is required to edit the ledger."); return; } formType = e.type; editId = e.id; formData = JSON.parse(JSON.stringify(e)); if(e.type === "Extraction") formData._rows = {}; openDrawer(); }
 function startLoad(bath){ formType = "Load In"; editId = null; formData = { datetime:nowLocalDT(), type:"Load In", bath:bath || "", operator:lastOperator }; openDrawer(); }
 function startExtraction(bath){ formType = "Extraction"; editId = null; formData = { datetime:nowLocalDT(), type:"Extraction", bath:bath || "", operator:lastOperator, _rows:{} }; openDrawer(); }
-function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[] }; openDrawer(); }
+function startMove(bath){ formType = "Transfer"; editId = null; formData = { datetime:nowLocalDT(), type:"Transfer", bath:bath || "", toBath:"", serials:[], operator:lastOperator }; openDrawer(); }
 // "Complete fill" = a fresh full charge; prefill the volumes from the last fill.
 function startCompleteFill(bath){
   const lf = (deriveBath(EVENTS, CONFIG, bath, nowLocalDT()).lastFill) || {};
   formType = "Bath Fill"; editId = null;
-  formData = { datetime:nowLocalDT(), type:"Bath Fill", bath:bath || "", hclAddedL:lf.hclAddedL, waterAddedL:lf.waterAddedL, h3po4AddedL:lf.h3po4AddedL };
+  formData = { datetime:nowLocalDT(), type:"Bath Fill", bath:bath || "", hclAddedL:lf.hclAddedL, waterAddedL:lf.waterAddedL, h3po4AddedL:lf.h3po4AddedL, operator:lastOperator };
   openDrawer();
 }
 // Top up: a complete fill (new charge) or a partial addition of acid / water.
@@ -1396,13 +1493,15 @@ function startAction(a){
 
 function appendOpList(card){ const dl = cel("datalist", { id:"opList" }); (CONFIG.operators || []).forEach(o => dl.append(cel("option", { value:o }))); card.append(dl); }
 function fieldNode(name, label, kind, onin){
-  const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
+  const inputId = "event-" + String(name).replace(/[^a-z0-9_-]/gi, "-");
+  const wrap = cel("div", { class:"field" }, cel("label", { class:"f", for:inputId }, label));
   let inp;
   if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); bathList(EVENTS, CONFIG).forEach(b => inp.append(cel("option", { value:b }, b))); }
   else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
   else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
   else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
   else inp = cel("input", { type:"text", oninput:onin });
+  inp.setAttribute("id", inputId);
   if(formData[name] != null) inp.value = formData[name];
   wrap.append(inp); return wrap;
 }
@@ -1746,6 +1845,8 @@ function buildExtractFields(card, refreshWarn){
 
 async function saveForm(){
   const rec = {}; Object.keys(formData).forEach(k => { if(!k.startsWith("_")) rec[k] = formData[k]; });
+  const incomplete = formIncompleteFor(rec.type, rec, editId != null);
+  if(incomplete){ alert(incomplete + "."); return; }
   if(rec.type === "Load In"){
     if(!rec.bath){ alert("Select a bath or the waiting area."); return; }
     // the chip list is the single source of truth — a cached text copy would
@@ -1760,30 +1861,34 @@ async function saveForm(){
   if(rec.type === "Top-Up"){ if(!(num(rec.hclAddedL) > 0 || num(rec.waterAddedL) > 0 || num(rec.h3po4AddedL) > 0)){ alert("Enter an HCl, water or H₃PO₄ amount."); return; } }
   if(rec.type === "Transfer"){ if(!rec.bath || !rec.toBath){ alert("Select a source and a destination."); return; } if(rec.bath === rec.toBath){ alert("Source and destination must differ."); return; } if(!(rec.serials || []).length){ alert("Tick at least one part to move."); return; } if(rec.toBath === WAITING_AREA) rec.toBath = ""; }   // waiting area = no destination bath
   if(editId != null){
-    if(rec.operator) lastOperator = rec.operator;
+    if(rec.operator){ lastOperator = rec.operator; cacheOperator(lastOperator); }
     const prior = JSON.parse(JSON.stringify(EVENTS.find(e => e.id === editId)));
     rec.id = editId; rec.eventId = rec.eventId || nextEventId(rec.datetime, EVENTS);
     await updateEvent(rec); setUndo("edit " + rec.eventId, async () => { await updateEvent(prior); });
     flash("Updated " + rec.eventId, { label:"Undo", fn:doUndo });
     drawerOpen = false; formType = null; editId = null; formData = {};
   } else {
-    if(rec.operator) lastOperator = rec.operator;
-    await addEvent(rec); const newId = rec.id; setUndo("add " + rec.eventId, async () => { await removeEvent(newId); });
-    flash("Saved " + rec.eventId, { label:"Undo", fn:doUndo });
+    if(rec.operator){ lastOperator = rec.operator; cacheOperator(lastOperator); }
+    await addEvent(rec); const newId = rec.id;
+    if(isAdmin()){
+      setUndo("add " + rec.eventId, async () => { await removeEvent(newId); });
+      flash("Saved " + rec.eventId, { label:"Undo", fn:doUndo });
+    } else flash("Saved " + rec.eventId);
     drawerOpen = false; formType = null; formData = {};
   }
   render();
 }
 
-function emptyState(){ return cel("div", { class:"empty" }, [
-  cel("div", { style:"font-size:34px;margin-bottom:6px;opacity:.5" }, "▦"),
-  cel("div", { style:"font-size:15px;margin-bottom:4px;color:var(--ink);font-weight:600" }, "No events yet"),
-  cel("div", { style:"margin-bottom:16px" }, "Log your first strip event, or load the sample data to explore the app."),
-  cel("div", { class:"btnrow", style:"justify-content:center" }, [
-    cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "＋ Log first event"),
-    cel("button", { class:"btn", onclick:loadExample }, "Load example data")
-  ])
-]); }
+function emptyState(){
+  const actions = [cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "＋ Log first event")];
+  if(!ONLINE) actions.push(cel("button", { class:"btn", onclick:loadExample }, "Load example data"));
+  return cel("div", { class:"empty" }, [
+    cel("div", { style:"font-size:34px;margin-bottom:6px;opacity:.5" }, "▦"),
+    cel("div", { style:"font-size:15px;margin-bottom:4px;color:var(--ink);font-weight:600" }, "No events yet"),
+    cel("div", { style:"margin-bottom:16px" }, ONLINE ? "Log the first real shop event to start the shared ledger." : "Log your first strip event, or load the sample data to explore the app."),
+    cel("div", { class:"btnrow", style:"justify-content:center" }, actions)
+  ]);
+}
 
 /* --- Floor (live tanks) --- */
 function suggestionsPanel(){
@@ -1849,7 +1954,7 @@ function vEventLog(m){
   m.append(cel("h2", { class:"sec" }, "Event log — the single source of truth"));
   const chips = cel("div", { class:"chips" });
   const tSel = cel("select", { style:"width:auto", oninput:e => { logFilter.type = e.target.value; render(); } }, cel("option", { value:"" }, "All types"));
-  Object.keys(TYPES).forEach(t => tSel.append(cel("option", { value:t }, typeLabel(t)))); tSel.value = logFilter.type;
+  Object.keys(TYPES).filter(t => !TYPES[t].hidden || EVENTS.some(e => e.type === t)).forEach(t => tSel.append(cel("option", { value:t }, typeLabel(t)))); tSel.value = logFilter.type;
   const bSel = cel("select", { style:"width:auto", oninput:e => { logFilter.bath = e.target.value; render(); } }, cel("option", { value:"" }, "All baths"));
   bathList(EVENTS, CONFIG).forEach(b => bSel.append(cel("option", { value:b }, b))); bSel.value = logFilter.bath;
   const txt = cel("input", { style:"width:210px", placeholder:"search J/C, serial, notes…", value:logFilter.text, oninput:e => { logFilter.text = e.target.value; render(); } });
@@ -1878,10 +1983,12 @@ function vEventLog(m){
     tr.append(tcell(e.bath)); tr.append(tcell(e.jc)); tr.append(tcell(partsCell));
     tr.append(tcell(eventDetail(e)));
     tr.append(tcell(e.operator));
-    tr.append(cel("td", { style:"white-space:nowrap" }, [
-      cel("button", { class:"btn sm", title:"Edit", onclick:() => startEdit(e) }, "✎"),
-      cel("button", { class:"btn sm danger", title:"Delete", style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; prior.uid = prior.uid || newUid(); prior.id = await putRec("events", prior); await loadAll(); await queueOp({ op:"put", uid:prior.uid, event:forServer(prior) }); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "✕")
-    ]));
+    const ledgerActions = [];
+    if(isAdmin()) ledgerActions.push(
+      cel("button", { class:"btn sm", title:"Edit", "aria-label":"Edit " + (e.eventId || "event"), onclick:() => startEdit(e) }, "✎"),
+      cel("button", { class:"btn sm danger", title:"Delete", "aria-label":"Delete " + (e.eventId || "event"), style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; prior.uid = prior.uid || newUid(); prior.id = await putRec("events", prior); await loadAll(); await queueOp({ op:"put", uid:prior.uid, event:forServer(prior) }); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "✕")
+    );
+    tr.append(cel("td", { style:"white-space:nowrap" }, ledgerActions));
     tb.append(tr);
   });
   t.append(tb); wrap.append(t); m.append(wrap);
@@ -2021,12 +2128,16 @@ function showBath(bath){
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
   const act = (label, fn, cls) => cel("button", { class:"btn sm" + (cls ? " " + cls : ""), onclick:() => { closeModal(); fn(); } }, label);
-  const foot = [act("Add parts", () => startLoad(bath))];
-  if(s.contents.length) foot.push(act("Remove parts", () => startExtraction(bath)));
-  if(s.contents.length) foot.push(act("Move", () => startMove(bath)));
-  foot.push(act("Chemistry", () => startAction({ type:"chem", bath })));
-  foot.push(act("Top up", () => startTopUp(bath)));
-  if(s.active) foot.push(act("Dispose", () => startAction({ type:"dispose", bath }), "danger"));
+  const foot = [];
+  if(!s.active) foot.push(act("Fill — new charge", () => startCompleteFill(bath), "primary"));
+  else {
+    foot.push(act("Add parts", () => startLoad(bath)));
+    if(s.contents.length) foot.push(act("Remove parts", () => startExtraction(bath)));
+    if(s.contents.length) foot.push(act("Move", () => startMove(bath)));
+    foot.push(act("Chemistry", () => startAction({ type:"chem", bath })));
+    foot.push(act("Top up", () => startTopUp(bath)));
+    foot.push(act("Dispose", () => startAction({ type:"dispose", bath }), "danger"));
+  }
   foot.push(cel("button", { class:"btn", onclick:closeModal }, "Close"));
   modal("Bath " + bath + (s.active ? "  ·  active" : ""), body, foot);
 }
@@ -2105,7 +2216,7 @@ function tankCard(s){
   c.append(tank);
   if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
   const acts = cel("div", { class:"tank-acts", onclick:e => e.stopPropagation() });
-  if(!s.active && s.disposal){
+  if(!s.active){
     acts.append(cel("button", { class:"btn sm primary", onclick:() => startCompleteFill(s.bath) }, "Fill — new charge"));
   } else {
     acts.append(cel("button", { class:"btn sm", onclick:() => startLoad(s.bath) }, "Add parts"));
@@ -2169,31 +2280,32 @@ function vDash(m){
 
 /* --- Settings --- */
 function vSettings(m){
+  if(ONLINE && !isAdmin()) m.append(cel("div", { class:"warn-line warn-amber", style:"max-width:560px;margin-bottom:12px" }, "Settings are read-only for operators. Sign in as an admin to change process limits or shared data."));
   const c1 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
   const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"], ["chemEveryDays", "Titration due every (days, 0 = never)"]];
   const lg = cel("div", { class:"twocol" });
   // never persist a half-typed / cleared field: "" would become 0 and silently
   // flip every limit check (maxCycles 0 routes ALL pieces to engineering)
-  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key],
-    oninput:async e => { const v = num(e.target.value); if(e.target.classList) e.target.classList.toggle("bad", v == null); if(v == null) return; CONFIG[key] = v; await saveConfig(); renderNav(); },
+  lim.forEach(([key, l]) => lg.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, l), cel("input", { type:"number", step:"any", value:CONFIG[key], disabled:!isAdmin(),
+    oninput:async e => { if(!isAdmin()) return; const v = num(e.target.value); if(e.target.classList) e.target.classList.toggle("bad", v == null); if(v == null) return; CONFIG[key] = v; await saveConfig([key]); renderNav(); },
     onblur:e => { if(num(e.target.value) == null){ e.target.value = CONFIG[key]; if(e.target.classList) e.target.classList.remove("bad"); } } })])));
   c1.append(lg); m.append(c1);
 
   const c2 = cel("div", { class:"card", style:"max-width:560px;margin-bottom:16px" });
   c2.append(cel("h2", { class:"sec" }, "Baths & operators"));
   // onchange, not oninput: a half-typed list must never be persisted
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107", value:CONFIG.baths.join(", "), onchange:async e => { CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "These tanks are always shown on the floor. Any extra bath that appears in your data is added automatically.")]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), onchange:async e => { CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
-  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), onchange:async e => { CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Bath IDs (comma separated)"), cel("input", { type:"text", placeholder:"e.g. 102-103, 106-107", value:CONFIG.baths.join(", "), disabled:!isAdmin(), onchange:async e => { if(!isAdmin()) return; CONFIG.baths = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(["baths"]); render(); } }), cel("div", { class:"faint", style:"font-size:11.5px;margin-top:4px" }, "These tanks are always shown on the floor. Any extra bath that appears in your data is added automatically.")]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Operators (comma separated, used for suggestions)"), cel("input", { type:"text", value:(CONFIG.operators || []).join(", "), disabled:!isAdmin(), onchange:async e => { if(!isAdmin()) return; CONFIG.operators = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(["operators"]); } })]));
+  c2.append(cel("div", { class:"field" }, [cel("label", { class:"f" }, "Masked areas (comma separated, e.g. cooling holes vs the part body)"), cel("input", { type:"text", value:(CONFIG.maskAreas || []).join(", "), disabled:!isAdmin(), onchange:async e => { if(!isAdmin()) return; CONFIG.maskAreas = e.target.value.split(",").map(s => s.trim()).filter(Boolean); await saveConfig(["maskAreas"]); } })]));
   c2.append(cel("div", { class:"muted", style:"font-size:12px" }, "List changes apply when you leave the field."));
   m.append(c2);
 
   const c3 = cel("div", { class:"card", style:"max-width:560px" });
   c3.append(cel("h2", { class:"sec" }, "Data"));
   c3.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap" }, [
-    cel("button", { class:"btn", onclick:loadExample }, "Load example data"),
-    cel("button", { class:"btn danger", disabled:!isAdmin(), onclick:async () => { if(!isAdmin()) return; if(confirm(ONLINE ? "Delete ALL events for EVERYONE? This clears the shared log on the server. This cannot be undone (export a backup first)." : "Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); await queueOp({ op:"reset" }); flash("All events cleared"); render(); } } }, "Clear all events")
+    !ONLINE ? cel("button", { class:"btn", onclick:loadExample }, "Load example data") : null,
+    cel("button", { class:"btn danger", disabled:!isAdmin(), onclick:async () => { if(!isAdmin()) return; if(confirm(ONLINE ? "Delete ALL events for EVERYONE? This clears the shared log on the server but preserves process settings. This cannot be undone (export a backup first)." : "Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); await queueOp({ op:"clear-events" }); flash("All events cleared"); render(); } } }, "Clear all events")
   ]));
   c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, ONLINE
     ? "Data is stored on the server and shared by everyone with the link and a password. “Backup” saves a snapshot you can keep; “Import” replaces the shared log for everyone, so use it deliberately."
@@ -2251,22 +2363,28 @@ function buildReportHTML(){
     + (body || "<tr><td colspan='10' style='text-align:center;color:#647078'>No dip records yet.</td></tr>") + "</tbody></table></body></html>";
 }
 $("#exportReport").onclick = () => download("strip_historian_report_" + todayISODate() + ".html", buildReportHTML(), "text/html");
-$("#importBtn").onclick = () => $("#importFile").click();
+$("#importBtn").onclick = () => { if(!isAdmin()){ flash("Admin access is required to import a shared backup."); return; } $("#importFile").click(); };
 $("#importFile").onchange = e => {
+  if(!isAdmin()){ e.target.value = ""; flash("Admin access is required to import a shared backup."); return; }
   const f = e.target.files[0]; if(!f) return;
   const r = new FileReader();
   r.onload = async () => {
     try {
       const d = JSON.parse(r.result);
       if(!Array.isArray(d.events)) throw new Error("no events array in file");
-      const good = d.events.filter(ev => ev && typeof ev === "object" && !Array.isArray(ev) && typeof ev.type === "string" && typeof ev.datetime === "string");
+      const good = d.events.filter(ev => ev && typeof ev === "object" && !Array.isArray(ev) && typeof ev.type === "string" && typeof ev.datetime === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(ev.datetime));
       const skipped = d.events.length - good.length;
       if(!confirm("Import will REPLACE current data with the backup (" + good.length + " events" + (skipped ? "; " + skipped + " malformed entries will be skipped" : "") + "). Continue?")) return;
       await clearStore("events");
-      if(ONLINE) await queueOp({ op:"reset" });
+      if(ONLINE) await queueOp({ op:d.config ? "reset" : "clear-events" });
+      const importedIds = new Set();
       for(const ev of good){
         const o = Object.assign({}, ev); delete o.id;
         o.uid = o.uid || newUid();
+        if(o.eventId != null) o.eventId = String(o.eventId);
+        const ymd = String(o.datetime || "").slice(0, 10).replace(/-/g, "") || todayISODate().replace(/-/g, "");
+        if(!o.eventId || importedIds.has(o.eventId)) o.eventId = ymd + "-IMP-" + String(o.uid).replace(/-/g, "").slice(0, 12).toUpperCase();
+        importedIds.add(o.eventId);
         await putRec("events", o);
         await queueOp({ op:"put", uid:o.uid, event:o });
       }
@@ -2328,6 +2446,7 @@ document.addEventListener("keydown", e => {
 
 /* --- example data --- */
 async function loadExample(){
+  if(ONLINE){ flash("Example data is available only in the private offline copy."); return; }
   if(EVENTS.length && !confirm("Add example data on top of existing events?")) return;
   const D0 = new Date();
   const agoDT = mins => { const x = new Date(D0.getTime() - mins * 60000); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
@@ -2396,6 +2515,8 @@ function activateHostedShell(){
   if(mode) mode.textContent = "shared · " + ROLE;
   const out = document.querySelector("#signOutBtn");
   if(out){ out.style.display = ""; out.onclick = signOut; }
+  const imp = document.querySelector("#importBtn");
+  if(imp){ imp.disabled = !isAdmin(); imp.title = isAdmin() ? "Restore the shared log from a backup" : "Admin access is required to import"; }
 
   if(!hostedShellStarted){
     hostedShellStarted = true;
