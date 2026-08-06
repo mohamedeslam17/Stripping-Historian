@@ -775,3 +775,28 @@ test("pieceStatusFor: a disposition in the same minute as the extraction still g
   ];
   assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "→ Engineering");
 });
+
+/* derivePieces is memoised on the events array identity (one render asks for it
+ * six times). The cache must still notice a config or clock change, because
+ * neither replaces the array. */
+test("derivePieces cache does not serve stale rows when config or time changes", () => {
+  const cfg = n => ({ ...CONFIG, maxCycles: n });
+  const events = [
+    load("2026-03-22T08:00", "B1", ["S1"]),
+    extract("2026-03-22T16:00", "B1", [{ serial: "S1", result: "Re-strip" }]),
+    load("2026-03-23T08:00", "B1", ["S1"]),
+    extract("2026-03-23T16:00", "B1", [{ serial: "S1", result: "Re-strip" }])
+  ];
+
+  const lenient = D.derivePieces(events, cfg(9), NOW)[0].status.s;
+  const strict = D.derivePieces(events, cfg(1), NOW)[0].status.s;
+  assert.notEqual(strict, lenient, "same array, tighter cycle limit must re-derive");
+  assert.equal(strict, "→ Engineering");
+  assert.equal(D.derivePieces(events, cfg(9), NOW)[0].status.s, lenient, "and back again");
+
+  // a repeat call with identical inputs is the cache hit, and must be equal
+  assert.deepEqual(D.derivePieces(events, cfg(9), NOW), D.derivePieces(events, cfg(9), NOW));
+
+  // a different array is a different cache entry
+  assert.equal(D.derivePieces(events.slice(0, 1), cfg(9), NOW)[0].cycles, 1);
+});

@@ -645,7 +645,16 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   return { s:"—", cls:"p-grey", ...base };
 }
 
+const _piecesMemo = new WeakMap(); // events array -> { now, cfg, val }
 function derivePieces(events, config, nowDT){
+  // deriveKpis, deriveJobCards, deriveSuggestions, waitingParts and the nav
+  // badge each ask for this, so one Dashboard render rebuilt it six times over
+  // the whole ledger — the dominant cost once the log passes a few hundred
+  // events. Cached like deriveImmersions: keyed on the events array identity,
+  // which any write replaces, plus config (it decides status) and the minute.
+  const cfgKey = JSON.stringify(config);
+  const memoHit = _piecesMemo.get(events);
+  if(memoHit && memoHit.now === nowDT && memoHit.cfg === cfgKey) return memoHit.val;
   const { records } = deriveImmersions(events, nowDT);
   const map = new Map();
   records.forEach(r => { const o = map.get(r.serial) || { serial:r.serial, jc:"", component:"", recs:[] }; o.recs.push(r); if(r.jc) o.jc = r.jc; if(r.component) o.component = r.component; map.set(r.serial, o); });
@@ -673,6 +682,7 @@ function derivePieces(events, config, nowDT){
     });
   });
   rows.sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)));
+  _piecesMemo.set(events, { now:nowDT, cfg:cfgKey, val:rows });
   return rows;
 }
 
@@ -1018,6 +1028,23 @@ function getAll(store){ return new Promise((res, rej) => { const r = tx(store, "
 function putRec(store, obj){ return new Promise((res, rej) => { const r = tx(store, "readwrite").put(obj); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 function delRec(store, key){ return new Promise((res, rej) => { const r = tx(store, "readwrite").delete(key); r.onsuccess = () => res(); r.onerror = () => rej(r.error); }); }
 function clearStore(store){ return new Promise((res, rej) => { const r = tx(store, "readwrite").clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); }); }
+// Recording an event and queueing its upload must be one atomic write. As two
+// separate transactions there is a window — widened by the loadAll() between
+// them — where a crash leaves the event on disk with no outbox row; the next
+// sync then replaces the local mirror with a server snapshot that never
+// received it, and the operator's saved entry disappears with no error.
+function putEventQueued(obj, op){
+  return new Promise((res, rej) => {
+    const t = db.transaction(["events", "outbox"], "readwrite");
+    let id = null;
+    const r = t.objectStore("events").put(obj);
+    r.onsuccess = () => { id = r.result; };
+    if(op) t.objectStore("outbox").put({ op });
+    t.oncomplete = () => res(id);
+    t.onerror = () => rej(t.error);
+    t.onabort = () => rej(t.error);
+  });
+}
 
 async function loadAll(){
   EVENTS = (await getAll("events")).sort(byDate);
@@ -1190,9 +1217,12 @@ async function addEvent(obj){
   // Keep the readable counter, plus a short UID suffix, so the ledger reference
   // remains unique without needing an online round trip.
   obj.eventId = obj.eventId || (ONLINE ? baseId + "-" + String(obj.uid).replace(/-/g, "").slice(0, 12).toUpperCase() : baseId);
-  const id = await putRec("events", obj); obj.id = id;
+  // forServer() only strips the local autoincrement id, so the outbox payload is
+  // known before the write and both rows can go in together.
+  const op = ONLINE ? { op:"put", uid:obj.uid, event:forServer(obj) } : null;
+  obj.id = await putEventQueued(obj, op);
   await loadAll();
-  await queueOp({ op:"put", uid:obj.uid, event:forServer(obj) });
+  if(op) scheduleSync();
 }
 async function updateEvent(obj){
   if(ONLINE && !isAdmin()) throw new Error("Only an admin can edit an event.");
