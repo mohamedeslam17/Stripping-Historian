@@ -227,7 +227,7 @@
   @keyframes fade{to{opacity:1}}
   .drawer{position:fixed;top:0;right:0;height:100vh;width:min(548px,96vw);background:var(--panel);z-index:61;border-left:1px solid #000;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .12s forwards}
   @keyframes slide{to{transform:translateX(0)}}
-  .drawer-h,.modal-h{display:flex;align-items:center;gap:10px;min-height:30px;padding:0 6px 0 13px;background:var(--chrome);color:#fff;border:0}
+  .drawer-h,.modal-h{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 0 0 13px;background:var(--chrome);color:#fff;border:0}
   .drawer-h h3,.modal-h h3{margin:0;font-size:11.5px;flex:1;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;color:#fff}
   .drawer-b,.modal-b{padding:15px;overflow:auto;flex:1}
   .drawer-f{min-height:52px;padding:9px 15px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:var(--elev)}
@@ -247,8 +247,10 @@
   .modal{background:var(--panel);border:1px solid #000;max-width:760px;width:100%;box-shadow:var(--sh-lg)}
   .modal-h{position:sticky;top:0;z-index:1}
   .modal-f{padding:11px 15px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--elev)}
-  .x{width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:1px;background:none;font-size:15px;color:#c2c8c3;line-height:1}
-  .x:hover{background:rgba(255,255,255,.16);color:#fff}
+  /* the close control keeps a class of its own: a generic .x rule would also
+     match the .dot.x inactive-bath marker and size it like a button (#4) */
+  .closebtn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:1px;background:none;font-size:16px;color:#c2c8c3;line-height:1}
+  .closebtn:hover{background:rgba(255,255,255,.16);color:#fff}
 
   .tl{list-style:none;margin:0;padding:0}
   .tl li{position:relative;padding:0 0 13px 18px;border-left:1px solid var(--line)}
@@ -265,22 +267,23 @@
   @media print{ body *{visibility:hidden} #printArea,#printArea *{visibility:visible} #printArea{display:block!important;position:absolute;inset:0;padding:0} thead th{position:static} }
 
   /* a11y: a clear, consistent keyboard-focus ring on every custom control (WCAG 2.4.7) */
-  .btn:focus-visible,.navlink:focus-visible,.side-log:focus-visible,.iconbtn:focus-visible,
+  .btn:focus-visible,.navlink:focus-visible,.iconbtn:focus-visible,
   .chip i:focus-visible,.typetab:focus-visible,.tankcard:focus-visible,.seg button:focus-visible,
   .chk:focus-visible,.waxchk:focus-visible,.idlechip:focus-visible,.linkish:focus-visible,.tag:focus-visible,
   thead th.sortable:focus-visible{
     outline:2px solid var(--accent);outline-offset:1px}
-  .tools button:focus-visible,.x:focus-visible,.side-log:focus-visible{outline:2px solid #8fb9de;outline-offset:-2px}
+  /* on the dark chrome and the accent button the steel-blue ring would vanish */
+  .tools button:focus-visible,.closebtn:focus-visible,.side-log:focus-visible{outline:2px solid #8fb9de;outline-offset:-2px}
 
   /* generous touch targets on finger/stylus devices — the floor uses gloves (WCAG 2.5.5) */
   @media(pointer:coarse){
-    .btn,.navlink,.side-log,.seg button,.tools button,.chk,.waxchk,.typetab{min-height:42px}
-    .btn.sm{padding:8px 12px;min-height:38px}
-    .tank-acts .btn{min-height:40px}
-    .chip i{width:22px;height:22px} .x{min-width:38px;min-height:38px}
-    .linkish{display:inline-block;padding:5px 2px}
-    input,select,textarea{font-size:16px;min-height:38px}   /* ≥16px stops iOS Safari from zooming on focus */
-    .filterbar select,.filterbar input,.search input{min-height:34px;height:auto}
+    .btn,.navlink,.side-log,.seg button,.tools button,.chk,.waxchk,.typetab{min-height:44px}
+    .btn.sm{padding:9px 13px;min-height:40px}
+    .tank-acts .btn{min-height:42px}
+    .chip i{width:24px;height:24px} .closebtn{min-width:44px;min-height:44px}
+    .linkish{display:inline-block;padding:6px 2px}
+    input,select,textarea{font-size:16px;min-height:40px}   /* ≥16px stops iOS Safari from zooming on focus */
+    .filterbar select,.filterbar input,.search input{min-height:38px;height:auto}
   }
 
   /* dense tables degrade gracefully on phones: drop the lowest-priority column and
@@ -1295,7 +1298,7 @@ function modal(title, bodyNode, footerNodes){
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
   const box = cel("div", { class:"modal", role:"dialog", "aria-modal":"true", "aria-label":typeof title === "string" ? title : "Dialog", tabindex:"-1" });
   box.append(
-    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeModal }, "×") ]),
+    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeModal }, "×") ]),
     cel("div", { class:"modal-b" }, bodyNode),
     footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
   );
@@ -1470,7 +1473,7 @@ function renderDrawer(){
   panel.append(cel("div", { class:"drawer-h" }, [
     cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
-    cel("button", { class:"x", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "×")
+    cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "×")
   ]));
   const body = cel("div", { class:"drawer-b" });
   const foot = cel("div", { class:"drawer-f" });
