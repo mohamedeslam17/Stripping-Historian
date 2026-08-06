@@ -66,21 +66,22 @@ loaded again — that's its next cycle.
 2. Start with the first real shop event. The realistic example dataset is available
    only when `index.html` is opened as a private local (`file://`) copy, so demo
    records cannot contaminate the shared production ledger.
-3. The **Dashboard** is home: one card per tank showing what's currently in it,
+3. The **Dashboard** is home: one panel per tank showing what's currently in it,
    with **Add parts / Remove parts / Move / Chem / Top up / Dispose** buttons. Use
-   the **＋ Log event** drawer (sidebar) for anything else; everything updates
-   automatically.
-4. Hit **Backup** (sidebar) to save a JSON snapshot; **Import** restores it.
+   the **Log event** button at the right of the tab rail for anything else;
+   everything updates automatically.
+4. Hit **Backup** in the title-strip toolbar (top right) to save a JSON snapshot;
+   **Import** restores it.
 
-A desktop‑oriented console: a left sidebar nav, a slide‑in **Log** drawer, and
-keyboard shortcuts — **L** add parts · **E** remove parts · **N** new event · **/** search.
-Serials are entered as **chips** (type/paste, Enter to add; ranges like
-`7261-01..06` expand).
+A desktop‑oriented console: a title strip carrying the toolbar, a tab rail beneath
+it, a slide‑in **Log** drawer, and keyboard shortcuts — **L** add parts · **E** remove
+parts · **N** new event · **/** search. Serials are entered as **chips** (type/paste,
+Enter to add; ranges like `7261-01..06` expand).
 
-A status pill sits at the bottom‑right of the shared app: **Synced**, **Syncing…**,
-**Offline — queued**, or **Not synced**. If the network drops, keep recording —
-entries are held locally and upload automatically when it returns. Don't close
-the browser while it still says *queued*.
+A status flag sits in the tab rail of the shared app, left of **Log event**:
+**Synced**, **Syncing…**, **Offline — queued**, or **Not synced**. If the network
+drops, keep recording — entries are held locally and upload automatically when it
+returns. Don't close the browser while it still says *queued*.
 
 > **Local mode only:** storage is per‑browser/per‑PC, so treat **Backup** as your
 > save button and keep snapshots somewhere durable.

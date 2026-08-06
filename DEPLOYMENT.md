@@ -66,8 +66,8 @@ existing deployment will not pick them up on its own.
 ### 4. Check it
 
 Open the site. You should get a password screen. Sign in with the admin
-password; the sidebar should read **shared · admin** and the pill at the
-bottom-right should settle on **Synced**.
+password; the title strip should read **shared · admin** and the status flag in
+the tab rail should settle on **Synced**.
 
 If something is missing, the app says which: a missing `AUTH_SECRET` or both
 passwords unset returns *"Server is not configured"*, and a missing `DB` binding

@@ -6,11 +6,12 @@
 <title>Stripping Historian — Process Engineering Log</title>
 <style>
   *{box-sizing:border-box}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
   /* #app and .sync-pill both carry a display rule that would otherwise beat the
      UA's [hidden] — the hosted shell and the sync chip rely on the attribute */
   [hidden]{display:none!important}
   :root{
-    --ink:#1b1e1c; --muted:#5b615c; --faint:#868c86; --line:#c3c8bf; --line-2:#e0e3dc;
+    --ink:#1b1e1c; --muted:#5b615c; --faint:#646a64; --line:#c3c8bf; --line-2:#e0e3dc;
     --bg:#e9ebe6; --panel:#ffffff; --elev:#f2f3ef;
     --chrome:#24282a; --chrome-ink:#dde1dd; --chrome-dim:#98a09a;
     --brand:#24282a; --brand-ink:#dde1dd;
@@ -131,6 +132,7 @@
   td:first-child,td:first-child + td{font-family:var(--mono);font-size:12px}
   td.num,th.num{text-align:right;font-family:var(--mono)}
   td.overlimit{color:var(--red);font-weight:700}
+  .limit-mark{display:inline-block;margin-left:5px;padding:0 4px;border:1px solid currentColor;border-radius:1px;font-family:var(--ui);font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;vertical-align:1px}
   thead th{background:#dcdfd8;font-weight:700;color:#3b413c;position:sticky;top:0;font-size:11.5px;border-bottom:1px solid #a9afa6;white-space:nowrap;vertical-align:bottom}
   thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--ink);background:#d2d6cd}
   thead th.sortable.sorted{color:var(--ink)} .sort-ind{font-size:9px;color:var(--accent);letter-spacing:0}
@@ -277,7 +279,9 @@
 
   /* generous touch targets on finger/stylus devices — the floor uses gloves (WCAG 2.5.5) */
   @media(pointer:coarse){
+    #idbar{height:auto;min-height:44px}          /* or the 44px toolbar overflows its own strip */
     .btn,.navlink,.side-log,.seg button,.tools button,.chk,.waxchk,.typetab{min-height:44px}
+    .iconbtn{width:40px;height:40px}
     .btn.sm{padding:9px 13px;min-height:40px}
     .tank-acts .btn{min-height:42px}
     .chip i{width:24px;height:24px} .closebtn{min-width:44px;min-height:44px}
@@ -338,7 +342,7 @@
       <button id="helpBtn" class="iconbtn" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">?</button>
     </div>
   </header>
-  <main id="main"></main>
+  <main id="main" aria-labelledby="viewHeading"></main>
   <input type="file" id="importFile" accept="application/json" style="display:none">
 </div>
 <div id="drawerRoot"></div>
@@ -1404,6 +1408,7 @@ function render(){
   renderNav();
   if(typeof document !== "undefined" && document.title !== undefined) document.title = activeTab + " — Stripping Historian";
   const m = $("#main"); m.innerHTML = "";
+  m.append(cel("h1", { id:"viewHeading", class:"sr-only" }, activeTab));   // the tab rail is the visible title; the outline still needs a heading
   const ab = attentionBar(); if(ab) m.append(ab);
   (VIEWS[activeTab] || vDash)(m);
   renderDrawer();
@@ -2097,7 +2102,10 @@ function vPieces(m){
   applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.hours, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
     const tr = cel("tr");
     tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
-    tr.append(cel("td", { class:"num" + (r.cycles >= CONFIG.maxCycles ? " overlimit" : ""), title:r.cycles >= CONFIG.maxCycles ? "At or over the " + CONFIG.maxCycles + "-cycle limit" : null }, String(r.cycles)));
+    const atLimit = r.cycles >= CONFIG.maxCycles;
+    tr.append(cel("td", { class:"num" + (atLimit ? " overlimit" : "") }, atLimit
+      ? [String(r.cycles), cel("span", { class:"limit-mark" }, "max"), cel("span", { class:"sr-only" }, " — at or over the " + CONFIG.maxCycles + "-cycle limit")]
+      : String(r.cycles)));
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
