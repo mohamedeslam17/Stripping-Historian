@@ -6,306 +6,350 @@
 <title>Stripping Historian — Process Engineering Log</title>
 <style>
   *{box-sizing:border-box}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  /* #app and .sync-pill both carry a display rule that would otherwise beat the
+     UA's [hidden] — the hosted shell and the sync chip rely on the attribute */
+  [hidden]{display:none!important}
   :root{
-    --ink:#172832; --muted:#52636f; --faint:#687783; --line:#dbe3e8; --line-2:#edf1f3;
-    --bg:#f4f7f9; --panel:#ffffff; --elev:#f0f4f6;
-    --brand:#102632; --brand-2:#14313f; --brand-ink:#f7fafb;
-    --accent:#0f766e; --accent-2:#0b625d; --accent-weak:#e7f3f1; --accent-ink:#0b625d; --on-accent:#ffffff;
-    --green:#18794e; --green-bg:#e8f5ee; --amber:#946200; --amber-bg:#fff4ce;
-    --red:#b42318; --red-bg:#fcebea; --blue:#2458a6; --blue-bg:#e7effb; --grey-bg:#eef2f4;
-    --focus:#0f766e; --r:9px; --r-s:7px; --r-xs:5px;
-    --sh-sm:0 1px 2px rgba(17,38,50,.06); --sh:0 5px 18px rgba(17,38,50,.09); --sh-lg:0 22px 58px rgba(17,38,50,.22);
+    --ink:#1b1e1c; --muted:#5b615c; --faint:#646a64; --line:#c3c8bf; --line-2:#e0e3dc;
+    --bg:#e9ebe6; --panel:#ffffff; --elev:#f2f3ef;
+    --chrome:#24282a; --chrome-ink:#dde1dd; --chrome-dim:#98a09a;
+    --brand:#24282a; --brand-ink:#dde1dd;
+    --accent:#1b4d7e; --accent-2:#143b61; --accent-weak:#e4ebf3; --accent-ink:#164066; --on-accent:#ffffff;
+    --green:#1c6337; --green-bg:#e1eee5; --amber:#8a5a00; --amber-bg:#f7ecd3;
+    --red:#9c2019; --red-bg:#f6e2e0; --blue:#1b4d7e; --blue-bg:#e4ebf3; --grey-bg:#e6e9e3;
+    --violet:#54407c; --violet-bg:#e9e6f1;
+    --focus:#1b4d7e; --r:2px; --r-s:2px; --r-xs:2px;
+    --ui:"Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,"Liberation Mono",monospace;
+    --sh-sm:none; --sh:none; --sh-lg:0 0 0 1px rgba(0,0,0,.22),0 16px 44px rgba(0,0,0,.3);
   }
   html,body{height:100%}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;color-scheme:light;font-variant-numeric:tabular-nums}
+  body{margin:0;font-family:var(--ui);color:var(--ink);background:var(--bg);font-size:13px;line-height:1.45;color-scheme:light;font-variant-numeric:tabular-nums}
 
-  #app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-  #sidebar{background:var(--brand);color:var(--brand-ink);border-right:1px solid #0b1d26;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;padding:16px 12px 14px;gap:4px}
-  .brand{display:flex;align-items:center;gap:11px;padding:4px 8px 18px}
-  .brand .logo{width:34px;height:34px;border-radius:8px;background:#22b89d;display:flex;align-items:center;justify-content:center;font-weight:800;color:#082d29;font-size:13px;letter-spacing:-.4px;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
-  .brand b{font-size:14.5px;font-weight:700;letter-spacing:.1px;display:block;line-height:1.15;color:#fff}
-  .brand small{display:block;color:#9fb2bd;font-size:10.5px;margin-top:3px;text-transform:uppercase;letter-spacing:.45px}
-  #nav{display:flex;flex-direction:column;gap:2px}
-  .navlink{display:flex;align-items:center;gap:10px;min-height:42px;padding:10px 12px;border-radius:var(--r-s);color:#c4d0d7;cursor:pointer;font-size:13.5px;font-weight:560;border:none;background:none;text-align:left;width:100%}
-  .navlink .ic{width:18px;text-align:center;opacity:.85;font-size:13px;color:#90a6b1}
-  .navlink:hover{background:rgba(255,255,255,.07);color:#fff}
-  .navlink.on{background:rgba(34,184,157,.14);color:#fff;box-shadow:inset 3px 0 0 #22b89d}
-  .navlink.on .ic{color:#49d4ba;opacity:1}
-  .navlink .badge{margin-left:auto;min-width:18px;text-align:center;padding:1px 6px;border-radius:9px;background:var(--red);color:#fff;font-size:11px;font-weight:700}
-  .navlink .badge.info{background:#22b89d;color:#082d29}
-  .side-sp{flex:1}
-  .side-log{min-height:44px;margin:8px 2px 12px;padding:11px;border-radius:var(--r-s);background:#22b89d;color:#082d29;border:none;cursor:pointer;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 14px rgba(0,0,0,.16)}
-  .side-log:hover{background:#34c7ac}
-  .side-foot{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:2px}
-  .side-foot button{min-width:0;min-height:38px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.12);color:#c4d0d7;border-radius:var(--r-xs);padding:7px 6px;font-size:11.5px;cursor:pointer}
-  .side-foot button:hover{background:rgba(255,255,255,.10);color:#fff;border-color:rgba(255,255,255,.22)}
-  .side-foot button:disabled{opacity:.38;cursor:not-allowed;background:rgba(255,255,255,.025)}
-  #signOutBtn{grid-column:1 / -1}
+  /* ---- application chrome: title strip over a tab rail ------------------ */
+  #app{display:flex;flex-direction:column;min-height:100vh}
+  #chrome{position:sticky;top:0;z-index:20;background:var(--panel)}
+  #idbar{display:flex;align-items:center;height:30px;padding-left:11px;background:var(--chrome);color:var(--chrome-ink)}
+  .brand{display:flex;align-items:baseline;gap:10px;min-width:0;overflow:hidden}
+  .brand b{font-size:11.5px;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand small{font-size:11px;color:var(--chrome-dim);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .idbar-sp{flex:1;min-width:8px}
+  .tools{display:flex;align-self:stretch}
+  .tools button{padding:0 11px;background:none;border:none;border-left:1px solid rgba(255,255,255,.14);color:var(--chrome-ink);font:inherit;font-size:11.5px;cursor:pointer;white-space:nowrap}
+  .tools button:hover{background:rgba(255,255,255,.11);color:#fff}
+  .tools button:disabled{color:#697069;cursor:not-allowed;background:none}
 
-  #content{display:flex;flex-direction:column;min-width:0}
-  #topbar{position:sticky;top:0;z-index:20;min-height:64px;background:rgba(255,255,255,.96);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:8px 20px;backdrop-filter:blur(8px)}
-  .page-head{min-width:210px;line-height:1.2}
-  #topbar h1{font-size:17px;margin:0;font-weight:720;letter-spacing:-.2px}
-  #pageSubtitle{font-size:11.5px;color:var(--muted);margin:4px 0 0}
-  .search{margin-left:auto}
-  .search input{width:286px;height:36px;padding:8px 13px;border:1px solid var(--line);border-radius:18px;background:var(--elev);font-size:13px}
-  .sync-pill{display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:5px 10px;border-radius:999px;border:1px solid transparent;font-size:11.5px;font-weight:650;white-space:nowrap}
-  .sync-pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
-  .sync-idle{background:var(--green-bg);color:var(--green);border-color:#cce8d8}
-  .sync-syncing{background:var(--blue-bg);color:var(--blue);border-color:#cadbf4}
-  .sync-offline{background:var(--amber-bg);color:var(--amber);border-color:#eadcaa}
-  .sync-error{background:var(--red-bg);color:var(--red);border-color:#edcac7}
-  .kbd{display:inline-block;border:1px solid #d0d0d0;border-radius:5px;padding:0 5px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace}
-  .iconbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--elev);color:var(--muted);cursor:pointer;font-size:14px;font-weight:700;flex:none;line-height:1}
-  .iconbtn:hover{background:#ececec;color:var(--ink)} .iconbtn:focus-visible{outline:2px solid var(--accent-ink);outline-offset:2px}
-  #main{padding:24px 28px 34px;flex:1;min-width:0;max-width:1440px;width:100%;margin:0 auto}
+  #topbar{display:flex;align-items:stretch;min-height:36px;background:var(--elev);border-bottom:1px solid var(--line)}
+  #nav{display:flex;align-items:stretch;overflow:auto;scrollbar-width:none}
+  #nav::-webkit-scrollbar{display:none}
+  .navlink{display:flex;align-items:center;gap:7px;padding:0 15px;border:none;border-right:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .navlink:hover{background:#e5e8e1;color:var(--ink)}
+  .navlink.on{background:var(--panel);color:var(--ink);box-shadow:inset 0 2px 0 var(--accent);margin-bottom:-1px}
+  .navlink .badge{min-width:16px;padding:0 4px;text-align:center;background:var(--red);color:#fff;font-size:10.5px;font-weight:700;font-family:var(--mono);line-height:15px;border-radius:1px}
+  .navlink .badge.info{background:var(--accent)}
+  .search{margin-left:auto;display:flex;align-items:center;padding:0 8px}
+  .search input{width:238px;height:24px;min-height:24px;padding:2px 7px;border:1px solid var(--line);border-radius:1px;background:var(--panel);font-size:12px;font-family:var(--mono)}
+  .side-log{align-self:stretch;display:flex;align-items:center;gap:8px;padding:0 15px;background:var(--accent);color:#fff;border:none;font:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .side-log:hover{background:var(--accent-2)}
+  .kbd{display:inline-block;border:1px solid var(--line);border-radius:1px;padding:0 4px;font-size:10px;line-height:15px;font-family:var(--mono);color:var(--muted);background:var(--elev)}
+  .side-log .kbd{border-color:currentColor;color:inherit;background:none;opacity:.72}
+  .iconbtn{align-self:center;width:24px;height:24px;margin:0 8px;border:1px solid var(--line);border-radius:1px;background:var(--panel);color:var(--muted);cursor:pointer;font-size:12px;font-weight:700;flex:none;line-height:1}
+  .iconbtn:hover{background:var(--elev);color:var(--ink)}
+  .sync-pill{align-self:center;display:inline-flex;align-items:center;height:21px;padding:0 7px;border:1px solid transparent;border-radius:1px;font-size:11px;font-weight:600;font-family:var(--mono);white-space:nowrap;margin-left:8px}
+  .sync-idle{background:var(--green-bg);color:var(--green);border-color:#b7d3c1}
+  .sync-syncing{background:var(--blue-bg);color:var(--blue);border-color:#b6c8da}
+  .sync-offline{background:var(--amber-bg);color:var(--amber);border-color:#dcc38b}
+  .sync-error{background:var(--red-bg);color:var(--red);border-color:#d9aca7}
+  #main{padding:14px 16px 40px;flex:1;min-width:0;width:100%}
 
+  /* ---- sign-in ---------------------------------------------------------- */
   .login-shell{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--bg);font-family:inherit}
-  .login-card{max-width:390px;width:100%;background:var(--panel);border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:12px;padding:26px;box-shadow:0 18px 45px rgba(17,38,50,.12)}
-  .login-brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
-  .login-mark{width:38px;height:38px;border-radius:9px;background:var(--brand);color:#49d4ba;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800}
-  .login-card h1{margin:0;font-size:19px;letter-spacing:-.25px}.login-card .login-sub{color:var(--muted);font-size:12.5px;margin-top:2px}
-  .login-error{color:var(--red);font-size:12.5px;min-height:20px;margin:7px 0}
-  .login-submit{width:100%;min-height:42px;font-size:14px}
-  .login-footnote{margin-top:16px;padding-top:14px;border-top:1px solid var(--line-2);color:var(--faint);font-size:11px;text-align:center;text-transform:uppercase;letter-spacing:.55px}
+  .login-card{max-width:352px;width:100%;background:var(--panel);border:1px solid #8f968e}
+  .login-head{margin:0;background:var(--chrome);color:#fff;padding:7px 13px;font-size:11.5px;font-weight:600;letter-spacing:1.1px;text-transform:uppercase}
+  .login-body{padding:16px 15px 15px}
+  .login-sub{color:var(--muted);font-size:12px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--line-2)}
+  .login-error{color:var(--red);font-size:12px;min-height:19px;margin:6px 0}
+  .login-submit{width:100%;min-height:32px;font-size:13px}
+  .login-footnote{margin-top:14px;padding-top:11px;border-top:1px solid var(--line-2);color:var(--faint);font-size:11px;font-family:var(--mono)}
 
-  .attn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-bg);color:var(--red);border:1px solid #f3c4c0;border-radius:var(--r);padding:9px 14px;margin-bottom:16px;font-size:13px}
-  .attn b{font-weight:700} .attn .sp{flex:1}
+  /* ---- shared furniture -------------------------------------------------- */
+  .attn{display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--red-bg);color:var(--red);border:1px solid #d9aca7;border-left:3px solid var(--red);padding:6px 11px;margin-bottom:12px;font-size:12.5px}
+  .attn b{font-weight:700;font-family:var(--mono)} .attn .sp{flex:1}
 
-  h2.sec{font-size:15px;margin:0 0 16px;font-weight:700;letter-spacing:-.1px}
-  h3.sub{font-size:11.5px;margin:24px 0 10px;color:#40535f;font-weight:750;text-transform:uppercase;letter-spacing:.8px}
+  h2.sec{font-size:13px;margin:0 0 12px;font-weight:700;padding-bottom:6px;border-bottom:1px solid var(--line-2)}
+  h3.sub{display:flex;align-items:center;gap:10px;font-size:12px;margin:18px 0 8px;color:var(--ink);font-weight:700;text-transform:none;letter-spacing:0}
+  h3.sub::after{content:"";flex:1;height:1px;background:var(--line)}
   .muted{color:var(--muted)} .faint{color:var(--faint)}
-  .row{display:flex;gap:14px;flex-wrap:wrap}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;box-shadow:var(--sh-sm)}
-  .linkish{color:var(--accent-ink);cursor:pointer;font-weight:500} .linkish:hover{text-decoration:underline}
-  .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--muted)}
-  .empty{min-height:220px;text-align:center;color:var(--muted);padding:44px 20px;background:var(--panel);border:1px dashed #cdd8de;border-radius:var(--r);display:flex;flex-direction:column;align-items:center;justify-content:center} .flagok{color:var(--green)}
-  .empty.compact{min-height:150px;padding:32px 20px}
-  .filterbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:10px;margin-bottom:10px;box-shadow:var(--sh-sm)}
-  .filterbar select{width:auto;min-width:132px}.filterbar input{width:230px;flex:0 1 280px}.filterbar .filter-count{margin-left:auto;padding:0 6px;color:var(--muted);font-size:12px;white-space:nowrap}
-  .settings-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,.85fr);gap:16px;align-items:start}
-  .settings-stack{display:grid;gap:16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  .card{background:var(--panel);border:1px solid var(--line);padding:13px}
+  .linkish{color:var(--accent-ink);cursor:pointer;font-weight:600;font-family:var(--mono);text-decoration:underline;text-decoration-color:#aabbcb;text-underline-offset:2px}
+  .linkish:hover{text-decoration-color:currentColor}
+  .mono{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .empty{min-height:170px;text-align:center;color:var(--muted);padding:36px 20px;background:var(--elev);border:1px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .empty.compact{min-height:110px;padding:26px 20px} .flagok{color:var(--green)}
+  .filterbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--elev);border:1px solid var(--line);padding:6px 8px;margin-bottom:8px}
+  .filterbar select,.filterbar input{min-height:26px;background:var(--panel)}
+  .filterbar select{width:auto;min-width:126px}.filterbar input{width:220px;flex:0 1 260px}
+  .filterbar .filter-count{margin-left:auto;padding:0 4px;color:var(--muted);font-size:11.5px;font-family:var(--mono);white-space:nowrap}
+  .settings-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.85fr);gap:12px;align-items:start}
+  .settings-stack{display:grid;gap:12px}
   .settings-grid .card{margin:0;max-width:none}
-  .setting-note{font-size:12px;color:var(--muted);padding-top:2px}
-  .danger-zone{border-color:#edcac7;background:#fffdfd}
-  .danger-zone h2.sec{color:#7f1d1d}
+  .setting-note{font-size:11.5px;color:var(--muted);padding-top:2px}
+  .danger-zone{border-color:#cfa8a3;background:#fdf7f6}
+  .danger-zone h2.sec{color:#7a1c16;border-bottom-color:#e6c8c4}
 
-  .btn{min-height:36px;background:#ffffff;border:1px solid #d4dde2;color:var(--ink);padding:8px 13px;border-radius:var(--r-s);cursor:pointer;font-size:13px;font-weight:620}
-  .btn:hover{background:#f3f6f7;border-color:#bdcbd2}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
-  .btn.primary:hover{background:var(--accent-2);border-color:var(--accent-2)}
-  .btn.sm{min-height:32px;padding:6px 10px;font-size:12px}
-  .btn.danger{color:var(--red);border-color:#f0c4c0;background:#fff}
-  .btn.danger:hover{background:#fef2f2}
-  .btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
-  .btnrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* ---- controls ---------------------------------------------------------- */
+  .btn{min-height:28px;background:var(--panel);border:1px solid #b4b9b1;color:var(--ink);padding:4px 11px;border-radius:2px;cursor:pointer;font:inherit;font-size:12.5px;font-weight:600}
+  .btn:hover{background:var(--elev);border-color:#979e95}
+  .btn:active{background:#e6e9e3}
+  .btn.primary{background:var(--accent);border-color:var(--accent-2);color:var(--on-accent)}
+  .btn.primary:hover{background:var(--accent-2)}
+  .btn.sm{min-height:24px;padding:2px 8px;font-size:12px}
+  .btn.danger{color:var(--red);border-color:#cba7a2;background:var(--panel)}
+  .btn.danger:hover{background:var(--red-bg)}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .btnrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 
-  label.f{display:block;font-size:12.5px;color:#40535f;margin:0 0 6px;font-weight:650}
-  input,select,textarea{width:100%;min-height:40px;padding:9px 11px;border:1px solid #cfd9de;border-radius:var(--r-s);font-size:13.5px;font-family:inherit;background:#ffffff;color:var(--ink)}
+  label.f{display:block;font-size:12px;color:#454b46;margin:0 0 4px;font-weight:600}
+  input,select,textarea{width:100%;min-height:30px;padding:5px 8px;border:1px solid #b4b9b1;border-radius:2px;font-size:13px;font-family:inherit;background:var(--panel);color:var(--ink)}
+  input[type=number],input[type=date],input[type=datetime-local],input[type=search],input[type=password]{font-family:var(--mono);font-size:12.5px}
   textarea{resize:vertical}
-  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--focus);box-shadow:0 0 0 3px rgba(15,118,110,.17)}
-  input:disabled,select:disabled,textarea:disabled{background:#eef2f4;color:#63727d;cursor:not-allowed}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  input:disabled,select:disabled,textarea:disabled{background:var(--elev);color:#7b817b;cursor:not-allowed}
+  input.bad{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
   ::placeholder{color:var(--faint)}
-  .field{margin-bottom:14px}
-  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  .field{margin-bottom:11px}
+  .twocol{display:grid;grid-template-columns:1fr 1fr;gap:11px}
 
-  .tbl-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);max-height:68vh;background:var(--panel);box-shadow:var(--sh-sm)}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th,td{padding:9px 12px;text-align:left;vertical-align:middle;border-bottom:1px solid var(--line-2)}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  thead th{background:#f1f5f7;font-weight:700;color:#4b5e69;position:sticky;top:0;font-size:10.5px;text-transform:uppercase;letter-spacing:.65px;border-bottom:1px solid var(--line);white-space:nowrap}
-  thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--ink);background:#eaf0f3}
-  thead th.sortable.sorted{color:var(--ink)} .sort-ind{font-size:9px;color:var(--accent-ink);letter-spacing:0}
-  thead th.sortable:focus-visible{outline:2px solid var(--accent-ink);outline-offset:-2px}
-  tbody tr:hover{background:#f4f8f9} tbody tr:last-child td{border-bottom:none}
+  /* ---- tables: a ledger, so rule every cell and stripe every other row --- */
+  .tbl-wrap{overflow:auto;border:1px solid var(--line);max-height:70vh;background:var(--panel)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{padding:5px 9px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line-2);border-right:1px solid var(--line-2)}
+  th:last-child,td:last-child{border-right:none}
+  /* identifiers and timestamps live in the first two columns of every table —
+     set them in the mono face so serials and times line up down the page */
+  td:first-child,td:first-child + td{font-family:var(--mono);font-size:12px}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  td.overlimit{color:var(--red);font-weight:700}
+  .limit-mark{display:inline-block;margin-left:5px;padding:0 4px;border:1px solid currentColor;border-radius:1px;font-family:var(--ui);font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;vertical-align:1px}
+  thead th{background:#dcdfd8;font-weight:700;color:#3b413c;position:sticky;top:0;font-size:11.5px;border-bottom:1px solid #a9afa6;white-space:nowrap;vertical-align:bottom}
+  thead th.sortable{cursor:pointer;user-select:none} thead th.sortable:hover{color:var(--ink);background:#d2d6cd}
+  thead th.sortable.sorted{color:var(--ink)} .sort-ind{font-size:9px;color:var(--accent);letter-spacing:0}
+  tbody tr:nth-child(even) td{background:#f7f8f4}
+  tbody tr:hover td{background:var(--accent-weak)}
+  tbody tr:last-child td{border-bottom:none}
 
-  .pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:20px;font-size:11.5px;font-weight:600;white-space:nowrap}
-  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.85}
-  .pill.nodot::before{display:none}
-  .p-green{background:var(--green-bg);color:var(--green)} .p-amber{background:var(--amber-bg);color:var(--amber)}
-  .p-red{background:var(--red-bg);color:var(--red)} .p-grey{background:var(--grey-bg);color:#5b6470}
-  .p-blue{background:var(--blue-bg);color:var(--blue)}
-  .p-purple{background:#f3e8ff;color:#7c3aed}
-  .tag{display:inline-flex;align-items:center;gap:6px;background:#f3f3f3;border:1px solid var(--line);border-radius:7px;padding:3px 8px;font-size:12px;margin:2px 4px 0 0}
-  .tag.flagbad{background:var(--red-bg);border-color:#f3c4c0;color:var(--red)}
+  /* ---- status marks: squared flags, never bubbles ------------------------ */
+  .pill{display:inline-flex;align-items:center;gap:5px;padding:0 6px;border:1px solid;border-radius:1px;font-family:var(--ui);font-size:11px;font-weight:650;line-height:17px;white-space:nowrap}
+  .pill::before{display:none}
+  .p-green{background:var(--green-bg);color:var(--green);border-color:#b7d3c1}
+  .p-amber{background:var(--amber-bg);color:var(--amber);border-color:#dcc38b}
+  .p-red{background:var(--red-bg);color:var(--red);border-color:#d9aca7}
+  .p-grey{background:var(--grey-bg);color:#575d58;border-color:#c3c8bf}
+  .p-blue{background:var(--blue-bg);color:var(--blue);border-color:#b6c8da}
+  .p-violet,.p-purple{background:var(--violet-bg);color:var(--violet);border-color:#c5bcd9}
+  .tag{display:inline-flex;align-items:center;gap:6px;background:var(--elev);border:1px solid var(--line);border-radius:1px;padding:1px 6px;font-size:11.5px;font-family:var(--mono);margin:2px 4px 0 0}
+  .tag.flagbad{background:var(--red-bg);border-color:#d9aca7;color:var(--red)}
 
-  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:0 0 18px}
-  .kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:13px 15px;box-shadow:var(--sh-sm)}
-  .kpi .v{font-size:25px;font-weight:750;letter-spacing:-.65px;line-height:1.1} .kpi .l{font-size:10.5px;color:var(--muted);margin-top:6px;font-weight:650;text-transform:uppercase;letter-spacing:.45px}
-  .kpi.warn{box-shadow:inset 3px 0 0 var(--red),var(--sh-sm)} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
+  /* ---- readout strip (replaces the stat-tile grid) ----------------------- */
+  .kpis{display:flex;flex-wrap:wrap;border:1px solid var(--line);border-right:0;background:var(--panel);margin:0 0 14px}
+  .kpi{flex:1 1 112px;min-width:0;display:flex;flex-direction:column-reverse;justify-content:flex-end;padding:7px 11px;border:0;border-right:1px solid var(--line-2);background:var(--panel);border-radius:0}
+  .kpi .v{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.4px;line-height:1.25}
+  .kpi .l{font-size:11px;color:var(--muted);margin:0 0 1px;font-weight:600;text-transform:none;letter-spacing:0}
+  .kpi.warn{box-shadow:inset 3px 0 0 var(--red)} .kpi.warn .v{color:var(--red)} .kpi.good .v{color:var(--green)}
 
-  .bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-  .bathcard{cursor:pointer;transition:box-shadow .12s,transform .12s}
-  .bathcard:hover{box-shadow:var(--sh);transform:translateY(-1px)}
-  .bathcard h3{margin:0;font-size:15px;display:flex;align-items:center;gap:8px}
-  .kv{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line-2);font-size:12.5px}
-  .kv span:first-child{color:var(--muted)}
-  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none}
-  .dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)} .dot.x{background:#c0c0c0}
-  .partline{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line-2);font-size:13px}
-  .partline:last-child{border-bottom:none} .partline .s{font-weight:600} .partline .t{margin-left:auto;color:var(--muted);font-size:12px}
-  .tankgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:12px;margin-bottom:18px}
-  .tankcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:14px;box-shadow:var(--sh-sm);cursor:pointer;transition:box-shadow .12s,border-color .12s,transform .12s;display:flex;flex-direction:column}
-  .tankcard:hover{box-shadow:var(--sh);border-color:#bfcdd4;transform:translateY(-1px)}
-  .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:auto;padding-top:12px}
+  /* ---- baths ------------------------------------------------------------- */
+  .kv{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .kv span:first-child{color:var(--muted)} .kv span:last-child{font-family:var(--mono)}
+  .dot{width:8px;height:8px;border-radius:0;display:inline-block;flex:none;border:1px solid rgba(0,0,0,.22)}
+  .dot.g{background:var(--green)} .dot.r{background:var(--red)} .dot.a{background:var(--amber)} .dot.x{background:#b3b8b1}
+  .partline{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line-2);font-size:12.5px}
+  .partline:last-child{border-bottom:none} .partline .s{font-weight:600;font-family:var(--mono)} .partline .t{margin-left:auto;color:var(--muted);font-size:12px;font-family:var(--mono)}
+  .tankgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(258px,1fr));gap:10px;margin-bottom:16px}
+  .tankcard{background:var(--panel);border:1px solid var(--line);padding:0;cursor:pointer;display:flex;flex-direction:column}
+  .tankcard:hover{border-color:#8b928a}
+  .tank-h{display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--elev);border-bottom:1px solid var(--line)}
+  .tank-h b{font-size:13px;font-family:var(--mono);letter-spacing:0}
+  .tank-meta{font-size:11.5px;color:var(--muted);padding:4px 10px;font-family:var(--mono);border-bottom:1px solid var(--line-2);min-height:22px}
+  .tank{position:relative;flex:1;border:0;border-radius:0;min-height:68px;background:#edf0ec;padding:8px 10px;display:flex;flex-wrap:wrap;gap:5px;align-content:flex-start;box-shadow:inset 0 1px 0 rgba(0,0,0,.05)}
+  .tank.spent{background:#f5e5e3}
+  /* hatched = out of service, the way it is marked up on a drawing */
+  .tank.off{min-height:52px;background:repeating-linear-gradient(45deg,#e8ebe5,#e8ebe5 5px,#dfe2db 5px,#dfe2db 10px)}
+  .tank-part{background:var(--panel);border:1px solid #b4bcb2;border-radius:1px;padding:0 5px;font-size:11px;line-height:17px;font-family:var(--mono);font-weight:600;color:var(--ink);height:fit-content}
+  .tank-part.hot{background:var(--red-bg);border-color:#d9aca7;color:var(--red)}
+  .tank-empty{color:#767d76;font-size:11.5px;margin:auto;font-family:var(--mono)}
+  .tankcard > .warn-line{margin:0;border-left-width:3px;padding:4px 10px}
+  .tank-acts{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-top:auto;padding:0;border-top:1px solid var(--line)}
   .tank-acts > :only-child{grid-column:1 / -1}
-  .tank-h{display:flex;align-items:center;gap:8px;margin-bottom:7px}.tank-h b{font-size:14px;letter-spacing:.1px}
-  .tank-meta{font-size:11.5px;color:var(--muted);margin-bottom:9px;min-height:18px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-  .tank{position:relative;border:1px solid #beded8;border-top:3px solid var(--accent);border-radius:5px 5px 9px 9px;min-height:78px;background:linear-gradient(180deg,#eef8f6,#dcefeb);padding:9px;display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
-  .tank.spent{background:linear-gradient(180deg,#fdecec,#f8d6d6);border-color:#f0c4c0}
-  .tank.off{min-height:58px;background:#f7f9fa;border:1px dashed #c8d3d9;border-top:3px solid #c8d3d9}
-  .tank-part{background:#fff;border:1px solid #c3dcd7;border-radius:6px;padding:3px 7px;font-size:11.5px;font-weight:650;color:var(--ink);box-shadow:var(--sh-sm);height:fit-content}
-  .tank-part.hot{background:var(--red-bg);border-color:#f0c4c0;color:var(--red)}
-  .tank-empty{color:#6c7c87;font-size:11.5px;margin:auto;font-weight:600}
+  .tank-acts .btn{border:0;border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);border-radius:0;min-height:29px}
+  .tank-acts .btn.primary{border-right-color:var(--accent-2)}
 
-  .chipbox{display:flex;flex-wrap:wrap;gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-s);background:#ffffff;min-height:44px;align-content:flex-start}
-  .chipbox.focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,118,110,.17)}
-  .chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-ink);border-radius:7px;padding:3px 4px 3px 9px;font-size:12.5px;font-weight:600}
-  .chip i{cursor:pointer;font-style:normal;width:16px;height:16px;border-radius:4px;display:flex;align-items:center;justify-content:center}
-  .chip i:hover{background:rgba(0,0,0,.10)}
-  .chipbox input{border:none;outline:none;box-shadow:none!important;flex:1;min-width:120px;padding:4px;background:transparent;color:var(--ink)}
-  .idlechip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-weak);color:var(--accent-ink);border:1px solid #bfe8d6;border-radius:7px;padding:3px 9px;font-size:12.5px;font-weight:600;cursor:pointer}
-  .idlechip:hover{background:#d6f3e6}
-  .idlechip-tag{background:#f3e8ff;color:#7c3aed;border-radius:5px;padding:0 5px;font-size:10px}
+  /* ---- serial entry ------------------------------------------------------ */
+  .chipbox{display:flex;flex-wrap:wrap;gap:5px;padding:6px;border:1px solid #b4b9b1;border-radius:2px;background:var(--panel);min-height:38px;align-content:flex-start}
+  .chipbox.focus{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+  .chip{display:inline-flex;align-items:center;gap:5px;background:var(--accent-weak);color:var(--accent-ink);border:1px solid #b6c8da;border-radius:1px;padding:0 2px 0 6px;font-size:12px;line-height:19px;font-weight:600;font-family:var(--mono)}
+  .chip i{cursor:pointer;font-style:normal;width:15px;height:15px;border-radius:1px;display:flex;align-items:center;justify-content:center}
+  .chip i:hover{background:rgba(0,0,0,.12)}
+  .chipbox input{border:none;outline:none;box-shadow:none!important;flex:1;min-width:120px;min-height:20px;padding:2px;background:transparent;color:var(--ink)}
+  .idlechip{display:inline-flex;align-items:center;gap:6px;background:var(--panel);color:var(--ink);border:1px solid #b4b9b1;border-radius:1px;padding:1px 7px;font-size:12px;font-family:var(--mono);font-weight:600;cursor:pointer}
+  .idlechip:hover{background:var(--accent-weak);border-color:var(--accent)}
+  .idlechip-tag{background:var(--violet-bg);color:var(--violet);border-radius:1px;padding:0 4px;font-size:10px}
 
-  .contents{border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;margin-top:4px}
-  .crow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line-2)}
+  .contents{border:1px solid var(--line);margin-top:4px}
+  .crow{display:grid;grid-template-columns:22px 1fr auto;gap:9px;align-items:center;padding:6px 9px;border-bottom:1px solid var(--line-2)}
   .crow:last-child{border-bottom:none} .crow.on{background:var(--accent-weak)}
-  .crow input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
-  .seg button{border:none;background:#fff;padding:5px 10px;font-size:12px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line)}
+  .crow input[type=checkbox]{width:16px;height:16px;min-height:16px;accent-color:var(--accent)}
+  .seg{display:inline-flex;border:1px solid #b4b9b1;border-radius:2px;overflow:hidden}
+  .seg button{border:none;background:var(--panel);padding:3px 10px;font:inherit;font-size:12px;cursor:pointer;color:var(--muted);border-right:1px solid var(--line)}
   .seg button:last-child{border-right:none}
   .seg button.on{background:var(--accent);color:var(--on-accent);font-weight:600}
   .seg.wrap{flex-wrap:wrap}
-  .seg.wax button.on{background:var(--amber);color:#fff}
-  .seg.wax button.on.partial{background:var(--amber);color:#fff}
+  .seg.wax button.on,.seg.wax button.on.partial{background:var(--amber);color:#fff}
   .seg.wax button.on.full{background:var(--red);color:#fff}
-  .waxchk{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:7px;padding:4px 9px;font-size:12px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
-  .waxchk input{width:14px;height:14px;margin:0;flex:none;accent-color:var(--red)}
-  .waxchk.on{background:var(--red-bg);border-color:#f0c4c0;color:var(--red);font-weight:600}
-  .waxchk.on-rm{background:#f3e8ff;border-color:#dcc6f5;color:#7c3aed;font-weight:600}
-  .waxchk.on-rm input{accent-color:#7c3aed}
-  .chk{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:7px;padding:6px 11px;font-size:12.5px;cursor:pointer;background:#fff;color:var(--muted);user-select:none}
-  .chk input{width:15px;height:15px;margin:0;flex:none;accent-color:var(--accent)}
-  .chk.on{background:var(--accent-weak);border-color:#bfe8d6;color:var(--accent-ink);font-weight:600}
+  .waxchk{display:inline-flex;align-items:center;gap:6px;border:1px solid #b4b9b1;border-radius:2px;padding:3px 8px;font-size:12px;cursor:pointer;background:var(--panel);color:var(--muted);user-select:none}
+  .waxchk input{width:13px;height:13px;min-height:13px;margin:0;flex:none;accent-color:var(--red)}
+  .waxchk.on{background:var(--red-bg);border-color:#d9aca7;color:var(--red);font-weight:600}
+  .waxchk.on-rm{background:var(--violet-bg);border-color:#c5bcd9;color:var(--violet);font-weight:600}
+  .waxchk.on-rm input{accent-color:var(--violet)}
+  .chk{display:inline-flex;align-items:center;gap:7px;border:1px solid #b4b9b1;border-radius:2px;padding:4px 10px;font-size:12.5px;cursor:pointer;background:var(--panel);color:var(--muted);user-select:none}
+  .chk input{width:14px;height:14px;min-height:14px;margin:0;flex:none;accent-color:var(--accent)}
+  .chk.on{background:var(--accent-weak);border-color:#b6c8da;color:var(--accent-ink);font-weight:600}
 
   svg.chart{display:block;max-width:100%}
-  .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px}
-  .charts3 .ch{border:1px solid var(--line);border-radius:var(--r-s);padding:8px;background:#fcfdfd}
-  .chttl{font-size:11px;color:var(--muted);margin-bottom:2px;display:flex;justify-content:space-between}
-  .bar{height:8px;background:var(--line-2);border-radius:6px;overflow:hidden}
-  .bar > i{display:block;height:100%;background:var(--accent);border-radius:6px}
-  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+  .charts3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+  .charts3 .ch{border:1px solid var(--line);padding:7px;background:var(--panel)}
+  .chttl{font-size:11px;color:var(--muted);margin-bottom:2px;display:flex;justify-content:space-between;font-family:var(--mono)}
+  .bar{height:9px;background:var(--line-2);border:1px solid var(--line);overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--accent)}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
 
-  .scrim{position:fixed;inset:0;background:rgba(10,27,36,.48);z-index:60;opacity:0;animation:fade .15s forwards;backdrop-filter:blur(1px)}
+  /* ---- overlays ---------------------------------------------------------- */
+  .scrim{position:fixed;inset:0;background:rgba(18,22,20,.44);z-index:60;opacity:0;animation:fade .1s forwards}
   @keyframes fade{to{opacity:1}}
-  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(560px,96vw);background:var(--panel);z-index:61;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .18s forwards}
+  .drawer{position:fixed;top:0;right:0;height:100vh;width:min(548px,96vw);background:var(--panel);z-index:61;border-left:1px solid #000;box-shadow:var(--sh-lg);display:flex;flex-direction:column;transform:translateX(100%);animation:slide .12s forwards}
   @keyframes slide{to{transform:translateX(0)}}
-  .drawer-h{display:flex;align-items:center;gap:10px;min-height:62px;padding:13px 18px;border-bottom:1px solid var(--line);background:#fbfcfd}
-  .drawer-h h3{margin:0;font-size:16px;flex:1;font-weight:720;letter-spacing:-.15px}
-  .drawer-b{padding:18px;overflow:auto;flex:1}
-  .drawer-f{min-height:66px;padding:12px 18px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:#fbfcfd}
+  .drawer-h,.modal-h{display:flex;align-items:center;gap:10px;min-height:34px;padding:0 0 0 13px;background:var(--chrome);color:#fff;border:0}
+  .drawer-h h3,.modal-h h3{margin:0;font-size:11.5px;flex:1;font-weight:600;letter-spacing:1.1px;text-transform:uppercase;color:#fff}
+  .drawer-b,.modal-b{padding:15px;overflow:auto;flex:1}
+  .drawer-f{min-height:52px;padding:9px 15px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center;background:var(--elev)}
   .form-hint{font-size:12px;align-self:center;color:var(--amber);font-weight:600;margin-left:2px}
   .form-hint.ready{color:var(--green)}
-  .typetabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
-  .typetab{min-height:62px;padding:10px 11px;border:1px solid var(--line);border-radius:var(--r-s);background:#fff;cursor:pointer;font-weight:650;font-size:13px;text-align:left;color:var(--ink);box-shadow:var(--sh-sm)}
-  .typetab:hover{border-color:#aebfc7;background:#f7fafb}
+  .typetabs{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:14px;border:1px solid var(--line)}
+  .typetab{min-height:52px;padding:8px 10px;border:0;border-right:1px solid var(--line-2);border-bottom:1px solid var(--line-2);border-radius:0;background:var(--panel);cursor:pointer;font:inherit;font-weight:650;font-size:13px;text-align:left;color:var(--ink)}
+  .typetab:nth-child(2n){border-right:0}
+  .typetab:hover{background:var(--elev)}
   .typetab small{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:2px}
-  .typetab.on{background:var(--accent-weak);color:var(--ink);border-color:var(--accent)} .typetab.on small{color:#3f716c}
-  .warn-line{display:flex;gap:7px;align-items:flex-start;padding:7px 11px;border-radius:var(--r-s);font-size:12.5px;margin-bottom:6px}
+  .typetab.on{background:var(--accent-weak);color:var(--ink);box-shadow:inset 3px 0 0 var(--accent)} .typetab.on small{color:#3d5871}
+  .warn-line{display:flex;gap:7px;align-items:flex-start;padding:5px 9px;border-left:3px solid currentColor;font-size:12.5px;margin-bottom:5px}
   .warn-red{background:var(--red-bg);color:var(--red)} .warn-amber{background:var(--amber-bg);color:var(--amber)}
+  .warn-violet{background:var(--violet-bg);color:var(--violet)}
 
-  .overlay{position:fixed;inset:0;background:rgba(10,27,36,.50);display:flex;align-items:flex-start;justify-content:center;padding:34px 14px;z-index:62;overflow:auto;backdrop-filter:blur(1px)}
-  .modal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);max-width:760px;width:100%;box-shadow:var(--sh-lg)}
-  .modal-h{display:flex;align-items:center;gap:10px;padding:15px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel);border-radius:var(--r) var(--r) 0 0}
-  .modal-h h3{margin:0;font-size:15px;flex:1;font-weight:650}
-  .modal-b{padding:18px}
-  .modal-f{padding:13px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
-  .closebtn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid transparent;border-radius:50%;background:none;font-size:17px;color:var(--muted);line-height:1}
-  .closebtn:hover{background:var(--elev);border-color:var(--line);color:var(--ink)}
+  .overlay{position:fixed;inset:0;background:rgba(18,22,20,.46);display:flex;align-items:flex-start;justify-content:center;padding:34px 14px;z-index:62;overflow:auto}
+  .modal{background:var(--panel);border:1px solid #000;max-width:760px;width:100%;box-shadow:var(--sh-lg)}
+  .modal-h{position:sticky;top:0;z-index:1}
+  .modal-f{padding:11px 15px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--elev)}
+  /* the close control keeps a class of its own: a generic .x rule would also
+     match the .dot.x inactive-bath marker and size it like a button (#4) */
+  .closebtn{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border:0;border-radius:1px;background:none;font-size:16px;color:#c2c8c3;line-height:1}
+  .closebtn:hover{background:rgba(255,255,255,.16);color:#fff}
 
   .tl{list-style:none;margin:0;padding:0}
-  .tl li{position:relative;padding:0 0 15px 22px;border-left:2px solid var(--line)}
+  .tl li{position:relative;padding:0 0 13px 18px;border-left:1px solid var(--line)}
   .tl li:last-child{border-left-color:transparent}
-  .tl li::before{content:"";position:absolute;left:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--accent);border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line)}
+  .tl li::before{content:"";position:absolute;left:-4px;top:5px;width:7px;height:7px;background:var(--accent);border-radius:0}
   .tl .tl-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .tl .tl-when{font-size:12px;color:var(--muted)} .tl .tl-d{font-size:12.5px;color:#41525a;margin-top:2px}
+  .tl .tl-when{font-size:12px;color:var(--muted);font-family:var(--mono)} .tl .tl-d{font-size:12.5px;color:#414843;margin-top:2px}
 
   #printArea{display:none}
-  .pr-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #16242b;padding-bottom:8px;margin-bottom:14px}
-  .pr-head h2{margin:0;font-size:18px}
+  .pr-head{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid var(--ink);padding-bottom:7px;margin-bottom:14px}
+  .pr-head h2{margin:0;font-size:15px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
   .pr-meta td{border:none;padding:2px 14px 2px 0;font-size:12px}
+  .pr-meta + .pr-meta{font-family:var(--mono)}
   @media print{ body *{visibility:hidden} #printArea,#printArea *{visibility:visible} #printArea{display:block!important;position:absolute;inset:0;padding:0} thead th{position:static} }
 
   /* a11y: a clear, consistent keyboard-focus ring on every custom control (WCAG 2.4.7) */
-  .btn:focus-visible,.navlink:focus-visible,.side-log:focus-visible,.side-foot button:focus-visible,
-  .closebtn:focus-visible,.chip i:focus-visible,.typetab:focus-visible,.tankcard:focus-visible,.seg button:focus-visible,
-  .chk:focus-visible,.waxchk:focus-visible,.idlechip:focus-visible,.linkish:focus-visible,.tag:focus-visible{
-    outline:3px solid #2dd4bf;outline-offset:2px;border-radius:var(--r-xs)}
+  .btn:focus-visible,.navlink:focus-visible,.iconbtn:focus-visible,
+  .chip i:focus-visible,.typetab:focus-visible,.tankcard:focus-visible,.seg button:focus-visible,
+  .chk:focus-visible,.waxchk:focus-visible,.idlechip:focus-visible,.linkish:focus-visible,.tag:focus-visible,
+  thead th.sortable:focus-visible{
+    outline:2px solid var(--accent);outline-offset:1px}
+  /* on the dark chrome and the accent button the steel-blue ring would vanish */
+  .tools button:focus-visible,.closebtn:focus-visible,.side-log:focus-visible{outline:2px solid #8fb9de;outline-offset:-2px}
 
   /* generous touch targets on finger/stylus devices — the floor uses gloves (WCAG 2.5.5) */
   @media(pointer:coarse){
-    .btn,.navlink,.side-log,.seg button,.side-foot button,.chk,.waxchk,.typetab{min-height:44px}
+    #idbar{height:auto;min-height:44px}          /* or the 44px toolbar overflows its own strip */
+    .btn,.navlink,.side-log,.seg button,.tools button,.chk,.waxchk,.typetab{min-height:44px}
+    .iconbtn{width:40px;height:40px}
     .btn.sm{padding:9px 13px;min-height:40px}
+    .tank-acts .btn{min-height:42px}
     .chip i{width:24px;height:24px} .closebtn{min-width:44px;min-height:44px}
     .linkish{display:inline-block;padding:6px 2px}
-    input,select,textarea{font-size:16px}            /* ≥16px stops iOS Safari from zooming on focus */
+    input,select,textarea{font-size:16px;min-height:40px}   /* ≥16px stops iOS Safari from zooming on focus */
+    .filterbar select,.filterbar input,.search input{min-height:38px;height:auto}
   }
 
   /* dense tables degrade gracefully on phones: drop the lowest-priority column and
      tighten cells so Status / Where stay on screen instead of behind a sideways scroll */
   @media(max-width:640px){
-    th,td{padding:8px 9px} table{font-size:12.5px}
+    th,td{padding:5px 7px} table{font-size:12px}
     .col-comp{display:none}
     .tbl-wrap{max-height:none}            /* page-scroll beats a nested scroll trap on mobile */
-    .kpi .v{font-size:23px}
-    #topbar{align-items:flex-start;flex-wrap:wrap;padding:10px 14px;gap:8px}
-    .page-head{min-width:0;flex:1}.search{order:4;flex:1 1 100%;margin:0}.search input{width:100%}
-    .sync-pill{margin-left:auto}
+    .kpi .v{font-size:17px}
+    .kpi{flex:1 1 50%}
     .filterbar select,.filterbar input{flex:1 1 100%;width:100%}.filterbar .filter-count{order:-1;flex:1 1 100%;margin:0}
-    .typetabs{grid-template-columns:1fr}
+    .typetabs{grid-template-columns:1fr} .typetab{border-right:0}
+    .brand small{display:none} .brand b{font-size:10.5px;letter-spacing:.7px}
+    .tools button{padding:0 9px}
   }
 
   @media(max-width:900px){
-    #app{grid-template-columns:1fr}
-    #sidebar{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:10px 12px}
-    .brand{padding:2px 4px;flex:1 1 auto} .side-sp{display:none}
-    .side-log{order:2;margin:0;padding:10px 16px;flex:0 0 auto}
-    #nav{order:3;flex:1 1 100%;flex-direction:row;flex-wrap:nowrap;gap:4px;overflow:auto;padding-bottom:2px}
-    .navlink{width:auto;min-width:max-content}
-    .side-foot{order:4;display:flex;flex:1 1 100%;gap:7px} .side-foot button{flex:1;padding:9px 6px;font-size:12px}#signOutBtn{grid-column:auto}
-    #main{padding:18px 14px}
-    .settings-grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,minmax(110px,1fr))}
-    .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:24px 1fr;row-gap:8px}
+    #idbar{padding-left:8px}
+    .tools{overflow:auto}
+    #topbar{flex-wrap:wrap}
+    #nav{order:1;flex:1 1 100%;border-bottom:1px solid var(--line)}
+    .navlink.on{margin-bottom:0}
+    .search{order:2;flex:1;margin:0;padding:5px 6px}.search input{width:100%;height:auto;min-height:30px}
+    .sync-pill{order:2;margin:0 0 0 6px}
+    .side-log{order:3;padding:8px 14px}
+    .iconbtn{order:4;margin:0 6px}
+    #main{padding:12px 10px 32px}
+    .settings-grid{grid-template-columns:1fr}
+    .twocol{grid-template-columns:1fr} .charts3{grid-template-columns:1fr} .crow{grid-template-columns:22px 1fr;row-gap:6px}
   }
-  @media(max-width:520px){.kpis{grid-template-columns:repeat(2,minmax(110px,1fr))}.side-foot{overflow:auto}.side-foot button{min-width:72px}.brand small{display:none}}
+
+  /* a phone matches the width query above as well as the coarse-pointer one,
+     and it comes later — restate the touch minimum so it is not undercut */
+  @media(pointer:coarse) and (max-width:900px){
+    .search input{min-height:38px;height:auto}
+  }
 </style>
 </head>
 <body>
 <div id="app">
-  <aside id="sidebar" aria-label="Application navigation">
-    <div class="brand"><div class="logo">SH</div><div><b>Stripping&nbsp;Historian</b><small id="brandMode">offline · on this PC</small></div></div>
-    <nav id="nav" aria-label="Primary"></nav>
-    <div class="side-sp"></div>
-    <button class="side-log" id="logBtn">＋&nbsp; Log event&nbsp; <span class="kbd">N</span></button>
-    <div class="side-foot">
-      <button id="exportReport" title="Download a color-coded HTML report">Report</button>
-      <button id="exportJson" title="Download a full JSON backup">Backup</button>
-      <button id="importBtn" title="Restore from a backup">Import</button>
-      <button id="exportCsv" title="Export the dip log as CSV">CSV</button>
-      <button id="signOutBtn" title="Sign out of the shared log" style="display:none">Sign out</button>
+  <header id="chrome">
+    <div id="idbar">
+      <div class="brand"><b>Stripping Historian</b><small id="brandMode">offline · on this PC</small></div>
+      <div class="idbar-sp"></div>
+      <div class="tools">
+        <button id="exportReport" title="Download a colour-coded HTML report">Report</button>
+        <button id="exportJson" title="Download a full JSON backup">Backup</button>
+        <button id="importBtn" title="Restore from a backup">Import</button>
+        <button id="exportCsv" title="Export the dip log as CSV">CSV</button>
+        <button id="signOutBtn" title="Sign out of the shared log" style="display:none">Sign out</button>
+      </div>
     </div>
-    <input type="file" id="importFile" accept="application/json" style="display:none">
-  </aside>
-  <div id="content">
-    <header id="topbar">
-      <div class="page-head"><h1 id="pageTitle">Dashboard</h1><p id="pageSubtitle">Live bath status and process exceptions</p></div>
-      <div class="search"><input id="globalSearch" type="search" aria-label="Search serials, job cards and notes" placeholder="Search serial, J/C, notes…   ( / )"></div>
+    <div id="topbar">
+      <nav id="nav" aria-label="Primary"></nav>
+      <div class="search"><input id="globalSearch" type="search" aria-label="Search serials, job cards and notes" placeholder="Search serial, J/C or notes"></div>
       <div id="syncPill" class="sync-pill" role="status" aria-live="polite" hidden></div>
+      <button class="side-log" id="logBtn">Log event <span class="kbd">N</span></button>
       <button id="helpBtn" class="iconbtn" title="Keyboard shortcuts (press ?)" aria-label="Keyboard shortcuts">?</button>
-    </header>
-    <main id="main"></main>
-  </div>
+    </div>
+  </header>
+  <main id="main" aria-labelledby="viewHeading"></main>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
 </div>
 <div id="drawerRoot"></div>
 <div id="modalRoot"></div>
@@ -930,17 +974,17 @@ function deriveSuggestions(events, config, nowDT){
   const baths = deriveBaths(events, config, nowDT);
 
   baths.forEach(b => {
-    if(!b.active){ if(b.contents.length) out.push({ level:"red", icon:"⚠", title:`Bath ${b.bath}: ${b.contents.length} part(s) recorded inside a disposed bath`, detail:b.contents.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:b.contents.map(r => r.serial) } }); return; }
+    if(!b.active){ if(b.contents.length) out.push({ level:"red", title:`Bath ${b.bath}: ${b.contents.length} part(s) recorded inside a disposed bath`, detail:b.contents.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:b.contents.map(r => r.serial) } }); return; }
     const overH = b.contents.filter(r => r.elapsedH >= config.maxHours);
-    if(overH.length) out.push({ level:"red", icon:"⏱", title:`Bath ${b.bath}: ${overH.length} part(s) over ${config.maxHours} h immersion`, detail:overH.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:overH.map(r => r.serial) } });
+    if(overH.length) out.push({ level:"red", title:`Bath ${b.bath}: ${overH.length} part(s) over ${config.maxHours} h immersion`, detail:overH.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:overH.map(r => r.serial) } });
     const lc = b.lastChem;
-    if(lc && num(lc.fePpm) != null && +lc.fePpm > config.feMax) out.push({ level:"red", icon:"⚗", title:`Bath ${b.bath}: iron ${lc.fePpm} ppm over limit`, detail:"Spent — dispose and refill.", action:{ type:"dispose", bath:b.bath } });
-    else if(lc && num(lc.hclPct) != null && +lc.hclPct < config.hclMin) out.push({ level:"amber", icon:"⚗", title:`Bath ${b.bath}: free HCl ${lc.hclPct}% below ${config.hclMin}%`, detail:"Top up acid.", action:{ type:"topup-hcl", bath:b.bath } });
-    if(b.age !== "" && b.age >= config.maxBathAge) out.push({ level:"amber", icon:"⌛", title:`Bath ${b.bath}: ${b.age} days old (≥ ${config.maxBathAge})`, detail:"Scheduled change due.", action:{ type:"dispose", bath:b.bath } });
+    if(lc && num(lc.fePpm) != null && +lc.fePpm > config.feMax) out.push({ level:"red", title:`Bath ${b.bath}: iron ${lc.fePpm} ppm over limit`, detail:"Spent — dispose and refill.", action:{ type:"dispose", bath:b.bath } });
+    else if(lc && num(lc.hclPct) != null && +lc.hclPct < config.hclMin) out.push({ level:"amber", title:`Bath ${b.bath}: free HCl ${lc.hclPct}% below ${config.hclMin}%`, detail:"Top up acid.", action:{ type:"topup-hcl", bath:b.bath } });
+    if(b.age !== "" && b.age >= config.maxBathAge) out.push({ level:"amber", title:`Bath ${b.bath}: ${b.age} days old (≥ ${config.maxBathAge})`, detail:"Scheduled change due.", action:{ type:"dispose", bath:b.bath } });
     const lastChemDT = b.chem.length ? b.chem[b.chem.length - 1].datetime : b.lastFill.datetime;
     const dd = daysBetween(lastChemDT, nowDT);
     const chemDue = config.chemEveryDays == null ? 2 : config.chemEveryDays;
-    if(chemDue > 0 && dd !== "" && dd >= chemDue) out.push({ level:"info", icon:"⚗", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
+    if(chemDue > 0 && dd !== "" && dd >= chemDue) out.push({ level:"info", title:`Bath ${b.bath}: no chemistry check in ${dd} days`, detail:"Log a titration.", action:{ type:"chem", bath:b.bath } });
   });
 
   // Assign rescue baths capacity-aware: each part consumes a free slot, so a
@@ -963,8 +1007,8 @@ function deriveSuggestions(events, config, nowDT){
     g.serials.push(p.serial); if(p.status.s === "Needs re-mask") g.remask++;
     groups.set(key, g);
   });
-  groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:(g.bath ? "→ bath " + g.bath : "no healthy bath available") + (g.remask ? " · re-mask " + g.remask + " first" : ""), action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
+  groups.forEach(g => out.push({ level:"amber", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:(g.bath ? "→ bath " + g.bath : "no healthy bath available") + (g.remask ? " · re-mask " + g.remask + " first" : ""), action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
+  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -1279,8 +1323,8 @@ function applySort(table, rows, acc){
   });
 }
 function flash(msg, action){
-  const b = cel("div", { style:"position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--brand);color:#fff;padding:10px 16px;border-radius:8px;z-index:80;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:var(--sh-lg)" }, msg);
-  if(action) b.append(cel("button", { style:"background:none;border:none;color:#7fd0ea;font-weight:700;cursor:pointer;font-size:13px", onclick:() => { b.remove(); action.fn(); } }, action.label));
+  const b = cel("div", { style:"position:fixed;bottom:0;left:0;right:0;background:var(--chrome);color:#fff;padding:7px 14px;z-index:80;font-size:12.5px;display:flex;align-items:center;gap:14px;border-top:1px solid #000" }, msg);
+  if(action) b.append(cel("button", { style:"background:none;border:none;color:#8fb9de;font-weight:700;cursor:pointer;font-size:12.5px;text-decoration:underline", onclick:() => { b.remove(); action.fn(); } }, action.label));
   document.body.append(b); setTimeout(() => b.remove(), action ? 5000 : 1600);
 }
 /* one-step undo for the last add / edit / delete */
@@ -1294,7 +1338,7 @@ function modal(title, bodyNode, footerNodes){
   const overlay = cel("div", { class:"overlay", onclick:e => { if(e.target === overlay) closeModal(); } });
   const box = cel("div", { class:"modal", role:"dialog", "aria-modal":"true", "aria-label":typeof title === "string" ? title : "Dialog", tabindex:"-1" });
   box.append(
-    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeModal }, "✕") ]),
+    cel("div", { class:"modal-h" }, [ cel("h3", {}, title), cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeModal }, "×") ]),
     cel("div", { class:"modal-b" }, bodyNode),
     footerNodes ? cel("div", { class:"modal-f" }, footerNodes) : null
   );
@@ -1307,7 +1351,7 @@ function closeModal(){ $("#modalRoot").innerHTML = ""; }
 
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs){ const e = document.createElementNS(SVGNS, tag); for(const k in attrs) e.setAttribute(k, attrs[k]); return e; }
-function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#8c8c8c", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
+function svgText(x, y, s, anchor){ const t = svgEl("text", { x, y, "font-size":9, fill:"#7c827c", "text-anchor":anchor || "start" }); t.textContent = s; return t; }
 function trendChart(points, opt = {}){
   const w = opt.w || 260, h = opt.h || 92, mini = !!opt.mini;
   const padL = mini ? 4 : 30, padR = mini ? 4 : 8, padT = mini ? 4 : 10, padB = mini ? 4 : 16;
@@ -1321,12 +1365,12 @@ function trendChart(points, opt = {}){
   const X = i => padL + (points.length <= 1 ? (w - padL - padR) / 2 : i * (w - padL - padR) / (points.length - 1));
   const Y = v => padT + (h - padT - padB) * (1 - (v - lo) / (hi - lo));
   const svg = svgEl("svg", { class:"chart", width:"100%", height:h, viewBox:`0 0 ${w} ${h}`, preserveAspectRatio:"none" });
-  if(opt.band) svg.appendChild(svgEl("rect", { x:padL, y:Y(opt.band.hi), width:w - padL - padR, height:Math.max(0, Y(opt.band.lo) - Y(opt.band.hi)), fill:"rgba(15,118,110,.14)" }));
-  if(opt.limit != null){ const ly = Y(opt.limit); svg.appendChild(svgEl("line", { x1:padL, y1:ly, x2:w - padR, y2:ly, stroke:"#dc2626", "stroke-dasharray":"4 3", "stroke-width":1 })); }
+  if(opt.band) svg.appendChild(svgEl("rect", { x:padL, y:Y(opt.band.hi), width:w - padL - padR, height:Math.max(0, Y(opt.band.lo) - Y(opt.band.hi)), fill:"rgba(27,77,126,.12)" }));
+  if(opt.limit != null){ const ly = Y(opt.limit); svg.appendChild(svgEl("line", { x1:padL, y1:ly, x2:w - padR, y2:ly, stroke:"#9c2019", "stroke-dasharray":"4 3", "stroke-width":1 })); }
   if(!mini){ svg.appendChild(svgText(padL - 4, Y(hi - span * 0.05) + 3, fmtY(hi - span * 0.05), "end")); svg.appendChild(svgText(padL - 4, Y(lo + span * 0.05), fmtY(lo + span * 0.05), "end")); }
   const d = points.map((p, i) => (i ? "L" : "M") + X(i).toFixed(1) + " " + Y(p.y).toFixed(1)).join(" ");
-  svg.appendChild(svgEl("path", { d, fill:"none", stroke:opt.color || "#2563eb", "stroke-width":2, "stroke-linejoin":"round" }));
-  if(!mini) points.forEach((p, i) => { const over = opt.limit != null && p.y > opt.limit; svg.appendChild(svgEl("circle", { cx:X(i), cy:Y(p.y), r:2.6, fill:over ? "#dc2626" : (opt.color || "#2563eb") })); });
+  svg.appendChild(svgEl("path", { d, fill:"none", stroke:opt.color || "#1b4d7e", "stroke-width":2, "stroke-linejoin":"round" }));
+  if(!mini) points.forEach((p, i) => { const over = opt.limit != null && p.y > opt.limit; svg.appendChild(svgEl("circle", { cx:X(i), cy:Y(p.y), r:2.6, fill:over ? "#9c2019" : (opt.color || "#1b4d7e") })); });
   return svg;
 }
 
@@ -1359,13 +1403,7 @@ function eventDetailForSerial(e, serial){
 }
 
 /* ------------------------------ state --------------------------------- */
-const TAB_META = [
-  { name:"Dashboard", icon:"▦", subtitle:"Live bath status and process exceptions" },
-  { name:"Pieces", icon:"◆", subtitle:"Serial-level status, cycle history and traceability" },
-  { name:"Events", icon:"≣", subtitle:"Controlled source ledger for every process action" },
-  { name:"Quality", icon:"⚑", subtitle:"Wax failures, re-masking and engineering dispositions" },
-  { name:"Settings", icon:"⚙", subtitle:"Process limits, bath configuration and data controls" }
-];
+const TAB_META = [{ name:"Dashboard" }, { name:"Pieces" }, { name:"Events" }, { name:"Quality" }, { name:"Settings" }];
 let activeTab = "Dashboard";
 let logFilter = { type:"", bath:"", text:"" };
 let qualFilter = "All", pieceFilter = "All";
@@ -1382,8 +1420,8 @@ function renderNav(){
   const nav = $("#nav"); nav.innerHTML = "";
   const { baths, pieces } = attentionItems();
   const inBath = bathContents(EVENTS, nowLocalDT(), "").length;
-  TAB_META.forEach(({ name:t, icon:ic }) => {
-    const kids = [cel("span", { class:"ic" }, ic), cel("span", {}, t)];
+  TAB_META.forEach(({ name:t }) => {
+    const kids = [cel("span", {}, t)];
     if(t === "Pieces" && pieces.length) kids.push(cel("span", { class:"badge" }, String(pieces.length)));
     if(t === "Dashboard" && baths.length) kids.push(cel("span", { class:"badge" }, String(baths.length)));
     if(t === "Dashboard" && !baths.length && inBath) kids.push(cel("span", { class:"badge info" }, String(inBath)));
@@ -1393,7 +1431,7 @@ function renderNav(){
 function attentionBar(){
   const { baths, pieces } = attentionItems();
   if(!baths.length && !pieces.length) return null;
-  const bar = cel("div", { class:"attn" }, cel("span", {}, "⚠"));
+  const bar = cel("div", { class:"attn" });
   if(baths.length) bar.append(cel("span", {}, [cel("b", {}, String(baths.length)), " bath" + (baths.length > 1 ? "s" : "") + " out of band"]));
   if(pieces.length) bar.append(cel("span", {}, [cel("b", {}, String(pieces.length)), " piece" + (pieces.length > 1 ? "s" : "") + " awaiting disposition"]));
   bar.append(cel("span", { class:"sp" }));
@@ -1404,10 +1442,9 @@ function attentionBar(){
 const VIEWS = { Dashboard:vDash, Pieces:vPieces, Events:vEventLog, Quality:vQuality, Settings:vSettings };
 function render(){
   renderNav();
-  $("#pageTitle").textContent = activeTab;
-  const viewMeta = TAB_META.find(item => item.name === activeTab);
-  const subtitle = $("#pageSubtitle"); if(subtitle) subtitle.textContent = viewMeta ? viewMeta.subtitle : "";
+  if(typeof document !== "undefined" && document.title !== undefined) document.title = activeTab + " — Stripping Historian";
   const m = $("#main"); m.innerHTML = "";
+  m.append(cel("h1", { id:"viewHeading", class:"sr-only" }, activeTab));   // the tab rail is the visible title; the outline still needs a heading
   const ab = attentionBar(); if(ab) m.append(ab);
   (VIEWS[activeTab] || vDash)(m);
   renderDrawer();
@@ -1477,7 +1514,7 @@ function renderDrawer(){
   panel.append(cel("div", { class:"drawer-h" }, [
     cel("h3", {}, editId != null ? ("Edit · " + typeLabel(formType)) : (formType ? typeLabel(formType) : "Log event")),
     editId != null ? pill("Editing " + (formData.eventId || ""), "p-amber") : null,
-    cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "✕")
+    cel("button", { class:"closebtn", title:"Close", "aria-label":"Close", onclick:closeDrawer }, "×")
   ]));
   const body = cel("div", { class:"drawer-b" });
   const foot = cel("div", { class:"drawer-f" });
@@ -1489,7 +1526,7 @@ function renderDrawer(){
   } else {
     if(editId == null) body.append(cel("button", { class:"btn sm", style:"margin-bottom:12px", onclick:() => { formType = null; formData = { datetime:nowLocalDT() }; renderDrawer(); } }, "‹ Change event type"));
     body.append(cel("div", { class:"field" }, [cel("label", { class:"f", for:"event-datetime" }, "Date / time" + (formType === "Load In" ? " (time in)" : formType === "Extraction" ? " (time out)" : "")), cel("input", { id:"event-datetime", type:"datetime-local", value:formData.datetime || nowLocalDT(), oninput:e => { formData.datetime = e.target.value; refreshWarn(); } })]));
-    if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed" }, [cel("span", {}, "▦"), cel("span", {}, "Resolves wax failure: " + formData.waxFailure)]));
+    if(formType === "Re-Masking" && formData.waxFailure) body.append(cel("div", { class:"warn-line warn-violet" }, "Resolves wax failure: " + formData.waxFailure));
     const warnBox = cel("div", { style:"margin-top:4px" });
     const saveBtn = cel("button", { class:"btn primary", onclick:saveForm }, editId != null ? "Update" : "Save");
     const hint = cel("span", { class:"form-hint", role:"status", "aria-live":"polite" });
@@ -1727,7 +1764,7 @@ function buildLoadFields(card, refreshWarn){
     const needing = (formData.serials || []).map(s => ({ serial:s, areas:unresolvedWaxAreas(EVENTS, s).map(a => a.area) })).filter(x => x.areas.length);
     formData.remask = (formData.remask || []).filter(r => needing.some(n => n.serial === r.serial));
     if(!needing.length) return;
-    remaskWrap.append(cel("div", { class:"warn-line", style:"background:#f3e8ff;color:#7c3aed;margin-top:4px" }, [cel("span", {}, "▦"), cel("span", {}, "Wax failure on these parts — tick the areas you re-masked before re-dipping:")]));
+    remaskWrap.append(cel("div", { class:"warn-line warn-violet", style:"margin-top:4px" }, "Wax failure on these parts — tick the areas you re-masked before re-dipping:"));
     needing.forEach(x => {
       // No pre-ticked entry: an empty `areas` would read as a whole-part re-mask
       // (resolves everything). Instead we keep NO entry until the operator ticks an
@@ -1829,7 +1866,7 @@ function chipInput(initial, onChange, ariaLabel = "Serials"){
   const box = cel("div", { class:"chipbox" });
   const input = cel("input", { type:"text", "aria-label":ariaLabel, placeholder:"type or paste serials (Excel column, commas, spaces)…" });
   const emit = () => onChange(list.slice());
-  function paint(){ box.innerHTML = ""; list.forEach((s, i) => box.append(cel("span", { class:"chip" }, [cel("b", {}, s), cel("i", { title:"remove", onclick:ev => { ev.stopPropagation(); list.splice(i, 1); paint(); emit(); input.focus(); } }, "✕")]))); box.append(input); }
+  function paint(){ box.innerHTML = ""; list.forEach((s, i) => box.append(cel("span", { class:"chip" }, [cel("b", {}, s), cel("i", { title:"remove", onclick:ev => { ev.stopPropagation(); list.splice(i, 1); paint(); emit(); input.focus(); } }, "×")]))); box.append(input); }
   const addTokens = text => { let added = false; parseSerials(text).forEach(s => { if(!list.includes(s)){ list.push(s); added = true; } }); if(added){ paint(); emit(); } };
   // Auto-commit whenever a separator appears in the field. This makes pasting a
   // column from Excel (tabs / newlines) or a comma/space list reliable, even if
@@ -1965,11 +2002,10 @@ async function saveForm(){
 }
 
 function emptyState(){
-  const actions = [cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "＋ Log first event")];
+  const actions = [cel("button", { class:"btn primary", onclick:() => { formType = null; editId = null; formData = {}; openDrawer(); } }, "Log first event")];
   if(!ONLINE) actions.push(cel("button", { class:"btn", onclick:loadExample }, "Load example data"));
   return cel("div", { class:"empty" }, [
-    cel("div", { style:"font-size:34px;margin-bottom:6px;opacity:.5" }, "▦"),
-    cel("div", { style:"font-size:15px;margin-bottom:4px;color:var(--ink);font-weight:600" }, "No events yet"),
+    cel("div", { style:"font-size:14px;margin-bottom:4px;color:var(--ink);font-weight:700" }, "Ledger is empty"),
     cel("div", { style:"margin-bottom:16px" }, ONLINE ? "Log the first real shop event to start the shared ledger." : "Log your first strip event, or load the sample data to explore the app."),
     cel("div", { class:"btnrow", style:"justify-content:center" }, actions)
   ]);
@@ -1978,9 +2014,16 @@ function emptyState(){
 /* --- Floor (live tanks) --- */
 function suggestionsPanel(){
   const sugs = deriveSuggestions(EVENTS, CONFIG, nowLocalDT());
-  const card = cel("div", { class:"card", style:"margin-bottom:16px" });
-  if(!sugs.length){ card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions")); card.append(cel("div", { class:"flagok", style:"font-size:13px" }, "✓ All caught up — nothing needs attention.")); return card; }
+  const card = cel("div", { class:"card", style:"margin-bottom:16px;padding:0" });
+  const heading = t => cel("div", { style:"padding:6px 12px;border-bottom:1px solid var(--line);background:var(--elev);font-weight:700;font-size:12px" }, t);
+  if(!sugs.length){ card.append(heading("Outstanding actions")); card.append(cel("div", { class:"flagok", style:"font-size:12.5px;padding:10px 12px" }, "None. No bath or piece is outside its limits.")); return card; }
   const lvlCls = { red:"p-red", amber:"p-amber", info:"p-blue" };
+  const lvlWord = { red:"Alarm", amber:"Warn", info:"Note" };
+  const sugRow = (s, i) => cel("div", { style:"display:flex;align-items:center;gap:10px;padding:6px 12px" + (i ? ";border-top:1px solid var(--line-2)" : "") }, [
+    cel("span", { class:"pill " + (lvlCls[s.level] || "p-grey"), style:"min-width:52px;justify-content:center" }, lvlWord[s.level] || "Note"),
+    cel("div", { style:"flex:1;min-width:0" }, [cel("div", { style:"font-size:12.5px" }, s.title), s.detail ? cel("div", { class:"muted", style:"font-size:11.5px;font-family:var(--mono)" }, s.detail) : null]),
+    cel("button", { class:"btn sm", onclick:() => startAction(s.action) }, "Record")
+  ]);
 
   // Separate bath-level and piece-level suggestions
   const bathMap = new Map();
@@ -2005,32 +2048,24 @@ function suggestionsPanel(){
   filtered.sort((a, b) => rank[a.level] - rank[b.level]);
 
   // Add heading with post-dedupe count
-  card.append(cel("h3", { class:"sub", style:"margin:0 0 6px" }, "Suggested next actions" + (filtered.length ? " · " + filtered.length : "")));
+  card.append(heading("Outstanding actions (" + filtered.length + ")"));
 
   const displayed = filtered.slice(0, 3);
   const expandable = filtered.slice(3);
   let expanded = false;
 
-  displayed.forEach((s, i) => card.append(cel("div", { style:"display:flex;align-items:center;gap:10px;padding:9px 0" + (i ? ";border-top:1px solid var(--line-2)" : "") }, [
-    cel("span", { class:"pill nodot " + (lvlCls[s.level] || "p-grey"), style:"min-width:26px;justify-content:center" }, s.icon || "•"),
-    cel("div", { style:"flex:1;min-width:0" }, [cel("div", { style:"font-weight:550;font-size:13px" }, s.title), s.detail ? cel("div", { class:"muted", style:"font-size:12px" }, s.detail) : null]),
-    cel("button", { class:"btn sm primary", onclick:() => startAction(s.action) }, "Do it")
-  ])));
+  displayed.forEach((s, i) => card.append(sugRow(s, i)));
 
   if(expandable.length){
-    const expandBtn = cel("button", { class:"btn sm", style:"margin-top:8px;width:100%", onclick:() => {
-      expanded = !expanded;
-      expandBtn.textContent = expanded ? "show less (" + expandable.length + ")" : "show all (" + expandable.length + ")";
-      expandableRows.style.display = expanded ? "block" : "none";
-    } }, "show all (" + expandable.length + ")");
-    card.append(expandBtn);
     const expandableRows = cel("div", { style:"display:none" });
-    expandable.forEach((s, i) => expandableRows.append(cel("div", { style:"display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line-2)" }, [
-      cel("span", { class:"pill nodot " + (lvlCls[s.level] || "p-grey"), style:"min-width:26px;justify-content:center" }, s.icon || "•"),
-      cel("div", { style:"flex:1;min-width:0" }, [cel("div", { style:"font-weight:550;font-size:13px" }, s.title), s.detail ? cel("div", { class:"muted", style:"font-size:12px" }, s.detail) : null]),
-      cel("button", { class:"btn sm primary", onclick:() => startAction(s.action) }, "Do it")
-    ])));
+    expandable.forEach(s => expandableRows.append(sugRow(s, 1)));
     card.append(expandableRows);
+    const expandBtn = cel("button", { class:"btn sm", style:"width:100%;border:0;border-top:1px solid var(--line);border-radius:0", onclick:() => {
+      expanded = !expanded;
+      expandBtn.textContent = (expanded ? "Hide " : "Show ") + expandable.length + " more";
+      expandableRows.style.display = expanded ? "block" : "none";
+    } }, "Show " + expandable.length + " more");
+    card.append(expandBtn);
   }
   return card;
 }
@@ -2068,8 +2103,8 @@ function vEventLog(m){
     tr.append(tcell(e.operator));
     const ledgerActions = [];
     if(isAdmin()) ledgerActions.push(
-      cel("button", { class:"btn sm", title:"Edit", "aria-label":"Edit " + (e.eventId || "event"), onclick:() => startEdit(e) }, "✎"),
-      cel("button", { class:"btn sm danger", title:"Delete", "aria-label":"Delete " + (e.eventId || "event"), style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; prior.uid = prior.uid || newUid(); prior.id = await putRec("events", prior); await loadAll(); await queueOp({ op:"put", uid:prior.uid, event:forServer(prior) }); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "✕")
+      cel("button", { class:"btn sm", title:"Edit", "aria-label":"Edit " + (e.eventId || "event"), onclick:() => startEdit(e) }, "Edit"),
+      cel("button", { class:"btn sm danger", title:"Delete", "aria-label":"Delete " + (e.eventId || "event"), style:"margin-left:4px", onclick:async () => { if(confirm("Delete event " + e.eventId + "?")){ const prior = JSON.parse(JSON.stringify(e)); await removeEvent(e.id); setUndo("delete " + e.eventId, async () => { delete prior.id; prior.uid = prior.uid || newUid(); prior.id = await putRec("events", prior); await loadAll(); await queueOp({ op:"put", uid:prior.uid, event:forServer(prior) }); }); flash("Deleted " + e.eventId, { label:"Undo", fn:doUndo }); render(); } } }, "Delete")
     );
     tr.append(cel("td", { style:"white-space:nowrap" }, ledgerActions));
     tb.append(tr);
@@ -2103,7 +2138,10 @@ function vPieces(m){
   applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.hours, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
     const tr = cel("tr");
     tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
-    tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
+    const atLimit = r.cycles >= CONFIG.maxCycles;
+    tr.append(cel("td", { class:"num" + (atLimit ? " overlimit" : "") }, atLimit
+      ? [String(r.cycles), cel("span", { class:"limit-mark" }, "max"), cel("span", { class:"sr-only" }, " — at or over the " + CONFIG.maxCycles + "-cycle limit")]
+      : String(r.cycles)));
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
@@ -2136,7 +2174,7 @@ function showSerial(serial){
   const p = derivePieces(EVENTS, CONFIG, nowLocalDT()).find(r => r.serial === serial);
   if(!p) return;
   const body = cel("div", {});
-  body.append(cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" }, [
+  body.append(cel("div", { class:"kpis" }, [
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, p.jc || "—"), cel("div", { class:"l" }, "Job card")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.cycles)), cel("div", { class:"l" }, "Cycles")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.hours)), cel("div", { class:"l" }, "Cum hours")]),
@@ -2146,7 +2184,7 @@ function showSerial(serial){
   if((CONFIG.maskAreas || []).length) body.append(cel("div", { class:"muted", style:"font-size:12.5px;margin-bottom:10px" }, "Masked areas: " + (cfg.length ? cfg.join(", ") : "none")));
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
-  const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
+  const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "Print traveler")];
   if(p.status.s === "Needs re-mask" || p.status.s === "Awaiting re-strip"){
     foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, p.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
   } else if(p.status.s === "→ Engineering"){
@@ -2200,13 +2238,13 @@ function showBath(bath){
     const mk = (title, key, opt, unit) => { const ch = cel("div", { class:"ch" }); const last = s.chem[s.chem.length - 1];
       ch.append(cel("div", { class:"chttl" }, [cel("span", {}, title), cel("span", {}, fmtNum(last[key]) + (unit || ""))]));
       ch.append(trendChart(s.chem.map(e => ({ y:+e[key] || 0 })), opt)); return ch; };
-    charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#c0392b" }, ""));
-    charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#2563eb" }, "%"));
-    charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#b45309" }, "°"));
+    charts.append(mk("Iron Fe (ppm)", "fePpm", { h:90, limit:CONFIG.feMax, color:"#9c2019" }, ""));
+    charts.append(mk("Free HCl (%)", "hclPct", { h:90, band:{ lo:CONFIG.hclMin, hi:CONFIG.hclMax }, color:"#1b4d7e" }, "%"));
+    charts.append(mk("Temp (°C)", "temp", { h:90, band:{ lo:CONFIG.tempSet - CONFIG.tempTol, hi:CONFIG.tempSet + CONFIG.tempTol }, color:"#8a5a00" }, "°"));
     body.append(charts);
-    body.append(cel("div", { class:"muted", style:"font-size:11px;margin-top:4px" }, "Red dashed = limit · green band = control band"));
+    body.append(cel("div", { class:"muted", style:"font-size:11px;margin-top:4px" }, "Red dashed = limit, shaded band = control band"));
   }
-  const stats = cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-top:12px" });
+  const stats = cel("div", { class:"kpis", style:"margin-top:12px" });
   [["In tank", s.capacity ? (s.contents.length + " / " + s.capacity) : String(s.contents.length)], ["Age (d)", s.age === "" ? "—" : s.age], ["Load (piece-h)", s.loadH], ["Parts", s.parts], ["Wax fails", s.wax], ["Chem checks", s.chem.length]]
     .forEach(([l, v]) => stats.append(cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(v)), cel("div", { class:"l" }, l)])));
   body.append(stats);
@@ -2258,23 +2296,23 @@ function vQuality(m){
 // (awaiting re-strip / needs re-mask) or parked on receipt. Tap to add to a bath.
 function parkedPanel(){
   const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT());
-  const card = cel("div", { class:"card", style:"margin-bottom:16px" });
-  card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin-bottom:8px" }, [
-    cel("h3", { class:"sub", style:"margin:0;flex:1" }, "Waiting area — parts not in a bath yet (" + waiting.length + ")"),
-    cel("button", { class:"btn sm", onclick:() => startLoad(WAITING_AREA) }, "＋ Add to waiting area")
+  const card = cel("div", { class:"card", style:"margin-bottom:16px;padding:0" });
+  card.append(cel("div", { style:"display:flex;align-items:center;gap:8px;padding:5px 8px 5px 12px;border-bottom:1px solid var(--line);background:var(--elev)" }, [
+    cel("div", { style:"flex:1;font-weight:700;font-size:12px" }, "Waiting area (" + waiting.length + ")"),
+    cel("button", { class:"btn sm", onclick:() => startLoad(WAITING_AREA) }, "Add serials")
   ]));
-  if(!waiting.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px" }, "Nothing waiting. Parts that come out of a bath without re-entry — and serials added to the waiting area — show up here.")); return card; }
-  const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
+  if(!waiting.length){ card.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:10px 12px" }, "Empty. Parts that leave a bath without re-entry, and serials booked in without a bath, are held here.")); return card; }
+  const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:5px;padding:10px 12px" });
   waiting.slice(0, 80).forEach(p => {
     const review = p.kind === "review";
     const tag = p.kind === "needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask")
       : review ? cel("span", { class:"idlechip-tag", style:"background:var(--red-bg);color:var(--red)" }, "review")
       : p.kind === "received" ? cel("span", { class:"idlechip-tag", style:"background:var(--green-bg);color:var(--green)" }, "new")
-      : (p.lastBath ? cel("span", { class:"idlechip-tag", style:"background:var(--grey-bg);color:#5b6470" }, "out " + p.lastBath) : null);
+      : (p.lastBath ? cel("span", { class:"idlechip-tag", style:"background:var(--grey-bg);color:#575d58" }, "out " + p.lastBath) : null);
     const onclick = review
       ? () => startAction({ type:"engineering", serial:p.serial, jc:p.jc })
       : () => startAction({ type:"reload", serials:[p.serial], jc:p.jc, component:p.component, bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath) });
-    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + (review ? " — tap to review" : " — tap to add to a bath"), onclick }, [cel("span", {}, "＋ " + p.serial), tag]));
+    chips.append(cel("button", { class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.kind + (p.lastBath ? " · was in " + p.lastBath : "") + (review ? " — tap to review" : " — tap to add to a bath"), onclick }, [cel("span", {}, p.serial), tag]));
   });
   card.append(chips);
   return card;
@@ -2290,14 +2328,14 @@ function tankCard(s){
     s.active ? (s.flags.length ? pill("Out of band", "p-red") : pill("In band", "p-green")) : pill(s.disposal ? "Disposed" : "No charge", "p-grey")
   ]));
   c.append(cel("div", { class:"tank-meta" },
-    s.lastChem ? ("Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d") + (s.capacity ? "  ·  " + s.contents.length + "/" + s.capacity + " in" : "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
+    s.lastChem ? ("Fe " + fmtNum(s.lastChem.fePpm) + " ppm   HCl " + fmtNum(s.lastChem.hclPct) + "%   age " + (s.age === "" ? "—" : s.age + " d") + (s.capacity ? "   " + s.contents.length + "/" + s.capacity + " in" : "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
   const tank = cel("div", { class:"tank" + (!s.active ? " off" : (s.flags.length ? " spent" : "")) });
   if(s.contents.length){
     s.contents.slice(0, 16).forEach(r => tank.append(cel("span", { class:"tank-part" + (r.elapsedH >= CONFIG.maxHours ? " hot" : ""), title:r.serial + " · " + round(r.elapsedH) + " h" }, r.serial)));
     if(s.contents.length > 16) tank.append(cel("span", { class:"tank-part" }, "+" + (s.contents.length - 16)));
   } else tank.append(cel("span", { class:"tank-empty" }, s.disposal ? "Charge disposed" : "No active charge"));
   c.append(tank);
-  if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"margin-top:8px;font-size:11.5px" }, "⚠ " + s.flags.join(" · ")));
+  if(s.flags.length) c.append(cel("div", { class:"warn-line warn-red", style:"font-size:11.5px" }, s.flags.join(" · ")));
   const acts = cel("div", { class:"tank-acts", onclick:e => e.stopPropagation() });
   if(!s.active){
     acts.append(cel("button", { class:"btn sm primary", onclick:() => startCompleteFill(s.bath) }, "Fill — new charge"));
@@ -2322,8 +2360,8 @@ function vDash(m){
     const known = bathList(EVENTS, CONFIG);
     const orphan = bathContents(EVENTS, now, "").filter(r => !known.includes(r.bath));
     if(orphan.length){
-      const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#f3c4c0" });
-      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, [cel("span", {}, "⚠"), cel("span", {}, orphan.length + " part(s) are recorded with no valid bath, so they don’t show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events.")]));
+      const oc = cel("div", { class:"card", style:"margin-bottom:16px;border-color:#cba7a2" });
+      oc.append(cel("div", { class:"warn-line warn-red", style:"margin:0 0 8px" }, orphan.length + " part(s) are recorded with no valid bath, so they don’t show in any tank. Click one to edit its load — assign a bath or the waiting area — or delete it in Events."));
       const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
       orphan.forEach(r => chips.append(cel("button", { class:"idlechip", title:"edit this load to assign a bath or the waiting area", onclick:() => { if(r.loadEvent && r.loadEvent.type === "Load In") startEdit(r.loadEvent); else showSerial(r.serial); } }, r.serial + (r.bath ? " · ‘" + r.bath + "’" : " · no bath"))));
       oc.append(chips);
@@ -2333,7 +2371,7 @@ function vDash(m){
   const baths = deriveBaths(EVENTS, CONFIG, now);
   if(!baths.length){
     m.append(cel("div", { class:"empty" }, [
-      cel("div", { style:"font-size:15px;margin-bottom:6px" }, EVENTS.length ? "No baths yet" : "Nothing here yet"),
+      cel("div", { style:"font-size:14px;font-weight:700;margin-bottom:6px;color:var(--ink)" }, EVENTS.length ? "No baths yet" : "No baths configured"),
       cel("div", {}, "Add your bath IDs in Settings, log a Bath Fill, or load the example data — baths appear here automatically from your data.")
     ]));
     return;
@@ -2341,8 +2379,8 @@ function vDash(m){
   const kp = cel("div", { class:"kpis" });
   [["Parts in baths", k.inBath, ""], ["Awaiting re-strip", k.awaiting, ""], ["In engineering", k.eng, k.eng > 0 ? "warn" : ""], ["Wax failures", k.wax, k.wax > 0 ? "warn" : ""], ["First-pass yield", k.fpyBase ? k.fpy + "%" : "—", k.fpyBase && k.fpy < 70 ? "warn" : (k.fpyBase ? "good" : "")], ["Cleared", k.cleared, ""]]
     .forEach(([l, v, cls]) => kp.append(cel("div", { class:"kpi " + cls }, [cel("div", { class:"v" }, String(v)), cel("div", { class:"l" }, l)])));
-  m.append(cel("h3", { class:"sub", style:"margin-top:0" }, "Process overview"), kp);
-  m.append(cel("h3", { class:"sub" }, "Bath status · live contents"));
+  m.append(kp);
+  m.append(cel("h3", { class:"sub", style:"margin-top:2px" }, "Baths"));
   const grid = cel("div", { class:"tankgrid" });
   baths.forEach(s => grid.append(tankCard(s)));
   m.append(grid);
@@ -2354,7 +2392,7 @@ function vDash(m){
     m.append(cel("h3", { class:"sub" }, "First-pass yield by job card"));
     const bars = cel("div", { class:"card", style:"max-width:560px" });
     jr.forEach(r => bars.append(cel("div", { style:"margin-bottom:8px" }, [
-      cel("div", { style:"display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted" }, r.decided ? (r.fp + "/" + r.decided + " · " + r.fpy + "%") : (r.pieces + " in process"))]),
+      cel("div", { style:"display:flex;justify-content:space-between;gap:12px;font-size:12.5px;margin-bottom:2px" }, [cel("span", {}, (r.jc || "(none)") + (r.component ? " · " + r.component : "")), cel("span", { class:"muted", style:"font-family:var(--mono)" }, r.decided ? (r.fp + "/" + r.decided + "  " + r.fpy + "%") : (r.pieces + " in process"))]),
       cel("div", { class:"bar" }, cel("i", { style:"width:" + (r.decided ? r.fpy : 0) + "%;background:" + (r.fpy < 70 ? "var(--amber)" : "var(--green)") }))
     ])));
     m.append(bars);
@@ -2420,7 +2458,7 @@ $("#exportCsv").onclick = () => {
   download("strip_historian_dips_" + todayISODate() + ".csv", lines.join("\n"), "text/csv");
 };
 // Color-coded, self-contained HTML report — opens/prints anywhere.
-const STATUS_COLOR = { Completed:["#dcf3e3", "#1b7a3d"], Ongoing:["#dcebf5", "#1f5e84"], "Re-strip":["#fceccb", "#8a5a00"], "Re-mask":["#ece3f5", "#6b3fa0"], Hold:["#eaeef0", "#5b6770"], Moved:["#eaeef0", "#5b6770"] };
+const STATUS_COLOR = { Completed:["#e1eee5", "#1c6337"], Ongoing:["#e4ebf3", "#1b4d7e"], "Re-strip":["#f7ecd3", "#8a5a00"], "Re-mask":["#e9e6f1", "#54407c"], Hold:["#e6e9e3", "#575d58"], Moved:["#e6e9e3", "#575d58"] };
 function buildReportHTML(){
   const { records } = deriveImmersions(EVENTS, nowLocalDT());
   const rows = records.slice().sort((a, b) => String(a.jc).localeCompare(String(b.jc)) || String(a.serial).localeCompare(String(b.serial)) || String(a.inDT || a.outDT).localeCompare(String(b.inDT || b.outDT)));
@@ -2434,14 +2472,16 @@ function buildReportHTML(){
       + "<td><span class='st' style='background:" + col[0] + ";color:" + col[1] + "'>" + esc(s) + "</span></td></tr>";
   }).join("");
   return "<!doctype html><html><head><meta charset='utf-8'><title>Stripping report " + todayISODate() + "</title><style>"
-    + "body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#16242b;margin:24px;font-size:13px}"
-    + "h1{font-size:18px;margin:0 0 2px} .muted{color:#647078;font-size:12px;margin-bottom:14px}"
-    + "table{border-collapse:collapse;width:100%} th,td{border:1px solid #e4e9ec;padding:6px 9px;text-align:left;vertical-align:top}"
-    + "th{background:#f6f9fa;text-transform:uppercase;font-size:11px;letter-spacing:.5px;color:#647078}"
-    + ".st{display:inline-block;padding:2px 9px;border-radius:10px;font-weight:600;font-size:11.5px;white-space:nowrap}"
-    + "tr:nth-child(even) td{background:#fbfcfd}</style></head><body>"
-    + "<h1>Stripping Historian — report</h1>"
-    + "<div class='muted'>Generated " + esc(fmtDT(nowLocalDT())) + " · " + rows.length + " dip records · " + k.cleared + " completed · " + k.inBath + " ongoing · first-pass yield " + k.fpy + "%</div>"
+    + "body{font-family:'Segoe UI',system-ui,Roboto,Arial,sans-serif;color:#1b1e1c;margin:22px;font-size:12.5px;font-variant-numeric:tabular-nums}"
+    + "h1{font-size:15px;margin:0 0 3px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}"
+    + ".muted{color:#5b615c;font-size:11.5px;margin:0 0 14px;padding-bottom:8px;border-bottom:2px solid #1b1e1c;font-family:ui-monospace,Menlo,Consolas,monospace}"
+    + "table{border-collapse:collapse;width:100%} th,td{border:1px solid #c3c8bf;padding:4px 8px;text-align:left;vertical-align:top}"
+    + "td:first-child{font-family:ui-monospace,Menlo,Consolas,monospace}"
+    + "th{background:#dcdfd8;font-size:11.5px;color:#3b413c;font-weight:700}"
+    + ".st{display:inline-block;padding:0 6px;border:1px solid rgba(0,0,0,.16);font-weight:600;font-size:11px;white-space:nowrap}"
+    + "tr:nth-child(even) td{background:#f7f8f4}</style></head><body>"
+    + "<h1>Stripping Historian — dip record</h1>"
+    + "<div class='muted'>Generated " + esc(fmtDT(nowLocalDT())) + "   ·   " + rows.length + " dip records   ·   " + k.cleared + " completed   ·   " + k.inBath + " ongoing   ·   first-pass yield " + k.fpy + "%</div>"
     + "<table><thead><tr><th>Serial</th><th>J/C</th><th>Component</th><th>Bath</th><th>Cycle</th><th>Time in</th><th>Time out</th><th>Hours</th><th>Wax</th><th>Status</th></tr></thead><tbody>"
     + (body || "<tr><td colspan='10' style='text-align:center;color:#647078'>No dip records yet.</td></tr>") + "</tbody></table></body></html>";
 }
@@ -2517,7 +2557,7 @@ function showShortcuts(){
     cel("span", {}, d)
   ])));
   body.append(cel("div", { class:"muted", style:"margin-top:14px;font-size:12px" }, "Tip: click any underlined column header to sort a table — click again to reverse."));
-  modal("Keyboard shortcuts", body, [cel("button", { class:"btn primary", onclick:closeModal }, "Got it")]);
+  modal("Keyboard shortcuts", body, [cel("button", { class:"btn primary", onclick:closeModal }, "Close")]);
 }
 document.addEventListener("keydown", e => {
   if((e.metaKey || e.ctrlKey) && (e.key === "z" || e.key === "Z") && undoStack.length){
@@ -2639,12 +2679,11 @@ function renderLogin(message){
   if(pill) pill.hidden = true;
 
   drawerOpen = false; formType = null; editId = null; formData = {};
-  const wrap = cel("div", { id:"loginRoot", class:"login-shell" });
+  const wrap = cel("main", { id:"loginRoot", class:"login-shell", "aria-labelledby":"loginHeading" });
   const card = cel("div", { class:"login-card" });
-  card.append(cel("div", { class:"login-brand" }, [
-    cel("div", { class:"login-mark" }, "SH"),
-    cel("div", {}, [cel("h1", {}, "Stripping Historian"), cel("div", { class:"login-sub" }, "Chemical stripping process ledger")])
-  ]));
+  card.append(cel("h1", { id:"loginHeading", class:"login-head" }, "Stripping Historian"));
+  const body = cel("div", { class:"login-body" });
+  body.append(cel("div", { class:"login-sub" }, "Chemical stripping process ledger — HCl strip line"));
 
   const input = cel("input", { id:"login-password", type:"password", autocomplete:"current-password", placeholder:"Enter password" });
   const err = cel("div", { class:"login-error", role:"alert" }, message || "");
@@ -2671,7 +2710,8 @@ function renderLogin(message){
   btn.addEventListener("click", submit);
   input.addEventListener("keydown", e => { if(e.key === "Enter") submit(); });
 
-  card.append(cel("label", { class:"f", for:"login-password" }, "Password"), input, err, btn, cel("div", { class:"login-footnote" }, "Shared process ledger · Authorized access only"));
+  body.append(cel("label", { class:"f", for:"login-password" }, "Password"), input, err, btn, cel("div", { class:"login-footnote" }, "Authorised access only"));
+  card.append(body);
   wrap.append(card);
   document.body.appendChild(wrap);
   input.focus();
