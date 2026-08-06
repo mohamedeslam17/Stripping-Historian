@@ -57,7 +57,23 @@ function storeApi(name){
     clear: () => req(() => { stores[name] = []; })
   };
 }
-const indexedDB = { open(){ const r = {}; setTimeout(() => { const db = { objectStoreNames: { contains: () => true }, createObjectStore: () => ({}), transaction: () => ({ objectStore: n => storeApi(n) }) }; r.onupgradeneeded && r.onupgradeneeded({ target: { result: db } }); r.onsuccess && r.onsuccess({ target: { result: db } }); }, 0); return r; } };
+// A real IndexedDB transaction spans stores and reports completion, which is
+// what putEventQueued relies on to write an event and its outbox row together.
+function makeTx(factory){
+  const t = { oncomplete:null, onerror:null, onabort:null, _pending:0 };
+  const track = fn => (...a) => {
+    t._pending++;
+    const r = fn(...a);
+    globalThis.setTimeout(() => { if(--t._pending === 0) globalThis.setTimeout(() => t.oncomplete && t.oncomplete(), 0); }, 0);
+    return r;
+  };
+  t.objectStore = name => {
+    const s = factory(name);
+    return { getAll:track(s.getAll), put:track(s.put), delete:track(s.delete), clear:track(s.clear) };
+  };
+  return t;
+}
+const indexedDB = { open(){ const r = {}; setTimeout(() => { const db = { objectStoreNames: { contains: () => true }, createObjectStore: () => ({}), transaction: () => makeTx(storeApi) }; r.onupgradeneeded && r.onupgradeneeded({ target: { result: db } }); r.onsuccess && r.onsuccess({ target: { result: db } }); }, 0); return r; } };
 
 const Blob = class { constructor(){} };
 const URL = { createObjectURL: () => "blob:x", revokeObjectURL(){} };

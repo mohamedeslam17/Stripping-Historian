@@ -76,10 +76,26 @@ function makeHarness({ role = "admin", rejectOversize = false, rejectAdminOps = 
     }),
     clear: () => request(() => { stores[name].length = 0; })
   });
+  // A real IndexedDB transaction spans stores and reports completion, which is
+  // what putEventQueued relies on to write an event and its outbox row together.
+  function makeTx(factory){
+    const t = { oncomplete:null, onerror:null, onabort:null, _pending:0 };
+    const track = fn => (...a) => {
+      t._pending++;
+      const r = fn(...a);
+      globalThis.setTimeout(() => { if(--t._pending === 0) globalThis.setTimeout(() => t.oncomplete && t.oncomplete(), 0); }, 0);
+      return r;
+    };
+    t.objectStore = name => {
+      const s = factory(name);
+      return { getAll:track(s.getAll), put:track(s.put), delete:track(s.delete), clear:track(s.clear) };
+    };
+    return t;
+  }
   const indexedDB = { open(){
     const req = {};
     globalThis.setTimeout(() => {
-      const db = { objectStoreNames: { contains: () => true }, createObjectStore(){}, transaction: (_n, _m) => ({ objectStore: store }) };
+      const db = { objectStoreNames: { contains: () => true }, createObjectStore(){}, transaction: (_n, _m) => makeTx(store) };
       req.onupgradeneeded?.({ target: { result: db } }); req.onsuccess?.({ target: { result: db } });
     }, 0);
     return req;
@@ -361,4 +377,22 @@ test("operator retries are idempotent but cannot edit or resurrect an event", as
   const resurrect = await call({ body:JSON.stringify(original), deleted:1 }, original);
   assert.equal(resurrect.response.status, 403);
   assert.equal(resurrect.applied, false);
+});
+
+test("recording an event writes it and its outbox row in one transaction", async () => {
+  // Two separate transactions leave a window: a crash between them puts the
+  // event on disk with nothing queued, and the next sync replaces the local
+  // mirror with a server snapshot that never received it — the operator's entry
+  // vanishes with no error. Both rows must land together or not at all.
+  const app = makeHarness();
+  await waitFor(() => app.registry.get("#brandMode")?.textContent === "shared · admin");
+
+  await app.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:00", serials:["ATOMIC"] });
+  assert.equal(app.stores.events.length, 1, "event persisted");
+  assert.equal(app.stores.outbox.length, 1, "and its upload was queued in the same write");
+
+  await app.handle.syncNow();
+  await waitFor(async () => (await app.handle.outbox()).length === 0);
+  assert.ok(app.handle.events().flatMap(e => e.serials || []).includes("ATOMIC"),
+    "the event survives the server snapshot that follows");
 });
