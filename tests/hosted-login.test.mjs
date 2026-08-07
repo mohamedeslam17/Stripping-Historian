@@ -214,7 +214,9 @@ test("hosted sign-in and sign-out preserve and restore the app shell", async () 
   assert.equal(app.hidden, false, "the existing shell is restored");
   assert.ok(main.children.length > 0, "the dashboard renders after login");
   assert.equal(harness.registry.get("#brandMode").textContent, "shared · admin");
-  assert.equal(harness.intervals(), 1, "background sync starts once");
+  // Two background timers: the sync poll, and the slow clock refresh that keeps
+  // immersion times and their thresholds current without a visible reload.
+  assert.equal(harness.intervals(), 2, "background timers start once");
 
   await harness.registry.get("#signOutBtn").onclick();
   assert.equal(app.hidden, true, "sign-out hides the shell");
@@ -223,7 +225,7 @@ test("hosted sign-in and sign-out preserve and restore the app shell", async () 
   await signIn(harness);
   assert.equal(app.hidden, false, "the shell can be restored a second time");
   assert.equal(harness.bodyClearCount(), 0, "the sign-out round trip never clears the body");
-  assert.equal(harness.intervals(), 1, "re-login does not duplicate the sync timer");
+  assert.equal(harness.intervals(), 2, "re-login does not duplicate the background timers");
   assert.deepEqual(harness.calls.slice(0, 3), [
     ["/api/sync", "GET"],
     ["/api/login", "POST"],

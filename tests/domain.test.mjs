@@ -22,7 +22,8 @@ assert.ok(domStart > -1 && domEnd > domStart, "DOMAIN markers must be present in
 const domainSrc = html.slice(html.indexOf("*/", domStart) + 2, html.lastIndexOf("/*", domEnd));
 
 const EXPORTS = [
-  "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","daysBetween","fmtDate","fmtDT","nextEventId",
+  "round","num","fmtNum","byDate","hrsBetween","hoursBetweenDT","minsBetweenDT","minsBetween","daysBetween",
+  "fmtDate","fmtDT","fmtMins","fmtDur","nextEventId",
   "parseSerials","eventsForSerial","deriveImmersions","bathContents","dipStatus","pieceStatusFor","derivePieces",
   "deriveBath","deriveBaths","deriveJobCards","deriveKpis","deriveDefects","eventWarnings","bathList",
   "lookupSerial","healthyBaths","suggestRescueBath","deriveSuggestions","parkedParts","waitingParts",
@@ -799,4 +800,58 @@ test("derivePieces cache does not serve stale rows when config or time changes",
 
   // a different array is a different cache entry
   assert.equal(D.derivePieces(events.slice(0, 1), cfg(9), NOW)[0].cycles, 1);
+});
+
+/* ---------------- durations read as a clock, not a decimal ---------------- */
+
+test("fmtMins renders hours, minutes, or hours plus minutes — never a fraction", () => {
+  assert.equal(D.fmtMins(0), "0 min");
+  assert.equal(D.fmtMins(45), "45 min");
+  assert.equal(D.fmtMins(60), "1 h");
+  assert.equal(D.fmtMins(95), "1 h 35 min");
+  assert.equal(D.fmtMins(1445), "24 h 5 min");
+  assert.equal(D.fmtMins(null), "", "no reading is blank, not '0 min'");
+  assert.equal(D.fmtMins(0.4), "0 min", "sub-minute rounds to the minute");
+});
+
+test("fmtDur converts an hours setpoint the same way", () => {
+  assert.equal(D.fmtDur(24), "24 h");
+  assert.equal(D.fmtDur(1.58), "1 h 35 min");
+  assert.equal(D.fmtDur(0.25), "15 min");
+  assert.equal(D.fmtDur(null), "");
+});
+
+test("a dip carries exact minutes alongside its decimal hours", () => {
+  // 08:00 -> 09:35 is 95 minutes. As decimal hours that is 1.583…, and the
+  // rounding that makes a tidy CSV number is exactly what used to push the
+  // on-screen reading to "1.6 h" / "1 h 36 min".
+  const events = [
+    load("2026-03-22T08:00", "B1", ["S1"]),
+    extract("2026-03-22T09:35", "B1", [{ serial: "S1", result: "Cleared" }])
+  ];
+  const r = D.deriveImmersions(events, NOW).records[0];
+  assert.equal(r.mins, 95);
+  assert.equal(D.fmtMins(r.mins), "1 h 35 min");
+  assert.equal(r.hours, 1.58, "the decimal-hours field the CSV exports is unchanged");
+});
+
+test("cumulative time sums exact minutes, so a total never drifts off the clock", () => {
+  // Four 95-minute dips. Summing the rounded hours (1.6 each) would report
+  // 6 h 24 min; the clock says 6 h 20 min.
+  const events = [];
+  for(let day = 22; day <= 25; day++){
+    events.push(load(`2026-03-${day}T08:00`, "B1", ["S1"]));
+    events.push(extract(`2026-03-${day}T09:35`, "B1", [{ serial: "S1", result: "Re-strip" }]));
+  }
+  const p = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(p.mins, 4 * 95);
+  assert.equal(D.fmtMins(p.mins), "6 h 20 min");
+});
+
+test("a part still in the bath reports elapsed minutes", () => {
+  const events = [load("2026-03-31T22:30", "B1", ["S1"])];
+  const r = D.deriveImmersions(events, NOW).records[0];   // NOW is 2026-04-01T00:00
+  assert.equal(r.open, true);
+  assert.equal(r.elapsedMins, 90);
+  assert.equal(D.fmtMins(r.elapsedMins), "1 h 30 min");
 });

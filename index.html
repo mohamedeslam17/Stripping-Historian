@@ -169,6 +169,9 @@
   .idlechip-tag{background:#f3e8ff;color:#7c3aed;border-radius:5px;padding:0 5px;font-size:10px}
 
   .contents{border:1px solid var(--line);border-radius:var(--r-s);overflow:hidden;margin-top:4px}
+  /* A pick-list can hold a whole bench of parts: cap it and scroll inside the
+     drawer, so the Save button never gets pushed out of reach. */
+  .picklist{max-height:252px;overflow-y:auto}
   .crow{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:9px 11px;border-bottom:1px solid var(--line-2)}
   .crow:last-child{border-bottom:none} .crow.on{background:var(--accent-weak)}
   .crow input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent)}
@@ -381,7 +384,33 @@ function hrsBetween(a, b){ // clock-time difference, tolerant of overnight roll-
   return round(d / 60, 2);
 }
 function hoursBetweenDT(a, b){ if(!a || !b) return 0; const d = (new Date(b) - new Date(a)) / 3600000; return d > 0 ? d : 0; }
+// Times are entered to the minute, so minutes — not decimal hours — are the
+// exact quantity. Everything shown to an operator is derived from these, which
+// is why a 95-minute dip reads "1 h 35 min" and not "1.6 h".
+function minsBetweenDT(a, b){ if(!a || !b) return 0; const d = Math.round((new Date(b) - new Date(a)) / 60000); return d > 0 ? d : 0; }
+function minsBetween(a, b){ // clock-time difference, tolerant of overnight roll-over
+  if(!a || !b) return 0;
+  const [h1, m1] = a.split(":").map(Number), [h2, m2] = b.split(":").map(Number);
+  let d = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if(d < 0) d += 1440;
+  return d;
+}
 function daysBetween(a, b){ if(!a || !b) return ""; return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+// Nobody on the floor reads "1.58 h" off a tank. Decimal hours are kept for the
+// CSV, where they still aggregate in a pivot; on screen a duration always reads
+// the way a clock does: "1 h 35 min", "45 min", "3 h".
+function fmtMins(m){
+  const n = num(m);
+  if(n == null) return "";
+  const t = Math.max(0, Math.round(n));
+  const hh = Math.floor(t / 60), mm = t % 60;
+  if(!hh) return mm + " min";
+  if(!mm) return hh + " h";
+  return hh + " h " + mm + " min";
+}
+// For the few values that are genuinely configured in hours (the immersion limit).
+function fmtDur(h){ const n = num(h); return n == null ? "" : fmtMins(n * 60); }
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function fmtDate(dt){ if(!dt) return ""; const d = dt.slice(0,10).split("-"); return d[2] + " " + MONTHS[(+d[1]) - 1] + " " + d[0].slice(2); }
@@ -487,17 +516,17 @@ function deriveImmersions(events, nowDT){
       (e.serials || []).forEach(s => {
         const rec = { serial:s, bath:e.bath || "", jc:e.jc || "", component:e.component || "",
           cycle:bump(s), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
-          hours:null, elapsedH:null, open:true, anomaly:null, loadEvent:e, extractEvent:null };
+          hours:null, mins:null, elapsedH:null, elapsedMins:null, open:true, anomaly:null, loadEvent:e, extractEvent:null };
         if(open.has(s)){ const old = open.get(s); old.open = false; old.anomaly = (old.anomaly ? old.anomaly + "; " : "") + "no extraction logged"; rec.anomaly = "was already in " + old.bath; }
         open.set(s, rec); records.push(rec);
       });
     } else if(e.type === "Extraction"){
       (e.items || []).forEach(it => {
         const s = it.serial, r = open.get(s);
-        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.wax = it.wax || null; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.wax = it.wax || null; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.mins = minsBetweenDT(r.inDT, e.datetime); r.extractEvent = e; open.delete(s); }
         else records.push({ serial:s, bath:e.bath || "", jc:"", component:"", cycle:(cyc.get(s) || 0),
           inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null,
-          hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
+          hours:null, mins:null, elapsedH:null, elapsedMins:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
       });
     } else if(e.type === "Transfer"){
       // Move parts to another bath, or OUT to the waiting area (no destination
@@ -507,15 +536,15 @@ function deriveImmersions(events, nowDT){
       const toBath = e.toBath || "";
       (e.serials || []).forEach(s => {
         const r = open.get(s);
-        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(r){ r.outDT = e.datetime; r.result = "Moved"; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.mins = minsBetweenDT(r.inDT, e.datetime); r.extractEvent = e; open.delete(s); }
         if(toBath){
           const cont = { serial:s, bath:toBath, jc:(r && r.jc) || e.jc || "", component:(r && r.component) || e.component || "",
             cycle:r ? r.cycle : (cyc.get(s) || 0), inDT:e.datetime, outDT:null, result:null, waxFailure:null,
-            hours:null, elapsedH:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
+            hours:null, mins:null, elapsedH:null, elapsedMins:null, open:true, anomaly:r ? null : "moved but was not in a bath", loadEvent:e, extractEvent:null, moved:true };
           open.set(s, cont); records.push(cont);
         } else if(!r){
           records.push({ serial:s, bath:"", jc:e.jc || "", component:e.component || "", cycle:(cyc.get(s) || 0),
-            inDT:null, outDT:e.datetime, result:"Moved", waxFailure:null, hours:null, elapsedH:null, open:false,
+            inDT:null, outDT:e.datetime, result:"Moved", waxFailure:null, hours:null, mins:null, elapsedH:null, elapsedMins:null, open:false,
             anomaly:"moved out but was not in a bath", loadEvent:null, extractEvent:e });
         }
       });
@@ -523,10 +552,10 @@ function deriveImmersions(events, nowDT){
       if(!e.serial) continue;
       records.push({ serial:e.serial, bath:e.bath || "", jc:e.jc || "", component:e.component || "",
         cycle:bump(e.serial), inDT:e.datetime, outDT:e.datetime, result:e.result || "", waxFailure:e.waxFailure || "None",
-        hours:hrsBetween(e.timeIn, e.timeOut), elapsedH:null, open:false, anomaly:null, loadEvent:e, extractEvent:e });
+        hours:hrsBetween(e.timeIn, e.timeOut), mins:minsBetween(e.timeIn, e.timeOut), elapsedH:null, elapsedMins:null, open:false, anomaly:null, loadEvent:e, extractEvent:e });
     }
   }
-  open.forEach(r => { r.elapsedH = round(hoursBetweenDT(r.inDT, nowDT), 2); });
+  open.forEach(r => { r.elapsedH = round(hoursBetweenDT(r.inDT, nowDT), 2); r.elapsedMins = minsBetweenDT(r.inDT, nowDT); });
   const val = { records, open };
   _immersionsMemo.set(events, { now:nowDT, val });
   return val;
@@ -615,8 +644,12 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   const cycles = real.filter(r => !r.moved).length;   // a bath-to-bath move is not a new dip
   const closedH = round(recs.filter(r => !r.open).reduce((a, r) => a + (r.hours || 0), 0));
   const totalH = round(closedH + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedH || 0), 0));
+  // Summed from the exact per-dip minutes, never from the rounded hours: adding
+  // up 1.6 h four times is how a total drifts minutes away from the clock.
+  const closedMins = recs.filter(r => !r.open).reduce((a, r) => a + (r.mins || 0), 0);
+  const totalMins = closedMins + recs.filter(r => r.open).reduce((a, r) => a + (r.elapsedMins || 0), 0);
   const engDisp = engEvents.length ? engEvents[engEvents.length - 1].status : "";
-  const base = { cycles, hours:closedH, totalH, open };
+  const base = { cycles, hours:closedH, totalH, mins:closedMins, totalMins, open };
   // a disposition recorded after the fact overrides an earlier clear
   if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
@@ -637,7 +670,7 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   if(cycles >= config.maxCycles || totalH >= config.maxHours){
     const why = [];
     if(cycles >= config.maxCycles) why.push(cycles + " cycles ≥ " + config.maxCycles);
-    if(totalH >= config.maxHours) why.push(totalH + " h ≥ " + config.maxHours);
+    if(totalH >= config.maxHours) why.push(fmtMins(totalMins) + " ≥ " + fmtDur(config.maxHours));
     return { s:"→ Engineering", cls:"p-red", reason:why.join(", "), ...base };
   }
   if(needsRemask)                    return { s:"Needs re-mask",    cls:"p-purple", ...base };
@@ -669,7 +702,7 @@ function derivePieces(events, config, nowDT){
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
-      cycles:st.cycles, hours:st.hours,
+      cycles:st.cycles, hours:st.hours, mins:st.mins,
       wax: recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
@@ -932,7 +965,7 @@ function deriveSuggestions(events, config, nowDT){
   baths.forEach(b => {
     if(!b.active){ if(b.contents.length) out.push({ level:"red", icon:"⚠", title:`Bath ${b.bath}: ${b.contents.length} part(s) recorded inside a disposed bath`, detail:b.contents.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:b.contents.map(r => r.serial) } }); return; }
     const overH = b.contents.filter(r => r.elapsedH >= config.maxHours);
-    if(overH.length) out.push({ level:"red", icon:"⏱", title:`Bath ${b.bath}: ${overH.length} part(s) over ${config.maxHours} h immersion`, detail:overH.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:overH.map(r => r.serial) } });
+    if(overH.length) out.push({ level:"red", icon:"⏱", title:`Bath ${b.bath}: ${overH.length} part(s) over ${fmtDur(config.maxHours)} immersion`, detail:overH.map(r => r.serial).join(", "), action:{ type:"extract", bath:b.bath, preselect:overH.map(r => r.serial) } });
     const lc = b.lastChem;
     if(lc && num(lc.fePpm) != null && +lc.fePpm > config.feMax) out.push({ level:"red", icon:"⚗", title:`Bath ${b.bath}: iron ${lc.fePpm} ppm over limit`, detail:"Spent — dispose and refill.", action:{ type:"dispose", bath:b.bath } });
     else if(lc && num(lc.hclPct) != null && +lc.hclPct < config.hclMin) out.push({ level:"amber", icon:"⚗", title:`Bath ${b.bath}: free HCl ${lc.hclPct}% below ${config.hclMin}%`, detail:"Top up acid.", action:{ type:"topup-hcl", bath:b.bath } });
@@ -964,7 +997,7 @@ function deriveSuggestions(events, config, nowDT){
     groups.set(key, g);
   });
   groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:(g.bath ? "→ bath " + g.bath : "no healthy bath available") + (g.remask ? " · re-mask " + g.remask + " first" : ""), action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.hours ? ", " + p.hours + " h" : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
+  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.mins ? ", " + fmtMins(p.mins) : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -1107,15 +1140,33 @@ async function api(path, opts){
   return body;
 }
 
+// The exact server answer the local mirror was last built from. The poll runs
+// every 20 seconds and almost always finds the same log it found last time;
+// comparing first means an unchanged answer costs nothing instead of clearing
+// and re-writing every event — and, more importantly, leaves the DOM alone.
+let adoptedSnapshot = null;
+function serverSnapshot(state){
+  try { return JSON.stringify([state.events || [], state.config || {}]); }
+  catch(e){ return null; }   // unstringifiable -> always treat as changed
+}
+// Anything that rewrites the mirror behind adoptServerState()'s back must say
+// so, or the next matching snapshot would be skipped over a stale mirror.
+function invalidateAdoptedSnapshot(){ adoptedSnapshot = null; }
+
 // Replace the local mirror with exactly what the server holds.
+// Returns true when the mirror actually changed.
 async function adoptServerState(state){
   if(state.role){ ROLE = state.role; cacheRole(ROLE); }
+  const snap = serverSnapshot(state);
+  if(snap != null && snap === adoptedSnapshot) return false;
   await clearStore("events");
   for(const ev of (state.events || [])) await putRec("events", forServer(ev));
   await clearStore("config");
   const cfg = sanitizeConfig(state.config || {});
   for(const k of Object.keys(cfg)) await putRec("config", { k, v:cfg[k] });
   await loadAll();
+  adoptedSnapshot = snap;
+  return true;
 }
 
 let syncTimer = null;
@@ -1140,12 +1191,13 @@ async function syncNow(){
   syncAgain = false;
   SYNC_STATE = "syncing"; paintSync();
   let rejectedNote = "";
+  let changed = false;
   try {
     while(ROLE){
       const queued = (await getAll("outbox")).sort((a, b) => a.seq - b.seq);
       if(!queued.length){
         const state = await api("/api/sync");
-        await adoptServerState(state);
+        if(await adoptServerState(state)) changed = true;
         // A save may have landed while the GET and mirror replacement were in
         // flight. Its outbox row is authoritative; loop and upload it now.
         if((await getAll("outbox")).length) continue;
@@ -1179,7 +1231,7 @@ async function syncNow(){
       // accepted. Otherwise the server snapshot would temporarily erase later
       // offline work from the UI.
       if((await getAll("outbox")).length) continue;
-      await adoptServerState(state);
+      if(await adoptServerState(state)) changed = true;
       if((await getAll("outbox")).length) continue;
       break;
     }
@@ -1203,7 +1255,10 @@ async function syncNow(){
   }
   syncing = false;
   paintSync();
-  if(typeof render === "function" && SYNC_STATE !== "syncing") render();
+  // Only repaint when the shared log actually moved. A poll that finds nothing
+  // new has to be invisible: re-rendering on a timer was throwing away the
+  // operator's scroll position every 20 seconds, mid-job.
+  if((changed || pendingRepaint) && typeof render === "function" && SYNC_STATE !== "syncing") repaintFromSync();
   // A debounced call may have fired while this pass was busy. Never leave its
   // outbox rows waiting for the 20-second poll.
   try { if(syncAgain || (await getAll("outbox")).length) scheduleSync(0); } catch(e){ /* database is closing */ }
@@ -1402,7 +1457,10 @@ function attentionBar(){
   return bar;
 }
 const VIEWS = { Dashboard:vDash, Pieces:vPieces, Events:vEventLog, Quality:vQuality, Settings:vSettings };
-function render(){
+// `opts.keepDrawer` leaves an open drawer standing. Every ordinary caller passes
+// nothing (and an accidental Event argument reads as falsy), so the default is
+// the full repaint it always was.
+function render(opts){
   renderNav();
   $("#pageTitle").textContent = activeTab;
   const viewMeta = TAB_META.find(item => item.name === activeTab);
@@ -1410,7 +1468,44 @@ function render(){
   const m = $("#main"); m.innerHTML = "";
   const ab = attentionBar(); if(ab) m.append(ab);
   (VIEWS[activeTab] || vDash)(m);
-  renderDrawer();
+  if(!(opts && opts.keepDrawer)) renderDrawer();
+}
+
+// A repaint nobody asked for — someone else's work arriving on the poll — must
+// not move the page under the operator's hands. Hold the scroll positions across
+// the rebuild, and never tear down a drawer being filled in: that would drop the
+// caret and any serial half-typed into the chip box.
+function renderInPlace(){
+  const qsa = sel => (document.querySelectorAll ? [].slice.call(document.querySelectorAll(sel)) : []);
+  const doc = document.documentElement || {};
+  const x = (typeof window !== "undefined" && window.scrollX) || doc.scrollLeft || 0;
+  const y = (typeof window !== "undefined" && window.scrollY) || doc.scrollTop || 0;
+  const kept = qsa(".tbl-wrap").map(el => ({ top:el.scrollTop, left:el.scrollLeft }));
+
+  render({ keepDrawer: drawerOpen && formType != null });
+
+  // The wrappers are fresh nodes; the view is the same, so match them by position.
+  qsa(".tbl-wrap").forEach((el, i) => { const p = kept[i]; if(p){ el.scrollTop = p.top; el.scrollLeft = p.left; } });
+  if(typeof window !== "undefined" && window.scrollTo && (x || y)) window.scrollTo(x, y);
+}
+
+// Rebuilding the view under a field someone is filling in would take their focus
+// and close an open drop-down, so a background repaint waits. It is never
+// dropped: it lands the moment they leave the control, or on the next poll.
+let pendingRepaint = false;
+function busyWithInput(){
+  const a = document.activeElement;
+  if(!a || !a.tagName) return false;
+  if(["INPUT", "SELECT", "TEXTAREA"].indexOf(String(a.tagName).toUpperCase()) < 0) return false;
+  return String(a.type || "").toLowerCase() !== "button";
+}
+function repaintFromSync(){
+  pendingRepaint = true;
+  // A modal owns the screen; repainting behind it is only ever a surprise.
+  const modal = document.querySelector && document.querySelector("#modalRoot");
+  if(busyWithInput() || (modal && modal.children && modal.children.length)) return;
+  pendingRepaint = false;
+  renderInPlace();
 }
 
 /* ------------------------------ log drawer ---------------------------- */
@@ -1680,21 +1775,77 @@ function buildLoadFields(card, refreshWarn){
   card.append(two);
 
   // Waiting area — parts not in a bath (came out without re-entry, or parked on
-  // receipt). Select one (or add all) to pull it into this bath. Hidden when the
-  // destination IS the waiting area (you'd be adding to it, not pulling from it).
+  // receipt). A re-load is normally a batch, so this is a checklist: tick the ten
+  // or fifteen parts going in and they all land in the serial list above. It was
+  // a single-pick drop-down, which meant one part per click or nothing but "all".
+  // Hidden when the destination IS the waiting area (you'd be adding to it).
   const waitingWrap = cel("div", {}); card.append(waitingWrap);
+  let waitingFilter = "";
+  let waitingSelfEdit = false;   // this list is editing the chips — it repaints itself
+  let waitingPaint = null;       // re-tick the rows in place, without rebuilding the block
   function refreshWaiting(){
+    if(waitingSelfEdit) return;
     waitingWrap.innerHTML = "";
+    waitingPaint = null;
     if(!formData.bath || formData.bath === WAITING_AREA) return;
-    const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT()).filter(p => !(formData.serials || []).includes(p.serial));
+    const waiting = waitingParts(EVENTS, CONFIG, nowLocalDT());
     if(!waiting.length) return;
-    const hint = p => p.kind === "needs re-mask" ? "  ·  re-mask" : p.kind === "review" ? "  ·  review" : p.kind === "received" ? "  ·  new" : (p.lastBath ? "  ·  out " + p.lastBath : "  ·  awaiting");
-    waitingWrap.append(cel("label", { class:"f", for:"event-waiting-parts", style:"margin:8px 0 5px" }, "Waiting area (" + waiting.length + ") — select to add"));
-    const sel = cel("select", { id:"event-waiting-parts", style:"flex:1" }, cel("option", { value:"" }, "Add from waiting area…"));
-    waiting.forEach(p => sel.append(cel("option", { value:p.serial }, p.serial + (p.jc ? "  ·  " + p.jc : "") + hint(p))));
-    sel.addEventListener("input", () => { if(sel.value){ chipBox.addOne(sel.value); sel.value = ""; } });
-    const addAll = cel("button", { class:"btn sm", type:"button", onclick:() => waiting.forEach(p => chipBox.addOne(p.serial)) }, "Add all");
-    waitingWrap.append(cel("div", { style:"display:flex;gap:8px;align-items:center" }, [sel, addAll]));
+    const hint = p => p.kind === "needs re-mask" ? "re-mask" : p.kind === "review" ? "review" : p.kind === "received" ? "new" : (p.lastBath ? "out " + p.lastBath : "awaiting");
+    const selfEdit = fn => { waitingSelfEdit = true; try { fn(); } finally { waitingSelfEdit = false; } };
+    const isOn = s => (formData.serials || []).includes(s);
+
+    const lbl = cel("label", { class:"f", style:"margin:0;flex:1" });
+    const addBtn = cel("button", { class:"btn sm", type:"button", title:"Tick every part in the list below" });
+    const clrBtn = cel("button", { class:"btn sm", type:"button", title:"Untick every waiting-area part" }, "Clear");
+    waitingWrap.append(cel("div", { style:"display:flex;align-items:center;gap:8px;margin:10px 0 5px" }, [lbl, addBtn, clrBtn]));
+
+    // Long benches need a way in; a short one is faster to just read.
+    if(waiting.length > 8){
+      const f = cel("input", { type:"search", "aria-label":"Filter the waiting area", placeholder:"filter by serial, J/C or component…" });
+      f.value = waitingFilter;
+      f.addEventListener("input", () => { waitingFilter = f.value; paintRows(); });
+      waitingWrap.append(cel("div", { style:"margin-bottom:2px" }, f));
+    }
+    const rowsBox = cel("div", { class:"contents picklist" });
+    waitingWrap.append(rowsBox);
+    waitingWrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Tick everything going into this bath — each ticked serial is added to the list above."));
+
+    let shown = waiting;
+    function paintHead(){
+      const n = waiting.filter(p => isOn(p.serial)).length;
+      lbl.textContent = "Waiting area (" + waiting.length + ")" + (n ? "  ·  " + n + " selected" : " — tick to add");
+      addBtn.textContent = shown.length < waiting.length ? "Add these " + shown.length : "Add all " + waiting.length;
+      addBtn.disabled = !shown.length || shown.every(p => isOn(p.serial));
+      clrBtn.disabled = !n;
+    }
+    function paintRows(){
+      const q = waitingFilter.trim().toLowerCase();
+      shown = q ? waiting.filter(p => (p.serial + " " + (p.jc || "") + " " + (p.component || "")).toLowerCase().indexOf(q) >= 0) : waiting;
+      rowsBox.innerHTML = "";
+      if(!shown.length){ rowsBox.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:9px 11px" }, "No waiting-area part matches that filter.")); paintHead(); return; }
+      shown.forEach(p => {
+        const cb = cel("input", { type:"checkbox", "aria-label":"Add " + p.serial + " to this load" });
+        cb.checked = isOn(p.serial);
+        const row = cel("div", { class:"crow" + (cb.checked ? " on" : ""), style:"grid-template-columns:24px 1fr" });
+        cb.addEventListener("change", () => {
+          selfEdit(() => { if(cb.checked) chipBox.addMany([p.serial]); else chipBox.removeMany([p.serial]); });
+          row.className = "crow" + (cb.checked ? " on" : "");
+          paintHead();
+        });
+        row.append(cb, cel("div", {}, [
+          cel("div", { class:"s" }, p.serial),
+          cel("div", { class:"muted", style:"font-size:11px" }, [p.jc, p.component, hint(p)].filter(Boolean).join("  ·  "))
+        ]));
+        rowsBox.append(row);
+      });
+      paintHead();
+    }
+    // A change from outside this list (a chip deleted, or a bulk button) only
+    // moves ticks, so keep the operator's place in a long list.
+    waitingPaint = () => { const top = rowsBox.scrollTop; paintRows(); rowsBox.scrollTop = top; };
+    addBtn.addEventListener("click", () => { selfEdit(() => chipBox.addMany(shown.map(p => p.serial))); waitingPaint(); });
+    clrBtn.addEventListener("click", () => { selfEdit(() => chipBox.removeMany(waiting.map(p => p.serial))); waitingPaint(); });
+    paintRows();
   }
   refreshWaiting();
 
@@ -1763,7 +1914,7 @@ function buildReceiveFields(card, refreshWarn){
   const wrap = cel("div", { class:"field" }, lbl);
   const chipBox = chipInput(formData.serials, list => { formData.serials = list; setCount(); refreshWarn(); });
   wrap.append(chipBox);
-  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Serials parked in the waiting area, offered in the drop-down when you add parts to a bath. Ranges like 7261-01..06 expand."));
+  wrap.append(cel("div", { class:"faint", style:"font-size:11.5px;margin-top:5px" }, "Serials parked in the waiting area, offered as a tick list when you add parts to a bath. Ranges like 7261-01..06 expand."));
   card.append(wrap); setCount();
   card.append(fieldNode("operator", "Operator", "operator", e => { formData.operator = e.target.value; refreshWarn(); }));
   card.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
@@ -1810,7 +1961,7 @@ function buildMoveFields(card, refreshWarn){
       const checked = formData.serials.includes(r.serial);
       const cb = cel("input", { type:"checkbox", "aria-label":"Select " + r.serial + " to move" }); cb.checked = checked;
       cb.addEventListener("change", () => { if(cb.checked){ if(!formData.serials.includes(r.serial)) formData.serials.push(r.serial); } else formData.serials = formData.serials.filter(x => x !== r.serial); refreshWarn(); rebuild(); });
-      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "");
+      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + fmtMins(r.elapsedMins) + " in") : (r.inDT ? fmtDT(r.inDT) : "");
       const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
       boxEl.append(cel("div", { class:"crow" + (checked ? " on" : ""), style:"grid-template-columns:24px 1fr" }, [cb, info]));
     });
@@ -1844,6 +1995,17 @@ function chipInput(initial, onChange, ariaLabel = "Serials"){
   input.addEventListener("focus", () => box.classList.add("focus"));
   box.addEventListener("click", () => input.focus());
   box.addOne = s => addTokens(s);   // programmatic add (e.g. from the "waiting to go back in" suggestions)
+  // Bulk edits from the waiting-area picker. One repaint and one change
+  // notification for the whole batch, not one per serial — ticking fifteen parts
+  // must not run the form's warning and re-mask passes fifteen times.
+  box.addMany = arr => { let added = false; (arr || []).forEach(s => { if(s && !list.includes(s)){ list.push(s); added = true; } }); if(added){ paint(); emit(); } };
+  box.removeMany = arr => {
+    const drop = new Set(arr || []);
+    const kept = list.filter(s => !drop.has(s));
+    if(kept.length === list.length) return;
+    list.length = 0; kept.forEach(s => list.push(s));
+    paint(); emit();
+  };
   paint();
   return box;
 }
@@ -1889,7 +2051,7 @@ function buildExtractFields(card, refreshWarn){
       const partAreas = maskConfigFor(EVENTS, CONFIG, r.serial);
       const cb = cel("input", { type:"checkbox", "aria-label":"Select " + r.serial + " to remove" }); cb.checked = !!st.checked;
       cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); rebuild(); });
-      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
+      const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + fmtMins(r.elapsedMins) + " in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
       const head = cel("div", { style:"display:flex;align-items:baseline;gap:8px;flex-wrap:wrap" }, [
         cel("span", { class:"s" }, r.serial),
         cel("span", { class:"muted", style:"font-size:11px" }, meta)
@@ -2094,7 +2256,7 @@ function vPieces(m){
   if(!rows.length){ m.append(all.length ? cel("div", { class:"empty compact" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
   [ ["J/C", "jc", ""], ["Serial", "serial", ""], ["Component", "component", "col-comp"],
-    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum h", "hours", "num", "Cumulative immersion hours"],
+    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum time", "hours", "num", "Cumulative immersion time"],
     ["Wax", "wax", "num", "Open (unresolved) wax-failure areas"], ["Status", "status", ""], ["Where", "where", ""] ]
     .forEach(c => hr.append(sortableTH("pieces", c[1], c[0], c[2], c[3])));
   hr.append(cel("th", {}, ""));
@@ -2104,7 +2266,7 @@ function vPieces(m){
     const tr = cel("tr");
     tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
-    tr.append(cel("td", { class:"num" }, String(r.hours)));
+    tr.append(cel("td", { class:"num" }, fmtMins(r.mins)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
@@ -2124,7 +2286,7 @@ function pieceTimeline(evs, serial, recs){
   evs.forEach(e => {
     let cyc = "";
     if(e.type === "Load In" && byLoad.has(e.id)) cyc = "cycle " + byLoad.get(e.id).cycle;
-    else if(e.type === "Extraction" && byExtract.has(e.id)){ const r = byExtract.get(e.id); cyc = "cycle " + r.cycle + (r.hours != null ? " · " + r.hours + " h" : ""); }
+    else if(e.type === "Extraction" && byExtract.has(e.id)){ const r = byExtract.get(e.id); cyc = "cycle " + r.cycle + (r.mins != null ? " · " + fmtMins(r.mins) : ""); }
     ul.append(cel("li", {}, [
       cel("div", { class:"tl-h" }, [pill(typeLabel(e.type), TYPE_PILL[e.type]), cel("span", { class:"tl-when" }, fmtDT(e.datetime)), cyc ? cel("span", { class:"tag", style:"margin:0" }, cyc) : null, e.operator ? cel("span", { class:"tl-when" }, "· " + e.operator) : null]),
       cel("div", { class:"tl-d" }, eventDetailForSerial(e, serial) || "")
@@ -2139,7 +2301,7 @@ function showSerial(serial){
   body.append(cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" }, [
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, p.jc || "—"), cel("div", { class:"l" }, "Job card")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.cycles)), cel("div", { class:"l" }, "Cycles")]),
-    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.hours)), cel("div", { class:"l" }, "Cum hours")]),
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, fmtMins(p.mins)), cel("div", { class:"l" }, "Cumulative time")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
   ]));
   const cfg = maskConfigFor(EVENTS, CONFIG, serial);
@@ -2163,7 +2325,7 @@ function printTraveler(p){
   ]));
   const meta = cel("table", { style:"width:auto;margin-bottom:14px" });
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Job card"), cel("td", { class:"pr-meta" }, p.jc || "—"), cel("td", { class:"pr-meta" }, "Cycles"), cel("td", { class:"pr-meta" }, String(p.cycles))]));
-  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cum hours"), cel("td", { class:"pr-meta" }, String(p.hours))]));
+  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cumulative time"), cel("td", { class:"pr-meta" }, fmtMins(p.mins))]));
   const cfg = maskConfigFor(EVENTS, CONFIG, p.serial);
   if((CONFIG.maskAreas || []).length) meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Masked areas"), cel("td", { class:"pr-meta", colspan:"3" }, cfg.length ? cfg.join(", ") : "none")]));
   pa.append(meta);
@@ -2192,7 +2354,7 @@ function showBath(bath){
   if(s.contents.length){
     body.append(cel("h3", { class:"sub" }, "In the bath now (" + s.contents.length + ")"));
     const cw = cel("div", {});
-    s.contents.forEach(r => cw.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " · " + round(r.elapsedH) + " h")));
+    s.contents.forEach(r => cw.append(cel("span", { class:"tag" + (r.elapsedH >= CONFIG.maxHours ? " flagbad" : "") }, r.serial + " · " + fmtMins(r.elapsedMins))));
     body.append(cw);
   }
   if(s.chem.length){
@@ -2293,7 +2455,7 @@ function tankCard(s){
     s.lastChem ? ("Fe " + fmtNum(s.lastChem.fePpm) + " ppm · HCl " + fmtNum(s.lastChem.hclPct) + "% · " + (s.age === "" ? "—" : s.age + " d") + (s.capacity ? "  ·  " + s.contents.length + "/" + s.capacity + " in" : "")) : (s.lastFill ? "Filled " + fmtDate(s.lastFill.datetime) : "No fill logged")));
   const tank = cel("div", { class:"tank" + (!s.active ? " off" : (s.flags.length ? " spent" : "")) });
   if(s.contents.length){
-    s.contents.slice(0, 16).forEach(r => tank.append(cel("span", { class:"tank-part" + (r.elapsedH >= CONFIG.maxHours ? " hot" : ""), title:r.serial + " · " + round(r.elapsedH) + " h" }, r.serial)));
+    s.contents.slice(0, 16).forEach(r => tank.append(cel("span", { class:"tank-part" + (r.elapsedH >= CONFIG.maxHours ? " hot" : ""), title:r.serial + " · " + fmtMins(r.elapsedMins) }, r.serial)));
     if(s.contents.length > 16) tank.append(cel("span", { class:"tank-part" }, "+" + (s.contents.length - 16)));
   } else tank.append(cel("span", { class:"tank-empty" }, s.disposal ? "Charge disposed" : "No active charge"));
   c.append(tank);
@@ -2366,7 +2528,7 @@ function vSettings(m){
   if(ONLINE && !isAdmin()) m.append(cel("div", { class:"warn-line warn-amber", style:"margin-bottom:12px" }, "Settings are read-only for operators. Sign in as an admin to change process limits or shared data."));
   const c1 = cel("section", { class:"card" });
   c1.append(cel("h2", { class:"sec" }, "Process limits"));
-  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion h / piece"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"], ["chemEveryDays", "Titration due every (days, 0 = never)"]];
+  const lim = [["tempSet", "Temperature setpoint °C"], ["tempTol", "Temp tolerance ± °C"], ["hclMin", "Free HCl % minimum"], ["hclMax", "Free HCl % maximum"], ["feMax", "Iron Fe max ppm"], ["maxCycles", "Max cycles / piece"], ["maxHours", "Max immersion / piece (hours)"], ["maxBathAge", "Max bath life (days)"], ["bathCapacity", "Bath capacity (parts, 0 = no limit)"], ["chemEveryDays", "Titration due every (days, 0 = never)"]];
   const lg = cel("div", { class:"twocol" });
   // never persist a half-typed / cleared field: "" would become 0 and silently
   // flip every limit check (maxCycles 0 routes ALL pieces to engineering)
@@ -2387,7 +2549,7 @@ function vSettings(m){
   c3.append(cel("h2", { class:"sec" }, "Data"));
   c3.append(cel("div", { style:"display:flex;gap:8px;flex-wrap:wrap" }, [
     !ONLINE ? cel("button", { class:"btn", onclick:loadExample }, "Load example data") : null,
-    cel("button", { class:"btn danger", disabled:!isAdmin(), onclick:async () => { if(!isAdmin()) return; if(confirm(ONLINE ? "Delete ALL events for EVERYONE? This clears the shared log on the server but preserves process settings. This cannot be undone (export a backup first)." : "Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); await loadAll(); await queueOp({ op:"clear-events" }); flash("All events cleared"); render(); } } }, "Clear all events")
+    cel("button", { class:"btn danger", disabled:!isAdmin(), onclick:async () => { if(!isAdmin()) return; if(confirm(ONLINE ? "Delete ALL events for EVERYONE? This clears the shared log on the server but preserves process settings. This cannot be undone (export a backup first)." : "Delete ALL events? This cannot be undone (export a backup first).")){ await clearStore("events"); invalidateAdoptedSnapshot(); await loadAll(); await queueOp({ op:"clear-events" }); flash("All events cleared"); render(); } } }, "Clear all events")
   ]));
   c3.append(cel("div", { class:"muted", style:"font-size:12px;margin-top:10px" }, ONLINE
     ? "Data is stored on the server and shared by everyone with the link and a password. “Backup” saves a snapshot you can keep; “Import” replaces the shared log for everyone, so use it deliberately."
@@ -2429,7 +2591,7 @@ function buildReportHTML(){
     const s = dipStatus(r), col = STATUS_COLOR[s] || ["#eaeef0", "#5b6770"];
     const td = (v, extra) => "<td" + (extra ? " style='" + extra + "'" : "") + ">" + esc(v == null ? "" : String(v)) + "</td>";
     return "<tr>" + td(r.serial) + td(r.jc) + td(r.component) + td(r.bath) + td(r.cycle || "", "text-align:center")
-      + td(fmtDT(r.inDT)) + td(fmtDT(r.outDT)) + td(r.open ? (r.elapsedH || 0) : (r.hours == null ? "" : r.hours), "text-align:right")
+      + td(fmtDT(r.inDT)) + td(fmtDT(r.outDT)) + td(fmtMins(r.open ? (r.elapsedMins || 0) : r.mins), "text-align:right")
       + td(waxSummary(r))
       + "<td><span class='st' style='background:" + col[0] + ";color:" + col[1] + "'>" + esc(s) + "</span></td></tr>";
   }).join("");
@@ -2442,7 +2604,7 @@ function buildReportHTML(){
     + "tr:nth-child(even) td{background:#fbfcfd}</style></head><body>"
     + "<h1>Stripping Historian — report</h1>"
     + "<div class='muted'>Generated " + esc(fmtDT(nowLocalDT())) + " · " + rows.length + " dip records · " + k.cleared + " completed · " + k.inBath + " ongoing · first-pass yield " + k.fpy + "%</div>"
-    + "<table><thead><tr><th>Serial</th><th>J/C</th><th>Component</th><th>Bath</th><th>Cycle</th><th>Time in</th><th>Time out</th><th>Hours</th><th>Wax</th><th>Status</th></tr></thead><tbody>"
+    + "<table><thead><tr><th>Serial</th><th>J/C</th><th>Component</th><th>Bath</th><th>Cycle</th><th>Time in</th><th>Time out</th><th>In bath</th><th>Wax</th><th>Status</th></tr></thead><tbody>"
     + (body || "<tr><td colspan='10' style='text-align:center;color:#647078'>No dip records yet.</td></tr>") + "</tbody></table></body></html>";
 }
 $("#exportReport").onclick = () => download("strip_historian_report_" + todayISODate() + ".html", buildReportHTML(), "text/html");
@@ -2459,6 +2621,7 @@ $("#importFile").onchange = e => {
       const skipped = d.events.length - good.length;
       if(!confirm("Import will REPLACE current data with the backup (" + good.length + " events" + (skipped ? "; " + skipped + " malformed entries will be skipped" : "") + "). Continue?")) return;
       await clearStore("events");
+      invalidateAdoptedSnapshot();   // the mirror no longer matches the snapshot we adopted
       if(ONLINE) await queueOp({ op:d.config ? "reset" : "clear-events" });
       const importedIds = new Set();
       for(const ev of good){
@@ -2605,6 +2768,14 @@ function activateHostedShell(){
     hostedShellStarted = true;
     setInterval(syncNow, 20000);                        // pick up other people's work
     window.addEventListener("online", () => syncNow());
+    // A repaint held back because the operator was mid-field goes in the moment
+    // they leave it, rather than sitting until the next poll.
+    document.addEventListener("focusout", () => { if(pendingRepaint) setTimeout(() => { if(pendingRepaint && !busyWithInput()) repaintFromSync(); }, 0); });
+    // Immersion clocks and the "over max immersion" flags are derived from the
+    // time of the last render. Refresh them on a slow beat — often enough that a
+    // tank sitting too long still raises itself, rare enough that it is not the
+    // twitchy every-few-seconds reload this replaced.
+    setInterval(() => { if(!drawerOpen) repaintFromSync(); }, 300000);
   }
 }
 
@@ -2680,6 +2851,7 @@ function renderLogin(message){
 async function signOut(){
   try { await api("/api/login", { method:"DELETE" }); } catch(e){ /* going anyway */ }
   ROLE = null; cacheRole(null);
+  invalidateAdoptedSnapshot();   // the next sign-in rebuilds the mirror from scratch
   SYNC_STATE = "idle"; SYNC_NOTE = "";
   renderLogin("Signed out.");
 }

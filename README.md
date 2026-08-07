@@ -52,7 +52,7 @@ On the floor you rarely know the out‑time when a part goes in, parts go in as 
   it goes back in.
 
 The system pairs loads → extractions per serial, counts cycles automatically,
-computes each dip's hours from the two timestamps, and always knows **what's still
+computes each dip's duration from the two timestamps, and always knows **what's still
 in every bath** ("On the floor now"). A part that comes out Re‑strip can simply be
 loaded again — that's its next cycle.
 
@@ -81,6 +81,12 @@ A status pill sits at the bottom‑right of the shared app: **Synced**, **Syncin
 **Offline — queued**, or **Not synced**. If the network drops, keep recording —
 entries are held locally and upload automatically when it returns. Don't close
 the browser while it still says *queued*.
+
+The shared app checks for other people's work every 20 seconds, but **the screen
+only redraws when the log has actually changed** — a check that finds nothing new
+costs nothing and touches nothing. When a redraw does happen it **keeps your
+scroll position** (page and table), and it will **never rebuild a form you are
+filling in**: a repaint that arrives mid‑entry waits until you leave the field.
 
 > **Local mode only:** storage is per‑browser/per‑PC, so treat **Backup** as your
 > save button and keep snapshots somewhere durable.
@@ -144,7 +150,7 @@ Settings):
   panel (serials parked, not yet in a bath); the headline KPIs; the **next‑action
   suggestions**; and first‑pass yield by job card. Click a tank for full chemistry
   charts and contents.
-- **Pieces** — one row per serial: cycles, cumulative hours, wax fails, where it is,
+- **Pieces** — one row per serial: cycles, cumulative time, wax fails, where it is,
   and a status (`In bath`, `Awaiting re‑strip`, `Needs re‑mask`, `Cleared`,
   `→ Engineering`, `Scrap`, …), filterable. Click *history* for a full timeline and
   a printable **strip traveler** for the quality record.
@@ -185,9 +191,12 @@ already true:
   (awaiting another strip, blocked needing a re‑mask, **or flagged for engineering**
   after hitting a cycle/hour limit), plus serials **parked** with *Add parts →
   Waiting area*. It shows as a panel on the Dashboard (tap a part to send it to a
-  bath, or — for a *review* part — to its engineering review) and as a **drop‑down**
-  in the **Add parts** form. A part leaves the waiting area the moment it goes back
-  into a bath. (Only finished parts — Cleared / Accepted / Scrap / Returned — drop off.)
+  bath, or — for a *review* part — to its engineering review) and as a **tick list**
+  in the **Add parts** form: a re‑dip is normally a batch, so **check off the ten or
+  fifteen parts going in** and they all land in the serial list at once — with
+  **Add all**, **Clear**, and a filter box once the bench passes eight parts. A part
+  leaves the waiting area the moment it goes back into a bath. (Only finished parts —
+  Cleared / Accepted / Scrap / Returned — drop off.)
 - **Capacity** — **off by default** (no part limit). Set a per‑bath capacity in
   Settings (0 = no limit) and loads that would overfill are flagged, the fill level
   shows on each tank, and a full bath is never offered as a rescue.

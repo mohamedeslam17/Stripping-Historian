@@ -155,7 +155,8 @@ function makeHarness({ role = "admin", rejectOversize = false, rejectAdminOps = 
       "events:()=>EVENTS.map(e=>({...e})),outbox:()=>getAll('outbox')," +
       "run:t=>{activeTab=t;render();}," +
       "nextEventId:(d,e)=>nextEventId(d,e)," +
-      "saveDraft:async d=>{formType=d.type;editId=null;formData={...d};await saveForm();}," +
+      "saveDraft:async d=>{formType=d.type;editId=null;formData={...d};await saveForm();},"
+      + "adopt:s=>adoptServerState(s),forgetSnapshot:()=>invalidateAdoptedSnapshot()," +
       "seed:async n=>{for(let i=0;i<n;i++){const e={type:'Parts Received',datetime:'2026-08-04T10:00',serials:['S'+i],uid:'u'+i,eventId:'20260804-'+String(i+1).padStart(4,'0')};await putRec('events',e);await queueOp({op:'put',uid:e.uid,event:e});}await loadAll();}" +
     "};"
   )(
@@ -395,4 +396,56 @@ test("recording an event writes it and its outbox row in one transaction", async
   await waitFor(async () => (await app.handle.outbox()).length === 0);
   assert.ok(app.handle.events().flatMap(e => e.serials || []).includes("ATOMIC"),
     "the event survives the server snapshot that follows");
+});
+
+test("an unchanged server answer is not re-adopted, so the poll never repaints", async () => {
+  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", serials:["S1"] }];
+  const h = makeHarness({ initialEvents: seed });
+  await waitFor(() => h.registry.get("#brandMode")?.textContent === "shared · admin");
+
+  // Count full view rebuilds the way render() causes them: #main.innerHTML = "".
+  const main = h.registry.get("#main");
+  let repaints = 0, html = "";
+  Object.defineProperty(main, "innerHTML", {
+    configurable: true,
+    get(){ return html; },
+    set(v){ html = String(v); if(v === "") repaints++; }
+  });
+
+  const state = () => ({ role:"admin", events: seed.map(e => ({ ...e })), config: {} });
+
+  // Sign-in already pulled this exact log, so the very next poll is a no-op.
+  assert.equal(await h.handle.adopt(state()), false, "the answer sign-in already adopted is not re-adopted");
+
+  h.handle.forgetSnapshot();
+  assert.equal(await h.handle.adopt(state()), true, "with no snapshot to compare, the mirror is rebuilt");
+  const afterFirst = repaints;
+
+  assert.equal(await h.handle.adopt(state()), false, "an identical answer is a no-op");
+  assert.equal(await h.handle.adopt(state()), false, "and stays a no-op on every later poll");
+  assert.equal(repaints, afterFirst, "no repaint, so nobody's scroll position moves");
+  assert.equal(h.handle.events().length, 1, "the mirror still holds the log");
+
+  // Real work from another operator still lands.
+  const moved = state();
+  moved.events.push({ uid:"u2", type:"Parts Received", datetime:"2026-08-04T11:00", eventId:"20260804-0002", serials:["S2"] });
+  assert.equal(await h.handle.adopt(moved), true, "a changed answer is adopted");
+  assert.equal(h.handle.events().length, 2);
+
+  // And a mirror rewritten behind its back (import, clear-all, sign-out) is
+  // never skipped over a stale snapshot.
+  h.handle.forgetSnapshot();
+  assert.equal(await h.handle.adopt(moved), true, "invalidating forces the next adopt");
+});
+
+test("the poll leaves an unchanged log alone rather than rewriting every event", async () => {
+  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", serials:["S1"] }];
+  const h = makeHarness({ initialEvents: seed });
+  await waitFor(() => h.handle.events().length === 1);
+
+  const idBefore = h.stores.events.map(e => e.id).join(",");
+  await h.handle.syncNow();
+  await h.handle.syncNow();
+  assert.equal(h.stores.events.map(e => e.id).join(","), idBefore,
+    "repeat polls do not clear and re-insert the events store");
 });
