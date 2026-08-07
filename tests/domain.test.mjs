@@ -855,3 +855,36 @@ test("a part still in the bath reports elapsed minutes", () => {
   assert.equal(r.elapsedMins, 90);
   assert.equal(D.fmtMins(r.elapsedMins), "1 h 30 min");
 });
+
+test("cumulative time counts the dip in progress, not just finished ones", () => {
+  // A part loaded and not yet pulled has no *completed* dip. Reporting its
+  // cumulative time as 0 told the operator a part that had been in the tank
+  // eight hours had been in for none.
+  const events = [load("2026-03-31T16:00", "B1", ["S1"])];   // NOW is 2026-04-01T00:00
+  const p = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(p.status.s, "In bath");
+  assert.equal(p.mins, 0, "no dip has closed yet");
+  assert.equal(p.totalMins, 480, "but it has been in the bath 8 hours");
+  assert.equal(D.fmtMins(p.totalMins), "8 h");
+});
+
+test("cumulative time adds a finished dip to the one in progress", () => {
+  const events = [
+    load("2026-03-30T08:00", "B1", ["S1"]),
+    extract("2026-03-30T09:35", "B1", [{ serial: "S1", result: "Re-strip" }]),   // 95 min
+    load("2026-03-31T22:30", "B1", ["S1"])                                       // 90 min so far
+  ];
+  const p = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.equal(p.mins, 95, "closed time is the finished dip alone");
+  assert.equal(p.totalMins, 185);
+  assert.equal(D.fmtMins(p.totalMins), "3 h 5 min");
+});
+
+test("the immersion limit and the displayed total are the same number", () => {
+  // The status flag has always been judged on the total including the open dip.
+  // The column must not disagree with the flag that the column explains.
+  const events = [load("2026-03-30T23:00", "B1", ["S1"])];   // 25 h open at NOW
+  const p = D.derivePieces(events, CONFIG, NOW)[0];
+  assert.ok(p.totalMins / 60 >= CONFIG.maxHours, "past the 24 h limit");
+  assert.equal(D.fmtMins(p.totalMins), "25 h");
+});

@@ -702,7 +702,7 @@ function derivePieces(events, config, nowDT){
     const openRec = recs.find(r => r.open);
     rows.push({
       serial:o.serial, jc:o.jc || (evs[0] && evs[0].jc) || "", component:o.component || (evs[0] && evs[0].component) || "",
-      cycles:st.cycles, hours:st.hours, mins:st.mins,
+      cycles:st.cycles, hours:st.hours, mins:st.mins, totalMins:st.totalMins,
       wax: recs.filter(r => r.result !== "Re-mask").reduce((a, r) => a + waxAreasOf(r).length, 0) + evs.filter(e => e.type === "Wax Failure").reduce((a, e) => a + waxAreasOf(e).length, 0),
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
@@ -997,7 +997,7 @@ function deriveSuggestions(events, config, nowDT){
     groups.set(key, g);
   });
   groups.forEach(g => out.push({ level:"amber", icon:"↻", title:`Re-load ${g.serials.length > 1 ? g.serials.length + " parts" : g.serials[0]}${g.jc ? " (" + g.jc + ")" : ""}`, detail:(g.bath ? "→ bath " + g.bath : "no healthy bath available") + (g.remask ? " · re-mask " + g.remask + " first" : ""), action:{ type:"reload", serials:g.serials, bath:g.bath, jc:g.jc, component:g.component } }));
-  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.mins ? ", " + fmtMins(p.mins) : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
+  pieces.filter(p => p.status.s === "→ Engineering").forEach(p => out.push({ level:"red", icon:"⚑", title:`Engineering review: ${p.serial}`, detail:`${p.cycles} cycles${p.totalMins ? ", " + fmtMins(p.totalMins) : ""}${p.jc ? " · " + p.jc : ""}`, action:{ type:"engineering", serial:p.serial, jc:p.jc } }));
 
   const rank = { red:0, amber:1, info:2 };
   return out.sort((a, b) => rank[a.level] - rank[b.level]);
@@ -2256,17 +2256,17 @@ function vPieces(m){
   if(!rows.length){ m.append(all.length ? cel("div", { class:"empty compact" }, "No pieces match this filter.") : emptyState()); return; }
   const wrap = cel("div", { class:"tbl-wrap" }), t = cel("table"), hr = cel("tr");
   [ ["J/C", "jc", ""], ["Serial", "serial", ""], ["Component", "component", "col-comp"],
-    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum time", "hours", "num", "Cumulative immersion time"],
+    ["Cyc", "cycles", "num", "Strip cycles completed"], ["Cum time", "hours", "num", "Cumulative immersion time, including the dip in progress"],
     ["Wax", "wax", "num", "Open (unresolved) wax-failure areas"], ["Status", "status", ""], ["Where", "where", ""] ]
     .forEach(c => hr.append(sortableTH("pieces", c[1], c[0], c[2], c[3])));
   hr.append(cel("th", {}, ""));
   t.append(cel("thead", {}, hr));
   const tb = cel("tbody");
-  applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.hours, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
+  applySort("pieces", rows, { jc:r => r.jc, serial:r => r.serial, component:r => r.component, cycles:r => r.cycles, hours:r => r.totalMins, wax:r => r.wax, status:r => r.status.s, where:r => r.inBath ? ("in " + r.currentBath) : (r.lastBath || "") }).forEach(r => {
     const tr = cel("tr");
     tr.append(tcell(r.jc)); tr.append(tcell(r.serial)); tr.append(tcell(r.component, "col-comp"));
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
-    tr.append(cel("td", { class:"num" }, fmtMins(r.mins)));
+    tr.append(cel("td", { class:"num" }, fmtMins(r.totalMins)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
     tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
@@ -2301,7 +2301,7 @@ function showSerial(serial){
   body.append(cel("div", { style:"display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px" }, [
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, p.jc || "—"), cel("div", { class:"l" }, "Job card")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, String(p.cycles)), cel("div", { class:"l" }, "Cycles")]),
-    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, fmtMins(p.mins)), cel("div", { class:"l" }, "Cumulative time")]),
+    cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, fmtMins(p.totalMins)), cel("div", { class:"l" }, "Cumulative time")]),
     cel("div", { class:"kpi", style:"padding:8px 12px" }, [cel("div", { class:"v", style:"font-size:18px" }, pill(p.status.s, p.status.cls)), cel("div", { class:"l" }, "Status")])
   ]));
   const cfg = maskConfigFor(EVENTS, CONFIG, serial);
@@ -2325,7 +2325,7 @@ function printTraveler(p){
   ]));
   const meta = cel("table", { style:"width:auto;margin-bottom:14px" });
   meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Job card"), cel("td", { class:"pr-meta" }, p.jc || "—"), cel("td", { class:"pr-meta" }, "Cycles"), cel("td", { class:"pr-meta" }, String(p.cycles))]));
-  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cumulative time"), cel("td", { class:"pr-meta" }, fmtMins(p.mins))]));
+  meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Status"), cel("td", { class:"pr-meta" }, p.status.s), cel("td", { class:"pr-meta" }, "Cumulative time"), cel("td", { class:"pr-meta" }, fmtMins(p.totalMins))]));
   const cfg = maskConfigFor(EVENTS, CONFIG, p.serial);
   if((CONFIG.maskAreas || []).length) meta.append(cel("tr", {}, [cel("td", { class:"pr-meta" }, "Masked areas"), cel("td", { class:"pr-meta", colspan:"3" }, cfg.length ? cfg.join(", ") : "none")]));
   pa.append(meta);
