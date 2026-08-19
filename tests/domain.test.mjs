@@ -139,6 +139,26 @@ test("a scrap disposition shows on the piece", () => {
   ];
   assert.equal(D.derivePieces(events, CONFIG, NOW)[0].status.s, "Scrap");
 });
+test("Hold is a distinct status, from either an extraction or an engineering disposition", () => {
+  const events = [
+    // H1: pulled with result Hold, not reloaded -> On hold (not lumped into Awaiting re-strip)
+    load("2026-03-22T08:00", "B1", ["H1"], { jc:"J" }),
+    extract("2026-03-22T10:00", "B1", [{ serial:"H1", result:"Hold", reason:"customer hold" }]),
+    // H2: engineering-review disposition of Hold -> On hold
+    load("2026-03-22T08:00", "B1", ["H2"], { jc:"J" }),
+    extract("2026-03-22T10:00", "B1", [{ serial:"H2", result:"Re-strip" }]),
+    ev({ datetime:"2026-03-23T09:00", type:"Engineering Review", serial:"H2", status:"Hold" }),
+    // H1 reloaded later -> back In bath, no longer On hold
+    load("2026-03-24T08:00", "B1", ["H3"], { jc:"J" }),
+    extract("2026-03-24T10:00", "B1", [{ serial:"H3", result:"Hold" }]),
+    load("2026-03-25T08:00", "B1", ["H3"])
+  ];
+  const rows = Object.fromEntries(D.derivePieces(events, CONFIG, "2026-03-25T09:00").map(r => [r.serial, r]));
+  assert.equal(rows.H1.status.s, "On hold");
+  assert.equal(rows.H1.lastReason, "customer hold");
+  assert.equal(rows.H2.status.s, "On hold");
+  assert.equal(rows.H3.status.s, "In bath");
+});
 
 /* ----------------------------- baths ------------------------------- */
 test("bath flags fire on iron / HCl / temp excursions, and report contents", () => {
@@ -197,6 +217,15 @@ test("defects expand per extracted item (wax + re-strip)", () => {
   assert.ok(defs.some(d => d.kind === "Wax failure" && d.serial === "A"));
   assert.ok(defs.some(d => d.kind === "Re-strip" && d.serial === "A"));
   assert.ok(!defs.some(d => d.serial === "B")); // B was clean
+});
+test("a re-strip with no wax failure carries its recorded reason, not a blank detail", () => {
+  const events = [
+    load("2026-03-22T08:00", "B1", ["A"]),
+    extract("2026-03-22T10:00", "B1", [{ serial:"A", result:"Re-strip", reason:"not fully stripped" }])
+  ];
+  const defs = D.deriveDefects(events);
+  const d = defs.find(x => x.kind === "Re-strip" && x.serial === "A");
+  assert.equal(d.detail, "not fully stripped");
 });
 
 /* -------------------------- entry warnings ------------------------- */

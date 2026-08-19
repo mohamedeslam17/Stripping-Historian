@@ -311,7 +311,7 @@ const F = { // key -> [storedName, label, kind]
   hclPct:["hclPct","Free HCl %","num"], fePpm:["fePpm","Iron Fe (ppm)","num"], temp:["temp","Temp °C","num"],
   hcl:["hclAddedL","HCl added (L)","num"], water:["waterAddedL","Water added (L)","num"], h3po4:["h3po4AddedL","H₃PO₄ added (L)","num"],
   wax:["waxFailure","Wax failure","sel:None,Partial mask loss,Complete mask loss"],
-  disp:["status","Disposition","sel:Accepted,Engineering review,Scrap,Return to vendor,Hold"],
+  disp:["status","Disposition","sel:Accepted,Scrap,Return to vendor,Hold"],
   reason:["disposalReason","Disposal reason","sel:Iron limit reached,HCl exhausted,Contamination,Scheduled change,Other"],
   op:["operator","Operator","operator"], notes:["notes","Notes","text"]
 };
@@ -362,9 +362,9 @@ function deriveImmersions(events, nowDT){
     } else if(e.type === "Extraction"){
       (e.items || []).forEach(it => {
         const s = it.serial, r = open.get(s);
-        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.wax = it.wax || null; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
+        if(r){ r.outDT = e.datetime; r.result = it.result || ""; r.waxFailure = it.waxFailure || "None"; r.wax = it.wax || null; r.reason = it.reason || ""; r.open = false; r.hours = round(hoursBetweenDT(r.inDT, e.datetime), 2); r.extractEvent = e; open.delete(s); }
         else records.push({ serial:s, bath:e.bath || "", jc:"", component:"", cycle:(cyc.get(s) || 0),
-          inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null,
+          inDT:null, outDT:e.datetime, result:it.result || "", waxFailure:it.waxFailure || "None", wax:it.wax || null, reason:it.reason || "",
           hours:null, elapsedH:null, open:false, anomaly:"extracted but was not in bath", loadEvent:null, extractEvent:e });
       });
     } else if(e.type === "Immersion"){ // legacy self-contained dip
@@ -440,6 +440,7 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
   if(engDisp === "Accepted")         return { s:"Accepted",         cls:"p-green", ...base };
   if(engDisp === "Scrap")            return { s:"Scrap",            cls:"p-red",   ...base };
   if(engDisp === "Return to vendor") return { s:"Returned",         cls:"p-grey",  ...base };
+  if(engDisp === "Hold")             return { s:"On hold",          cls:"p-grey",  ...base };
   if(engEvents.length)               return { s:"→ Engineering",    cls:"p-red",   ...base };
   if(open)                           return { s:"In bath",          cls:"p-blue",  ...base };
   if(cycles >= config.maxCycles || totalH >= config.maxHours){
@@ -448,6 +449,8 @@ function pieceStatusFor(recs, engEvents, config, needsRemask){
     if(totalH >= config.maxHours) why.push(totalH + " h ≥ " + config.maxHours);
     return { s:"→ Engineering", cls:"p-red", reason:why.join(", "), ...base };
   }
+  const lastRec = recs.length ? recs[recs.length - 1] : null;
+  if(lastRec && !lastRec.open && lastRec.result === "Hold") return { s:"On hold", cls:"p-grey", reason:lastRec.reason || "", ...base };
   if(needsRemask)                    return { s:"Needs re-mask",    cls:"p-purple", ...base };
   if(cycles > 0)                     return { s:"Awaiting re-strip", cls:"p-amber", ...base };
   return { s:"—", cls:"p-grey", ...base };
@@ -473,6 +476,7 @@ function derivePieces(events, config, nowDT){
       reStrips: recs.filter(r => r.result === "Re-strip").length,
       inBath: !!openRec, currentBath: openRec ? openRec.bath : "",
       lastBath: recs.length ? recs[recs.length - 1].bath : "",
+      lastReason: recs.length ? (recs[recs.length - 1].reason || "") : "",
       firstPass: recs.length > 0 && recs[0].result === "Cleared",
       needsRemask: unresolvedWax.length > 0,
       waxFail: unresolvedWax.length ? { areas:unresolvedWax.map(u => u.area), detail:unresolvedWax.map(u => u.area).join(", "), event:unresolvedWax[unresolvedWax.length - 1].event } : null,
@@ -567,7 +571,7 @@ function deriveDefects(events){
     else if(e.type === "Wax Failure") out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
     else if(e.type === "Extraction") (e.items || []).forEach(it => {
       if(waxAreasOf(it).length) out.push({ e, kind:"Wax failure", detail:waxSummary(it), serial:it.serial, bath:e.bath || "" });
-      if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:"", serial:it.serial, bath:e.bath || "" });
+      if(it.result === "Re-strip") out.push({ e, kind:"Re-strip", detail:it.reason || "", serial:it.serial, bath:e.bath || "" });
     });
     else if(e.type === "Immersion"){
       if(waxAreasOf(e).length) out.push({ e, kind:"Wax failure", detail:waxSummary(e), serial:e.serial || "", bath:e.bath || "" });
@@ -833,7 +837,7 @@ function eventDetail(e){
 }
 function eventDetailForSerial(e, serial){
   if(e.type === "Load In") return "loaded into " + (e.bath || "bath");
-  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "")) : ("extraction from " + (e.bath || "bath")); }
+  if(e.type === "Extraction"){ const it = (e.items || []).find(i => i.serial === serial); return it ? ("pulled from " + (e.bath || "bath") + " — " + (it.result || "") + (waxAreasOf(it).length ? " · ⚠ wax: " + waxSummary(it) : "") + (it.reason ? " · " + it.reason : "")) : ("extraction from " + (e.bath || "bath")); }
   if(e.type === "Re-Masking"){ const ar = remaskAreasOf(e); return "re-masked" + (ar ? " — " + ar.join(", ") : (e.waxFailure ? " — resolves " + e.waxFailure : "")) + (e.notes ? " · " + e.notes : ""); }
   return eventDetail(e);
 }
@@ -957,26 +961,28 @@ function startAction(a){
   openDrawer();
 }
 
-function appendOpList(card){ const dl = cel("datalist", { id:"opList" }); (CONFIG.operators || []).forEach(o => dl.append(cel("option", { value:o }))); card.append(dl); }
 function fieldNode(name, label, kind, onin){
   const wrap = cel("div", { class:"field" }, cel("label", { class:"f" }, label));
   let inp;
   if(kind === "baths"){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); CONFIG.baths.forEach(b => inp.append(cel("option", { value:b }, b))); }
+  else if(kind === "operator"){
+    inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—"));
+    const opts = (CONFIG.operators || []).slice();
+    if(formData[name] && !opts.includes(formData[name])) opts.unshift(formData[name]); // preserve an unlisted/legacy operator on edit
+    opts.forEach(o => inp.append(cel("option", { value:o }, o)));
+  }
   else if(kind && kind.indexOf("sel:") === 0){ inp = cel("select", { oninput:onin }, cel("option", { value:"" }, "—")); kind.slice(4).split(",").forEach(o => inp.append(cel("option", { value:o }, o))); }
   else if(kind === "num") inp = cel("input", { type:"number", step:"any", oninput:onin });
-  else if(kind === "operator") inp = cel("input", { type:"text", list:"opList", oninput:onin });
   else inp = cel("input", { type:"text", oninput:onin });
   if(formData[name] != null) inp.value = formData[name];
   wrap.append(inp); return wrap;
 }
 
 function buildGenericFields(card, refreshWarn){
-  let needList = false;
   const two = cel("div", { class:"twocol" });
-  TYPES[formType].fields.forEach(fd => { const [name, label, kind] = fd; if(kind === "operator") needList = true;
+  TYPES[formType].fields.forEach(fd => { const [name, label, kind] = fd;
     two.append(fieldNode(name, label, kind, e => { formData[name] = e.target.value; refreshWarn(); })); });
   card.append(two);
-  if(needList) appendOpList(card);
 }
 
 // Multi-select area toggles (which masked areas — re-masked, or failed).
@@ -992,7 +998,6 @@ function areaToggleControl(getSel, setSel, onChange, areasList){
 }
 
 function buildRemaskFields(card, refreshWarn){
-  appendOpList(card);
   const two = cel("div", { class:"twocol" });
   two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
   two.append(fieldNode("serial", "Serial", "text", e => { formData.serial = e.target.value; refreshWarn(); }));
@@ -1004,7 +1009,6 @@ function buildRemaskFields(card, refreshWarn){
 }
 
 function buildWaxFailFields(card, refreshWarn){
-  appendOpList(card);
   const two = cel("div", { class:"twocol" });
   two.append(fieldNode("bath", "Bath", "baths", e => { formData.bath = e.target.value; refreshWarn(); }));
   two.append(fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); }));
@@ -1017,7 +1021,6 @@ function buildWaxFailFields(card, refreshWarn){
 }
 
 function buildLoadFields(card, refreshWarn){
-  appendOpList(card);
   const jcField = fieldNode("jc", "J/C No.", "text", e => { formData.jc = e.target.value; refreshWarn(); });
   const compField = fieldNode("component", "Component", "text", e => { formData.component = e.target.value; refreshWarn(); });
   const jcInput = jcField.querySelector("input"), compInput = compField.querySelector("input");
@@ -1053,7 +1056,7 @@ function buildLoadFields(card, refreshWarn){
       cel("button", { class:"btn sm", type:"button", onclick:() => idle.forEach(p => chipBox.addOne(p.serial)) }, "Add all")
     ]));
     const chips = cel("div", { style:"display:flex;flex-wrap:wrap;gap:6px" });
-    idle.slice(0, 40).forEach(p => chips.append(cel("button", { type:"button", class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.status.s + (p.lastBath ? " · was in " + p.lastBath : ""), onclick:() => chipBox.addOne(p.serial) },
+    idle.slice(0, 40).forEach(p => chips.append(cel("button", { type:"button", class:"idlechip", title:(p.jc ? p.jc + " · " : "") + p.status.s + (p.lastBath ? " · was in " + p.lastBath : "") + (p.lastReason ? " · " + p.lastReason : ""), onclick:() => chipBox.addOne(p.serial) },
       [cel("span", {}, "＋ " + p.serial), p.status.s === "Needs re-mask" ? cel("span", { class:"idlechip-tag" }, "re-mask") : null])));
     idleWrap.append(chips);
   }
@@ -1107,7 +1110,6 @@ function chipInput(initial, onChange){
 }
 
 function buildExtractFields(card, refreshWarn){
-  appendOpList(card);
   const bathWrap = cel("div", { class:"field" }, cel("label", { class:"f" }, "Bath"));
   const bsel = cel("select", {}, cel("option", { value:"" }, "—"));
   CONFIG.baths.forEach(b => bsel.append(cel("option", { value:b }, b))); if(formData.bath) bsel.value = formData.bath;
@@ -1119,18 +1121,18 @@ function buildExtractFields(card, refreshWarn){
   two.append(fieldNode("notes", "Notes", "text", e => { formData.notes = e.target.value; refreshWarn(); }));
   card.append(two);
   formData._rows = formData._rows || {};
-  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => { const st = formData._rows[s]; return { serial:s, result:st.result, wax:(st.wax || []).slice() }; }); }
+  function sync(){ formData.items = Object.keys(formData._rows).filter(s => formData._rows[s].checked).map(s => { const st = formData._rows[s]; return { serial:s, result:st.result, wax:(st.wax || []).slice(), reason:st.result !== "Cleared" ? (st.reason || "") : "" }; }); }
   function rebuild(){
     cont.innerHTML = "";
     if(!formData.bath){ cont.append(cel("div", { class:"muted", style:"font-size:12.5px;padding:4px 0" }, "Select a bath to see what is currently in it.")); sync(); return; }
     let rows;
     if(editId != null && Array.isArray(formData.items) && !Object.keys(formData._rows).length){
-      formData.items.forEach(it => { formData._rows[it.serial] = { result:it.result || "Cleared", wax:waxAreasOf(it), checked:true }; });
+      formData.items.forEach(it => { formData._rows[it.serial] = { result:it.result || "Cleared", wax:waxAreasOf(it), reason:it.reason || "", checked:true }; });
       rows = formData.items.map(it => ({ serial:it.serial, inDT:null, elapsedH:null }));
     } else {
       const contents = bathContents(EVENTS, nowLocalDT(), formData.bath);
       rows = contents.slice();
-      contents.forEach(r => { if(!formData._rows[r.serial]) formData._rows[r.serial] = { result:"Cleared", wax:[], checked:r.elapsedH >= CONFIG.maxHours }; });
+      contents.forEach(r => { if(!formData._rows[r.serial]) formData._rows[r.serial] = { result:"Cleared", wax:[], reason:"", checked:r.elapsedH >= CONFIG.maxHours }; });
       Object.keys(formData._rows).forEach(s => { if(!rows.find(r => r.serial === s)) rows.push({ serial:s, inDT:null, elapsedH:null }); });
     }
     if(!rows.length){ cont.append(cel("div", { class:"warn-line warn-amber" }, "Nothing is currently recorded in bath " + formData.bath + ".")); sync(); return; }
@@ -1147,6 +1149,11 @@ function buildExtractFields(card, refreshWarn){
       cb.addEventListener("change", () => { st.checked = cb.checked; sync(); refreshWarn(); rebuild(); });
       const meta = r.elapsedH != null ? (fmtDT(r.inDT) + " · " + r.elapsedH + " h in") : (r.inDT ? fmtDT(r.inDT) : "not in bath");
       const info = cel("div", {}, [cel("div", { class:"s" }, r.serial), cel("div", { class:"muted", style:"font-size:11px" }, meta)]);
+      if(st.result !== "Cleared"){
+        const rin = cel("input", { type:"text", placeholder:"reason (optional) — e.g. not fully stripped, dimensional", value:st.reason || "", style:"width:100%;font-size:11.5px;margin-top:5px;padding:3px 6px" });
+        rin.addEventListener("input", () => { st.reason = rin.value; sync(); refreshWarn(); });
+        info.append(rin);
+      }
       const seg = cel("div", { class:"seg" });
       ["Cleared", "Re-strip", "Hold"].forEach(o => seg.append(cel("button", { type:"button", class:st.result === o ? "on" : "", onclick:() => { st.result = o; st.checked = true; sync(); refreshWarn(); rebuild(); } }, o)));
       if(!Array.isArray(st.wax)) st.wax = [];
@@ -1250,7 +1257,8 @@ function vPieces(m){
   const filt = {
     "All": () => true, "In bath": r => r.status.s === "In bath",
     "Needs re-mask": r => r.status.s === "Needs re-mask",
-    "Awaiting": r => r.status.s === "Awaiting re-strip", "Cleared": r => r.status.s === "Cleared" || r.status.s === "Accepted",
+    "Awaiting": r => r.status.s === "Awaiting re-strip", "On hold": r => r.status.s === "On hold",
+    "Cleared": r => r.status.s === "Cleared" || r.status.s === "Accepted",
     "→ Engineering": r => r.status.s === "→ Engineering"
   };
   const chips = cel("div", { class:"chips" });
@@ -1268,10 +1276,12 @@ function vPieces(m){
     tr.append(cel("td", { class:"num" }, String(r.cycles) + (r.cycles >= CONFIG.maxCycles ? " ⚑" : "")));
     tr.append(cel("td", { class:"num" }, String(r.hours)));
     tr.append(cel("td", { class:"num" }, r.wax ? String(r.wax) : ""));
-    tr.append(cel("td", {}, pill(r.status.s, r.status.cls)));
+    tr.append(cel("td", { title:r.lastReason || "" }, pill(r.status.s, r.status.cls)));
     tr.append(tcell(r.inBath ? ("in " + r.currentBath) : (r.lastBath || ""), "muted"));
     const act = cel("div", { class:"btnrow" });
-    if(r.status.s === "Awaiting re-strip" || r.status.s === "Needs re-mask") act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, r.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
+    const idleLike = r.status.s === "Awaiting re-strip" || r.status.s === "Needs re-mask" || r.status.s === "On hold";
+    if(idleLike) act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"reload", serials:[r.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), r.lastBath), jc:r.jc, component:r.component }) }, r.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
+    if(idleLike) act.append(cel("button", { class:"btn sm", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Send to engineering"));
     if(r.status.s === "→ Engineering") act.append(cel("button", { class:"btn sm danger", onclick:() => startAction({ type:"engineering", serial:r.serial, jc:r.jc }) }, "Review"));
     act.append(cel("span", { class:"linkish", onclick:() => showSerial(r.serial) }, "history"));
     tr.append(cel("td", {}, act));
@@ -1307,8 +1317,9 @@ function showSerial(serial){
   body.append(cel("h3", { class:"sub", style:"margin-top:4px" }, "History (newest first)"));
   body.append(pieceTimeline(p.events.slice().reverse(), serial, p.recs));
   const foot = [cel("button", { class:"btn", onclick:() => printTraveler(p) }, "🖨 Traveler")];
-  if(p.status.s === "Needs re-mask" || p.status.s === "Awaiting re-strip"){
+  if(p.status.s === "Needs re-mask" || p.status.s === "Awaiting re-strip" || p.status.s === "On hold"){
     foot.push(cel("button", { class:"btn primary", onclick:() => { closeModal(); startAction({ type:"reload", serials:[p.serial], bath:suggestRescueBath(EVENTS, CONFIG, nowLocalDT(), p.lastBath), jc:p.jc, component:p.component }); } }, p.status.s === "Needs re-mask" ? "Re-mask & re-load" : "Re-load"));
+    foot.push(cel("button", { class:"btn", onclick:() => { closeModal(); startAction({ type:"engineering", serial:p.serial, jc:p.jc }); } }, "Send to engineering"));
   } else if(p.status.s === "→ Engineering"){
     foot.push(cel("button", { class:"btn danger", onclick:() => { closeModal(); startAction({ type:"engineering", serial:p.serial, jc:p.jc }); } }, "Engineering review"));
   }
