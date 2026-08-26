@@ -92,13 +92,13 @@ const handle = new Function(
     "extractBath:b=>startExtraction(b)," +
     "moveBath:b=>startMove(b)," +
     "closeDrawer:()=>closeDrawer()," +
-    "serialHistory:s=>showSerial(s)," +
+    "lotHistory:k=>showLot(k)," +
     "bathModal:b=>showBath(b)," +
     "loadExample:()=>loadExample()," +
     "clickExport:()=>{document.querySelector('#exportCsv').onclick();document.querySelector('#exportJson').onclick();document.querySelector('#exportReport').onclick();}," +
     "mainKids:()=>document.querySelector('#main').children.length," +
     "drawerKids:()=>document.querySelector('#drawerRoot').children.length," +
-    "pieces:()=>derivePieces(EVENTS,CONFIG,nowLocalDT())," +
+    "lots:()=>deriveLots(EVENTS,CONFIG,nowLocalDT())," +
     "suggestions:()=>deriveSuggestions(EVENTS,CONFIG,nowLocalDT())," +
     "doAction:a=>startAction(a)," +
     "modalKids:()=>document.querySelector('#modalRoot').children.length," +
@@ -117,18 +117,19 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   await tick();
   ok(handle.eventsLen() > 25, "example data loaded (" + handle.eventsLen() + " events)");
 
-  for(const tab of ["Dashboard", "Pieces", "Events", "Quality", "Settings"]){
+  for(const tab of ["Dashboard", "Sets", "Events", "Quality", "Settings"]){
     safe("renders tab: " + tab, () => { handle.run(tab); if(handle.mainKids() < 1) throw new Error("empty main"); });
   }
 
-  safe("opens the Load In drawer (chip input)", () => { handle.openForm("Load In"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Add parts drawer (set + count)", () => { handle.openForm("Load In"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens Load for a specific bath", () => { handle.loadBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Extraction drawer with live contents", () => { handle.extractBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Chemistry Check drawer", () => { handle.openForm("Chemistry Check"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Move (Transfer) drawer for a live bath", () => { handle.moveBath("206-207"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the Parts Received (parked) drawer", () => { handle.openForm("Parts Received"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
   safe("opens the partial Top-Up drawer", () => { handle.openForm("Top-Up"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
-  safe("a re-load of a wax-failed part shows the inline re-mask step", () => { handle.doAction({ type:"reload", serials:["7501-04"], bath:"206-207", jc:"7501" }); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("opens the Engineering Review drawer", () => { handle.openForm("Engineering Review"); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
+  safe("a re-load of a wax-failed set shows the inline re-mask step", () => { handle.doAction({ type:"reload", set:"7501", qty:1, bath:"206-207" }); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
   safe("the drawer renders exactly once and does not stack on re-open", () => { handle.openForm("Load In"); handle.openForm("Load In"); const k = handle.drawerKids(); if(k !== 2) throw new Error("expected 1 drawer (scrim+panel = 2 nodes), got " + k); handle.closeDrawer(); });
 
@@ -136,10 +137,12 @@ function safe(label, fn){ try { fn(); ok(true, label); } catch(e){ ok(false, lab
   ok(sug.length > 0, "derives next-action suggestions (" + sug.length + ")");
   safe("a suggestion prefills the drawer", () => { handle.doAction(sug[0].action); if(handle.drawerKids() < 1) throw new Error("no drawer"); handle.closeDrawer(); });
 
-  const ps = handle.pieces();
-  ok(ps.length > 0, "derives pieces from the example (" + ps.length + ")");
-  ok(ps.filter(p => p.status.s === "In bath").length >= 3, "example leaves parts in a bath (" + ps.filter(p => p.status.s === "In bath").length + " in bath)");
-  safe("opens a piece history modal", () => handle.serialHistory(ps[0].serial));
+  const ps = handle.lots();
+  ok(ps.length > 0, "derives lots from the example (" + ps.length + ")");
+  const inBath = ps.filter(p => p.status.s === "In bath").reduce((a, p) => a + p.qty, 0);
+  ok(inBath >= 3, "example leaves parts in a bath (" + inBath + " in bath)");
+  ok(ps.every(p => p.serial === undefined) && ps.every(p => p.set !== undefined), "lots are keyed by set + count, never by serial");
+  safe("opens a lot history modal", () => handle.lotHistory(ps[0].key));
   safe("opens a bath modal", () => handle.bathModal("102-103"));
   safe("opens the live bath modal", () => handle.bathModal("206-207"));
   safe("export handlers run", () => handle.clickExport());

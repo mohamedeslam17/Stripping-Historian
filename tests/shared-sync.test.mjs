@@ -157,7 +157,7 @@ function makeHarness({ role = "admin", rejectOversize = false, rejectAdminOps = 
       "nextEventId:(d,e)=>nextEventId(d,e)," +
       "saveDraft:async d=>{formType=d.type;editId=null;formData={...d};await saveForm();},"
       + "adopt:s=>adoptServerState(s),forgetSnapshot:()=>invalidateAdoptedSnapshot()," +
-      "seed:async n=>{for(let i=0;i<n;i++){const e={type:'Parts Received',datetime:'2026-08-04T10:00',serials:['S'+i],uid:'u'+i,eventId:'20260804-'+String(i+1).padStart(4,'0')};await putRec('events',e);await queueOp({op:'put',uid:e.uid,event:e});}await loadAll();}" +
+      "seed:async n=>{for(let i=0;i<n;i++){const e={type:'Parts Received',datetime:'2026-08-04T10:00',set:'S'+i,qty:1,uid:'u'+i,eventId:'20260804-'+String(i+1).padStart(4,'0')};await putRec('events',e);await queueOp({op:'put',uid:e.uid,event:e});}await loadAll();}" +
     "};"
   )(
     document, window, indexedDB, class Blob {}, { createObjectURL:() => "blob:x", revokeObjectURL(){} },
@@ -189,15 +189,15 @@ async function waitFor(check, timeout = 1500){
 test("a save made while a POST is in flight remains local and is uploaded next", async () => {
   const race = makeHarness();
   await waitFor(() => race.registry.get("#brandMode")?.textContent === "shared · admin");
-  await race.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:00", serials:["A"] });
+  await race.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:00", set:"A", qty:1 });
   const postSeen = race.control.holdNextPost();
   const firstSync = race.handle.syncNow();
   await postSeen;
-  await race.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:01", serials:["B"] });
+  await race.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:01", set:"B", qty:1 });
   race.control.release();
   await firstSync;
   await waitFor(async () => (await race.handle.outbox()).length === 0);
-  assert.deepEqual(race.handle.events().map(e => e.serials?.[0]), ["A", "B"]);
+  assert.deepEqual(race.handle.events().map(e => e.set), ["A", "B"]);
   assert.equal((await race.handle.outbox()).length, 0);
   assert.deepEqual(race.control.batches.map(b => b.length), [1, 1]);
 });
@@ -222,19 +222,30 @@ test("blank process events are rejected before they enter the ledger", async () 
 
 test("an unresolved wax failure really blocks re-loading until its areas are re-masked", async () => {
   const history = [
-    { uid:"u-load", eventId:"20260804-0001-X", type:"Load In", datetime:"2026-08-04T08:00", bath:"B1", serials:["S1"], jc:"JC", operator:"OP" },
-    { uid:"u-out", eventId:"20260804-0002-X", type:"Extraction", datetime:"2026-08-04T09:00", bath:"B1", operator:"OP", items:[{ serial:"S1", result:"Re-strip", wax:["Cooling holes"] }] }
+    { uid:"u-load", eventId:"20260804-0001-X", type:"Load In", datetime:"2026-08-04T08:00", bath:"B1", set:"7261", qty:2, operator:"OP" },
+    { uid:"u-out", eventId:"20260804-0002-X", type:"Extraction", datetime:"2026-08-04T09:00", bath:"B1", operator:"OP", items:[{ set:"7261", qty:2, result:"Re-strip", wax:["Cooling holes"] }] }
   ];
   const app = makeHarness({ initialEvents:history });
   await waitFor(() => app.registry.get("#brandMode")?.textContent === "shared · admin");
-  const draft = { type:"Load In", datetime:"2026-08-04T10:00", bath:"B2", serials:["S1"], jc:"JC", operator:"OP" };
+  const draft = { type:"Load In", datetime:"2026-08-04T10:00", bath:"B2", set:"7261", qty:2, operator:"OP" };
 
   await app.handle.saveDraft(draft);
   assert.equal(app.handle.events().length, 2);
   assert.match(app.alerts.at(-1) || "", /re-mask.*Cooling holes/i);
 
-  await app.handle.saveDraft({ ...draft, remask:[{ serial:"S1", areas:["Cooling holes"] }] });
+  await app.handle.saveDraft({ ...draft, remask:["Cooling holes"] });
   assert.equal(app.handle.events().length, 3);
+});
+
+test("a parts entry with no count is rejected before it enters the ledger", async () => {
+  const app = makeHarness();
+  await waitFor(() => app.registry.get("#brandMode")?.textContent === "shared · admin");
+  await app.handle.saveDraft({ type:"Load In", datetime:"2026-08-04T10:00", bath:"B1", set:"7261", qty:"", operator:"OP" });
+  assert.equal(app.handle.events().length, 0);
+  assert.match(app.alerts.at(-1) || "", /how many parts/i);
+  await app.handle.saveDraft({ type:"Load In", datetime:"2026-08-04T10:00", bath:"B1", qty:4, operator:"OP" });
+  assert.equal(app.handle.events().length, 0);
+  assert.match(app.alerts.at(-1) || "", /set number/i);
 });
 
 test("two online clients cannot assign the same visible event id", async () => {
@@ -243,15 +254,15 @@ test("two online clients cannot assign the same visible event id", async () => {
     waitFor(() => a.registry.get("#brandMode")?.textContent === "shared · admin"),
     waitFor(() => b.registry.get("#brandMode")?.textContent === "shared · admin")
   ]);
-  await a.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T11:00", serials:["A"], jc:"JC", operator:"OP" });
-  await b.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T11:00", serials:["B"], jc:"JC", operator:"OP" });
+  await a.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T11:00", set:"A", qty:1, operator:"OP" });
+  await b.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T11:00", set:"B", qty:1, operator:"OP" });
   assert.notEqual(a.handle.events()[0].eventId, b.handle.events()[0].eventId);
 });
 
 test("one rejected operator change does not erase a valid queued event", async () => {
   const mixed = makeHarness({ role:"operator", rejectAdminOps:true });
   await waitFor(() => mixed.registry.get("#brandMode")?.textContent === "shared · operator");
-  await mixed.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T12:00", serials:["VALID"], jc:"JC", operator:"OP" });
+  await mixed.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T12:00", set:"VALID", qty:1, operator:"OP" });
   await mixed.handle.queueOp({ op:"config", k:"maxCycles", v:4 });
   await mixed.handle.syncNow();
   assert.equal(mixed.handle.events().length, 1);
@@ -302,7 +313,7 @@ test("the API identifies a malformed operation without applying its batch", asyn
 test("the API points to the rejected operator op while leaving the batch atomic", async () => {
   const { onRequestPost } = await import("../functions/api/sync.js");
   let applied = false;
-  const event = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", serials:["S1"], jc:"JC", operator:"OP" };
+  const event = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", set:"S1", qty:1, operator:"OP" };
   const db = {
     prepare(sql){ return { sql, bind(){ return this; }, async first(){ return null; }, async all(){ return { results:[] }; } }; },
     async batch(){ applied = true; }
@@ -320,7 +331,7 @@ test("the API points to the rejected operator op while leaving the batch atomic"
 });
 
 test("operator UI does not expose admin edit, delete, import, or settings writes", async () => {
-  const event = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", serials:["S1"], jc:"JC", operator:"OP" };
+  const event = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", set:"S1", qty:1, operator:"OP" };
   const app = makeHarness({ role:"operator", initialEvents:[event] });
   await waitFor(() => app.registry.get("#brandMode")?.textContent === "shared · operator");
   assert.equal(app.registry.get("#importBtn").disabled, true);
@@ -347,7 +358,7 @@ test("a never-filled bath offers only the required new-charge action", async () 
 
 test("operator retries are idempotent but cannot edit or resurrect an event", async () => {
   const { onRequestPost } = await import("../functions/api/sync.js");
-  const original = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", serials:["S1"], jc:"JC", operator:"OP" };
+  const original = { uid:"u1", eventId:"20260804-0001-X", type:"Parts Received", datetime:"2026-08-04T10:00", set:"S1", qty:1, operator:"OP" };
   const call = async (existing, event) => {
     let applied = false;
     const db = {
@@ -388,18 +399,18 @@ test("recording an event writes it and its outbox row in one transaction", async
   const app = makeHarness();
   await waitFor(() => app.registry.get("#brandMode")?.textContent === "shared · admin");
 
-  await app.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:00", serials:["ATOMIC"] });
+  await app.handle.addEvent({ type:"Parts Received", datetime:"2026-08-04T10:00", set:"ATOMIC", qty:1 });
   assert.equal(app.stores.events.length, 1, "event persisted");
   assert.equal(app.stores.outbox.length, 1, "and its upload was queued in the same write");
 
   await app.handle.syncNow();
   await waitFor(async () => (await app.handle.outbox()).length === 0);
-  assert.ok(app.handle.events().flatMap(e => e.serials || []).includes("ATOMIC"),
+  assert.ok(app.handle.events().some(e => e.set === "ATOMIC"),
     "the event survives the server snapshot that follows");
 });
 
 test("an unchanged server answer is not re-adopted, so the poll never repaints", async () => {
-  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", serials:["S1"] }];
+  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", set:"S1", qty:1 }];
   const h = makeHarness({ initialEvents: seed });
   await waitFor(() => h.registry.get("#brandMode")?.textContent === "shared · admin");
 
@@ -428,7 +439,7 @@ test("an unchanged server answer is not re-adopted, so the poll never repaints",
 
   // Real work from another operator still lands.
   const moved = state();
-  moved.events.push({ uid:"u2", type:"Parts Received", datetime:"2026-08-04T11:00", eventId:"20260804-0002", serials:["S2"] });
+  moved.events.push({ uid:"u2", type:"Parts Received", datetime:"2026-08-04T11:00", eventId:"20260804-0002", set:"S2", qty:1 });
   assert.equal(await h.handle.adopt(moved), true, "a changed answer is adopted");
   assert.equal(h.handle.events().length, 2);
 
@@ -439,7 +450,7 @@ test("an unchanged server answer is not re-adopted, so the poll never repaints",
 });
 
 test("the poll leaves an unchanged log alone rather than rewriting every event", async () => {
-  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", serials:["S1"] }];
+  const seed = [{ uid:"u1", type:"Parts Received", datetime:"2026-08-04T10:00", eventId:"20260804-0001", set:"S1", qty:1 }];
   const h = makeHarness({ initialEvents: seed });
   await waitFor(() => h.handle.events().length === 1);
 
